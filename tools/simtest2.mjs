@@ -226,6 +226,18 @@ section('drag and drop', () => {
   const tr = sim.floor.get(tool.id);
   ok(tr && tr.x > a.x + 0.4 && Math.abs(tr.z - a.z) < 1.2, 'throwing at a point sends it that way');
   step(0.1);
+
+  // hostile or buggy clients: junk must be ignored, never turned into NaN positions or phantom hands
+  for (const at of [[a.x + 5, 'x', a.z], [NaN, 1, 1], null, 'north', [1, 2]]) {
+    const t2 = sim.newItem('/obj/item/crowbar'); hand(a, t2, 0); a.cool = 0; a.pitch = 0;
+    sim.handle(A, { t: 'inv', op: 'throw', item: t2.id, at });
+    ok(a.hands[0] === t2 && Number.isFinite(a.pitch) && Number.isFinite(a.yaw), 'a throw with a malformed target is ignored: ' + JSON.stringify(at));
+    a.hands[0] = null; sim.items.delete(t2.id);
+  }
+  const phantom = sim.newItem('/obj/item/crowbar'); hand(a, phantom, 0); a.hands[1] = null;
+  sim.handle(A, { t: 'inv', op: 'move', item: phantom.id, to: { t: 'hand', i: 5 } });
+  ok(a.hands.length === 2 && a.hands.every((h) => h === null || a.hands.indexOf(h) < 2), 'cannot move an item into a third hand');
+  ok(a.hands[0] === phantom || a.hands[1] === phantom, 'the item is still in one of the two real hands');
 });
 
 section('death -> ghost', () => {

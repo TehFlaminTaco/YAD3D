@@ -59,6 +59,7 @@ export class Hud {
 
   /** A short line of text at the bottom of the screen (mode changes, how-to hints). */
   toast(text, sec = 2.5) {
+    if (this.game.panelOpen) return;
     this.el.toast.textContent = text;
     this.el.toast.classList.add('on');
     this.toastUntil = this.game.time + sec;
@@ -113,7 +114,7 @@ export class Hud {
   // ---------------------------------------------------------------- per frame
   update() {
     const g = this.game, e = this.el;
-    if (this.toastUntil && g.time > this.toastUntil) { this.toastUntil = 0; e.toast.classList.remove('on'); }
+    if (this.toastUntil && (g.time > this.toastUntil || g.panelOpen)) { this.toastUntil = 0; e.toast.classList.remove('on'); }
     if (this.root.classList.contains('hidden')) return;
     this.updateRunes();
     const look = g.mode === 'look';

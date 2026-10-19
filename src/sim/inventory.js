@@ -169,8 +169,9 @@ export function storeIn(sim, mob, box, item) {
 export function moveItem(sim, mob, item, to) {
   if (!item || !carried(mob, item)) return false;
   if (to.t === 'hand') {
-    if (mob.hands[to.i]) { NOTICE(sim, mob, 'That hand is already holding something.'); return false; }
-    detach(sim, item); attach(sim, item, { t: 'hand', mob, i: to.i }); return true;
+    const i = to.i === 1 ? 1 : 0;                       // there are two hands
+    if (mob.hands[i]) { NOTICE(sim, mob, 'That hand is already holding something.'); return false; }
+    detach(sim, item); attach(sim, item, { t: 'hand', mob, i }); return true;
   }
   if (to.t === 'slot') return equipTo(sim, mob, item, to.slot);
   if (to.t === 'box') {

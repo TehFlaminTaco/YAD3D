@@ -622,6 +622,7 @@ export class Actions {
   }
 
   throwAt(m, item, at) {
+    if (!Array.isArray(at) || at.length < 3 || !at.slice(0, 3).every((v) => typeof v === 'number' && Number.isFinite(v))) return;
     const dx = at[0] - m.x, dy = at[1] - EYE, dz = at[2] - m.z;
     const hd = Math.hypot(dx, dz);
     if (!Number.isFinite(hd) || hd < 0.05) return;
