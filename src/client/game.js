@@ -84,8 +84,8 @@ export class Game {
 
     this.fx = new ScreenFX(this);
     this.hud = new Hud(this);
-    this.bodyview = new BodyView(this);       // before the hands: they are drawn over it
     this.hands = new Hands(this);
+    this.bodyview = new BodyView(this);       // your own body, in the 3D scene
     this.bags = new Bags(this);
     this.body = new BodyPanel(this);
     this.pda = new PDA(this);
@@ -619,7 +619,7 @@ export class Game {
     if (this.phase === 'playing') {
       this.view.lightField.sample(this.pred.x, this.pred.z, this.tmpC);
       const lum = (this.tmpC[0] + this.tmpC[1] + this.tmpC[2]) / 3;
-      this.bodyview.update(dt, { pitch: this.pitch, moving: this.moving, show: this.mode === 'look' && !this.panelOpen });
+      this.bodyview.update(dt, { pitch: this.pitch, moving: this.moving, show: this.mode === 'look' && !this.panelOpen && !this.self?.inside, cam: this.camera.position, yaw: this.yaw, light: lum });
       this.hands.update(dt, { moving: this.moving, light: Math.max(lum * 1.4, torch ? 0.95 : 0), crouch: this.self?.crit ? 1 : 0 });
     }
     this.hud.update(dt);

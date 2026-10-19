@@ -22,6 +22,8 @@ It plays like a round of SS13: lobby, job slots, a crew of other people, things 
   people say also floats over their heads for a few seconds. The dead talk to the dead.
 * **Systems.** Atmospherics with real partial pressures and decompression, APC power with emergency cells and a blackout, fire
   alarms and firelocks, access-controlled airlocks (crowbars work on dead ones), meteors that blow holes in the hull, space carp,
+  characters you design (body, skin, hair, facial hair, eyes, underwear; saved in your browser) that everyone sees, with the
+  clothes they really wear, a hairdresser's mirror, and your own body when you look down,
   closets, lockers and crates that really open, close, lock (ID access, Alt+click), weld shut, hold what the DM says they
   hold, and shut people in (they break out in two minutes),
   smashed windows (they open up to whatever is behind them: only a window that touches space vents the room, and the grille
@@ -177,9 +179,9 @@ writes `assets/ui.png`, `assets/ui.json` and `assets/overlays/` from the HUD ico
 ### Tests
 
 ```sh
-npm run test:sim      # 86 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, chat,
+npm run test:sim      # 98 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, chat,
                       #   consoles, drag and drop, death and ghosts)
-npm run test:level    # level mesh geometry (no browser): window tiles are full glass blocks with their real floor under them
+npm run test:level    # level mesh geometry and the character art data (no browser)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, body panel, bags,
@@ -190,7 +192,6 @@ npm run test:net      # starts the server and drives 3 browsers: lobby, round st
 ## Known gaps
 
 * Windoors (the thin glass doors) are drawn but do not block movement.
-* NPC crew keep their roundstart look when their clothes change.
 * There is no antagonist game mode, chemistry, botany, cooking or construction. The goal is the feel of a round (a station full of
   people, a crisis, an evacuation), not a port of SS13's rules.
 * Look mode needs pointer lock and everything else needs a mouse and keyboard, so it does not work on touch devices.

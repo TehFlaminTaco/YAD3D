@@ -32,7 +32,12 @@ export class CharEditor {
     this.di = 0;
     this.hold = 0;
     this.$('ce-done').onclick = () => this.close();
-    this.$('ce-rand').onclick = () => { this.set(this.looks.random(Math.random)); this.build(); };
+    this.$('ce-rand').onclick = () => {
+      const r = this.looks.random(Math.random);
+      // at a mirror only hair and facial hair are yours to change
+      this.set(this.mode === 'mirror' ? { ...this.look, h: r.h, hc: r.hc, f: r.f, fc: r.fc } : r);
+      this.build();
+    };
     this.$('ce-wear').onchange = () => this.draw();
     root.querySelectorAll('.ce-rot button').forEach((b) => { b.onclick = () => { this.di = (this.di + (+b.dataset.r) + 4) % 4; this.hold = 5; this.draw(); }; });
     this.timer = setInterval(() => { if (!this.open_) return; if (this.hold > 0) { this.hold--; return; } this.di = (this.di + 1) % 4; this.draw(); }, 1100);

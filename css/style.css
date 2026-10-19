@@ -40,10 +40,6 @@ button, input { font-family: inherit; }
 #fx-vac { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 38%, rgba(170,215,255,.65) 100%); mix-blend-mode: screen; }
 #fx-flash { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(255,40,20,.35) 20%, rgba(200,0,0,.95) 100%); }
 
-/* ---------- your own body, when you look down ---------- */
-#bodyview { position: fixed; left: 50%; bottom: 0; width: min(46vw, 480px); transform: translateX(-50%); pointer-events: none; z-index: 6; opacity: 0; }
-#bodyview canvas { width: 100%; image-rendering: pixelated; display: block; filter: brightness(.9); }
-
 /* ---------- first-person hands ---------- */
 #hands { position: fixed; inset: 0; pointer-events: none; z-index: 7; display: none; }
 .hand { position: absolute; bottom: calc(-4px * var(--h)); width: calc(64px * var(--h)); height: calc(72px * var(--h)); will-change: transform; }

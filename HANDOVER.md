@@ -12,7 +12,7 @@ browser. It works end to end and is pushed.
 * **Branch** `claude/yad3d-game` on `TehFlaminTaco/YAD3D`, open as **[PR #1](https://github.com/TehFlaminTaco/YAD3D/pull/1)**
   into `main` (which holds only an "Initial commit"). Pushing to the branch updates the PR. The user said not to worry about
   the repo's original Unlicense: the project is now **AGPL-3.0** (`LICENSE`), art and sound CC BY-SA 3.0.
-* **Tests:** `node tools/simtest2.mjs` 86/86 and `node tools/leveltest.mjs` 13/13 pass now. `node tools/uitest.mjs` (191/191,
+* **Tests:** `node tools/simtest2.mjs` 98/98 and `node tools/leveltest.mjs` 18/18 pass now. `node tools/uitest.mjs` (191/191,
   about 4 min) and `node tools/nettest.mjs` (29/29) were last run before the window work, and **could not be run in the
   Windows session that did it** (Playwright path below): re-run both before you say "all green". The window change touches
   tile events (`brk`) and rendering, so the multiplayer suite is the one most worth running.
@@ -180,11 +180,11 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 
 | What | Command | Notes |
 | --- | --- | --- |
-| Sim logic (no browser) | `node tools/simtest2.mjs` | 86 assertions, seconds. Add a `section()` for any new server rule. |
+| Sim logic (no browser) | `node tools/simtest2.mjs` | 98 assertions, seconds. Add a `section()` for any new server rule. |
 | Long soak | `node tools/simtest.mjs 12 --player` | a 12-minute simulated shift, ~4 s |
 | Browser UI (local round) | `node tools/uitest.mjs` | needs :8123 static server; ~4 min; `BASE=`, `SHOTS=` env; drives the real mouse/keyboard |
 | Closets (in simtest2) | `node tools/simtest2.mjs` | the `closets` section: DM contents, locks, welding, breakout, personal lockers |
-| Level mesh geometry | `node tools/leveltest.mjs` | no browser or WebGL; 13 assertions: glass, floor, grille, smashed windows |
+| Level mesh geometry | `node tools/leveltest.mjs` | no browser or WebGL; 18 assertions: glass, floor, grille, smashed windows, the character art data |
 | Multiplayer | `node tools/nettest.mjs` | spawns `server/index.js` on :8191 with `--debug`, three browsers |
 | Screenshots | `node tools/shot.mjs "<query>" <prefix> --w 1280 --h 720 --steps '[…]'` | per step runs: `eval`, then `key`/`down`/`up`/`click`, then `wait`, then `snap` |
 
@@ -220,8 +220,9 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 
 ## 8. Open items, roughly in priority order
 
-1. **Re-run `uitest` and `nettest`** (see section 1) and look at a window in a real two-player session: the window work
-   was only checked by `simtest2`, `leveltest` and the in-app browser (single player, local round).
+1. **Re-run `uitest` and `nettest`** (see section 1) and look at windows, closets and other people in a real two-player session:
+   those were only checked by `simtest2`, `leveltest` and the in-app browser (single player, local round). The new `look`
+   and `mob+ ap` events and the `chars.png` download are the parts most worth a multiplayer check.
 2. *(Done: lobby fix, pointer lock and sound were checked in a real browser by the user; grille under windows; closets.)*
 3. **The review of the new UI was only half done.** The drag-and-drop *server* code got a manual review (2 bugs fixed). Not
    yet reviewed: (a) the mode/state machine in `game.js` (`applyMode/enterHands/enterLook/panelsChanged/closeTop/setPhase`)
@@ -229,8 +230,7 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
    transitions leaving panels up; (b) `hands.js`/`effects.js`/`art.js`/`hud.js` robustness and per-frame cost (`rayAt` and
    `lookRay` allocate vectors every frame; runechat does an LOS test per speaking mob per frame; the visor canvas is redrawn
    on resize). The earlier plan was three independent reviewers plus a skeptic pass per finding.
-4. **Known gaps** (also in the README): windoors are drawn but don't block movement; NPC crew keep their roundstart sprite
-   when clothes change; no antagonists/chemistry/botany/cooking/construction (scope decision, not an oversight). Look mode
+4. **Known gaps** (also in the README): windoors are drawn but don't block movement; no antagonists/chemistry/botany/cooking/construction (scope decision, not an oversight). Look mode
    doesn't work on touch devices; the user said that is a non-consideration.
 5. **Small things noticed:** a throw within the 0.5 s cooldown silently does nothing after the drag ghost vanishes (no
    feedback); `tools/preview_ui.html` is a leftover dev page for eyeballing procedural art (works with the static server);
@@ -239,7 +239,7 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
    source (see the memory note about checking their numbers). (1) Foundations + closets/lockers/crates: **done**, except
    stuffing someone into a closet (needs grabs) and body bags. Still to build for the foundations: a generic tool dispatch
    (`startTimed` now takes `{start, stop}` messages and `welderReady` mirrors SS13's tool check), stacks (merge, split, craft
-   menu), mutable tiles/structures beyond closets. (2) **Dynamic character sprites**: compose a human at runtime in the
+   menu), mutable tiles/structures beyond closets. (2) **Dynamic character sprites** (DONE, see section 10): compose a human at runtime in the
    browser from the layered DMIs (what `tools/build_mobs.py` does at build time: greyscale body parts tinted by skin, uniform,
    shoes, gloves, suit, eyes, `human_face.dmi` hair, mask, head; 176 hair styles, 36 facial hair, 31 underwear, 55
    undershirts, 33 socks), so worn clothes show on everyone; then a setup screen with a live preview, **mirrors on the map**
@@ -271,13 +271,26 @@ tools/                        build_*.py (data pipeline), serve.py, shot.mjs, si
 assets/ data/ vendor/         generated art/sound/level data (committed), jobs data, vendored three.js r170
 ```
 
-## 10. Step 2 in progress (uncommitted when this was written): runtime character sprites
-People are no longer baked sprites. `tools/build_chars.py` (run by `build_level.py`) writes `assets/chars.png|json` (layered body,
-hair, facial hair, underwear, undershirt, socks and 434 worn items, with SS13's own hide flags). `src/shared/looks.js` holds the look
-rules; the server sends each human `ap = {l: look, o: {slot: cell}, h: hide flags}` in `mob+` and a `look` event when it changes;
-`src/client/charart.js` composes it in SS13's layer order into a strip under the sprite atlas (`DynAtlas`). Done and tested
-(simtest2 98/98): looks, hello with a look, outfits, hiding, mirror authorisation, the character screen in the lobby
-(`charedit.js`, saved in localStorage), hands in your skin tone, `bodyview.js` (your body when you look down). Written but NOT yet
-looked at in the browser: the body view. NOT done: the mirror *reflection* sprite (plan: a `dyn` sprite in front of each of the 10
-mirror props, showing the top half of your front-facing sprite, only for you and only in front of the mirror; add `sd` to the wm
-interact record in propdata for the normal), `uitest`/`nettest` runs, README feature text, and a data test for chars.json.
+## 10. Characters: runtime-composed people, the character screen, mirrors, your own body (roadmap step 2, done)
+People are no longer baked sprites. `tools/build_chars.py` (run by `build_level.py`) writes `assets/chars.png|json`: layered body
+parts, eyes, hair, facial hair, underwear, undershirts, socks and the worn sprites of every item the game knows (434), with SS13's own
+`flags_inv` hide bits. `src/shared/looks.js` holds the look rules (`look` = what you design, `ap` = look + what you wear + hide flags);
+the server sends each human `ap` in `mob+` and a `look` event when it changes (`recalc` marks it dirty); `src/client/charart.js`
+composes it in SS13's layer order into a strip under the sprite atlas (`DynAtlas`, ~800 people, shared by identical looks and
+reference counted), so the normal sprite batches draw them. Dead people are the sprite turned on its side.
+
+* **Character screen** (`charedit.js`, Character button in the lobby): live turning preview wearing the selected job's clothes,
+  body, skin, hair, facial hair, eyes, underwear dials, Randomise. Saved in `localStorage` (`yad3d.look`), sent as `hello.look`;
+  the server sanitises it (`Looks.sanitize`: unknown names fall back, colours are normalised).
+* **Mirrors** (10 on the map): clicking one sends `{e:'mirror'}`; the same screen opens with only hair and facial hair, and
+  `{t:'mirror', look}` is applied only if you stand within 3.4 m of a mirror and only hair fields change (`Actions.mirror`). A
+  mirror also shows your reflection (`WorldView.updateMirrors`, a small shader on a quad over the glass): the image is you as
+  you would be standing as far behind the glass as you stand in front, drawn with the sprite direction that image would get (it turns as
+  you turn; front/back views are flipped left-right), projected from your eye onto the glass (that sets its size and how far it slides
+  along the wall as you move), and cut to the glass's oval. Only you appear in it, only when you are in front of it, within 5.5 m.
+* **Your own body** (`bodyview.js`): when you look down, a plane in the 3D world stands at your feet (0.28 m ahead, leaning back
+  toward you about 17 degrees, cropped to shoes-to-chest) wearing your front sprite; it turns with you and sways when you walk. The
+  user did not like a flat screen overlay and found a 36 degree lean too much. Your hands take your skin tone.
+* NPCs get random looks (`Looks.random`). Map items now all have definitions (913), so clothing found on the map can be worn.
+* Not done: held items are not drawn on people, no species (human only), no job-specific uniform variants (skirts), no persistent
+  server-side characters, no third-person toggle (the user does not want one).

@@ -114,7 +114,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const w = rc.w * PX * S, h = rc.h * PX * S;
         const x = cx + sdx * (TILE / 2 - 0.03), z = cz + sdz * (TILE / 2 - 0.03);
         const st = sprite({ tag: 'wm', rect: p.s, mode: 1, x, y: yc - h / 2, z, w, h, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz], emit: p.sub === 'status_display' || p.sub === 'newscaster' ? 0.6 : 0 });
-        const it = { idx: out.interact.length, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, x, z, y0: yc - h / 2, y1: yc + h / 2, rad: 0.6, st };
+        const it = { idx: out.interact.length, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, x, z, y0: yc - h / 2, y1: yc + h / 2, rad: 0.6, st, sd: p.sd };
         out.interact.push(it); out.added.interact.push(it);
         break;
       }

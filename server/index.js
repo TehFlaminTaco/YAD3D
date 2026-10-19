@@ -96,6 +96,7 @@ wss.on('connection', (ws, req) => {
         if (ws.bufferedAmount > 2e6) { ws.terminate(); return; }
         ws.send(JSON.stringify(m));
       });
+      if (msg.look) sim.handle(client, { t: 'hello', look: msg.look });          // the character they designed
       log(`${name} joined from ${ip} (${sim.clients.size} online)`);
       return;
     }

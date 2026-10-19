@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TILE, WALL_H, PX, KIND } from '../shared/config.js';
+import { TILE, WALL_H, PX, KIND, DV } from '../shared/config.js';
 import { ITEM_SCALE } from '../shared/propdata.js';
 import { lightMode } from '../shared/power.js';
 import { rng } from '../shared/util.js';
@@ -11,6 +11,36 @@ import { spriteMaterial } from '../render/materials.js';
 
 const SY = WALL_H / TILE;                       // doors are drawn taller than a 32px tile is wide
 const AMBIENT = [0.045, 0.045, 0.06];
+
+const MIRROR_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+/* The glass is an oval inside the sprite's frame; the picture is the image's sprite placed on it (uSpr: its left, bottom,
+   right and top in metres from the glass centre) and anything outside the glass or the sprite is discarded. */
+const MIRROR_FRAG = /* glsl */ `
+uniform sampler2D uMap;
+uniform vec4 uSpr;
+uniform vec4 uUv;
+uniform vec2 uSize;
+uniform float uFlip;
+uniform vec3 uTint;
+varying vec2 vUv;
+void main() {
+  vec2 e = (vUv - 0.5) * 2.0 / vec2(0.857, 0.895);
+  if (dot(e, e) > 1.0) discard;
+  vec2 p = (vUv - 0.5) * uSize;
+  vec2 s = (p - uSpr.xy) / (uSpr.zw - uSpr.xy);
+  if (s.x < 0.0 || s.x > 1.0 || s.y < 0.0 || s.y > 1.0) discard;
+  float sx = uFlip > 0.5 ? 1.0 - s.x : s.x;
+  vec4 t = texture2D(uMap, vec2(mix(uUv.x, uUv.z, clamp(sx, 0.001, 0.999)), mix(uUv.w, uUv.y, clamp(s.y, 0.001, 0.999))));
+  if (t.a < 0.45) discard;
+  gl_FragColor = vec4(t.rgb * uTint, 1.0);
+}
+`;
 
 /** Everything you can see: terrain mesh, sprite batches (props, doors, items, mobs), lights. Reads the Replica, never writes it. */
 export class WorldView {
@@ -39,6 +69,7 @@ export class WorldView {
     this.doorViews = [];
     for (const d of rep.doors) this.addDoorView(d);
     this.fdoorViews = rep.fdoors.map((f) => this.addFdoorView(f));
+    this.mirrors = this.addMirrors();
 
     this.itemSlot = new Map();                   // item id -> sprite id
     this.itemFree = [];
@@ -84,6 +115,75 @@ export class WorldView {
     if (!it.st || !rc) return;
     this.stat.setRect(it.st.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, 0);
     this.stat.setAlpha(it.st.id, it.gone ? 0 : 1);
+  }
+
+  // ------------------------------------------------------------------ mirrors
+  /**
+   * A mirror shows you as you would be if you stood as far behind the glass as you stand in front of it: the same
+   * sprite you would be drawn with there (so it turns as you turn), projected from your eye onto the glass, which is what
+   * sets its size and how far it slides sideways as you move along the wall, and cut to the oval of the glass.
+   */
+  addMirrors() {
+    const out = [];
+    for (const it of this.rep.props.interact) {
+      if (it.kind !== 'wm' || it.sub !== 'mirror' || !it.st) continue;
+      const st = it.st;
+      const n = { x: Math.sin(st.yaw), z: Math.cos(st.yaw) };          // out of the wall, into the room
+      const r = { x: n.z, z: -n.x };                                   // along the wall
+      const cx = st.x + r.x * (st.ox || 0) + n.x * 0.012, cz = st.z + r.z * (st.ox || 0) + n.z * 0.012;
+      const cy = st.y + st.h / 2;
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uMap: { value: this.assets.spriteTex }, uSpr: { value: new THREE.Vector4() }, uUv: { value: new THREE.Vector4() },
+          uSize: { value: new THREE.Vector2(st.w, st.h) }, uFlip: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) },
+        },
+        vertexShader: MIRROR_VERT, fragmentShader: MIRROR_FRAG, side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(st.w, st.h), mat);
+      mesh.position.set(cx, cy, cz);
+      mesh.rotation.y = st.yaw;
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      this.scene.add(mesh);
+      out.push({ it, mesh, mat, n, r, cx, cz, cy });
+    }
+    return out;
+  }
+
+  updateMirrors(selfId, cam, camYaw) {
+    const mine = this.mobViews.get(selfId);
+    const ok = mine && mine.chars && !mine.m.dead;
+    const camRx = Math.cos(camYaw), camRz = -Math.sin(camYaw);          // the camera's right
+    const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);               // the way you face
+    for (const m of this.mirrors) {
+      const dc = (cam.x - m.cx) * m.n.x + (cam.z - m.cz) * m.n.z;       // how far in front of the glass you are
+      if (!ok || dc < 0.3 || dc > 5.5) { m.mesh.visible = false; continue; }
+      const ix = cam.x - 2 * dc * m.n.x, iz = cam.z - 2 * dc * m.n.z;   // where the image of your feet is, behind the glass
+      const fdn = fx * m.n.x + fz * m.n.z;
+      const gx = fx - 2 * fdn * m.n.x, gz = fz - 2 * fdn * m.n.z;       // the image faces the mirrored way
+      const vx = ix - cam.x, vz = iz - cam.z, vl = Math.hypot(vx, vz) || 1;
+      const dot = (gx * vx + gz * vz) / vl, side = gx * camRx + gz * camRz;
+      const di = dot > 0.62 ? 1 : dot < -0.62 ? 0 : side > 0 ? 2 : 3;   // same choice of sprite as for anyone else
+      const rc = this.rects[mine.set.d[di][0]];
+      if (!rc || !rc.w) { m.mesh.visible = false; continue; }
+      // the image stands up facing your eye; project its corners through your eye onto the plane of the glass
+      const ox = (rc.ox + rc.w / 2 - rc.fw / 2) * PX, hw = rc.w * PX / 2, H = rc.h * PX;
+      const onGlass = (x, z, y) => {
+        const t = dc / (dc - ((x - m.cx) * m.n.x + (z - m.cz) * m.n.z));
+        return [((cam.x + (x - cam.x) * t - m.cx) * m.r.x + (cam.z + (z - cam.z) * t - m.cz) * m.r.z), cam.y + (y - cam.y) * t - m.cy];
+      };
+      const [l0, yFoot] = onGlass(ix + camRx * (ox - hw), iz + camRz * (ox - hw), 0);
+      const [l1] = onGlass(ix + camRx * (ox + hw), iz + camRz * (ox + hw), 0);
+      const [, yHead] = onGlass(ix + camRx * ox, iz + camRz * ox, H);
+      const u = m.mat.uniforms;
+      u.uSpr.value.set(Math.min(l0, l1), yFoot, Math.max(l0, l1), yHead);
+      u.uUv.value.set(rc.u0, rc.v0, rc.u1, rc.v1);
+      u.uFlip.value = di < 2 ? 1 : 0;                                   // front and back views swap left and right in a mirror
+      this.lightField.sample(m.cx + m.n.x, m.cz + m.n.z, this.tmpC);
+      const t = this.tmpC;
+      u.uTint.value.set(Math.min(1.15, t[0] * 0.9), Math.min(1.15, t[1] * 0.97), Math.min(1.2, t[2] * 1.08));
+      m.mesh.visible = true;
+    }
   }
 
   // ------------------------------------------------------------------ doors
@@ -413,6 +513,7 @@ export class WorldView {
       if (f !== v.frame) { v.frame = f; const rc = this.rects[v.d.proto.fr[f]]; if (rc) this.setDoorRect(this.dyn, v.id, rc); }
     }
     this.updateMobs(dt, rt, cam, camYaw, selfId);
+    this.updateMirrors(selfId, cam, camYaw);
     this.updateTosses(now);
     this.updateFlicker(now);
     for (let i = this.beams.length - 1; i >= 0; i--) {

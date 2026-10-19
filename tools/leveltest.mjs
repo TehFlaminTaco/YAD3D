@@ -6,6 +6,8 @@ import { decodeLevel } from '../src/shared/leveldata.js';
 import { World } from '../src/shared/world.js';
 import { LevelMesh } from '../src/render/level.js';
 import { TILE, KIND, DV } from '../src/shared/config.js';
+import fs from 'node:fs';
+import { Looks, WORN_SLOTS } from '../src/shared/looks.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const data = loadSimData(root);
@@ -86,6 +88,28 @@ console.log('smashed window');
     ok(sides.every((s) => solid.get(edge(c, r, s, INSET)) === gr), `${name}: the grille is left standing`);
     ok(floors.get(i) === world.floorCell[i], `${name}: the floor shows`);
   }
+}
+
+
+console.log('character art');
+{
+  const chars = JSON.parse(fs.readFileSync(path.join(root, 'assets/chars.json'), 'utf8'));
+  const jobs = JSON.parse(fs.readFileSync(path.join(root, 'data/jobs.json'), 'utf8')).jobs;
+  const bases = [chars.eyes, ...Object.values(chars.body), ...['hair', 'facial', 'underwear', 'undershirt', 'socks'].flatMap((k) => chars[k].map((e) => e.c)), ...Object.values(chars.worn).flatMap((w) => Object.values(w).map((e) => e[0]))];
+  ok(bases.every((b) => b >= -1 && (b < 0 || b + 3 < chars.cells)), 'every cell group the data points at exists in the sheet');
+  ok(chars.hair.length > 100 && chars.facial.length > 30 && chars.skin.length === 12, `the option lists are the real SS13 ones (${chars.hair.length} hair, ${chars.facial.length} facial)`);
+  const missing = [];
+  for (const j of jobs) for (const slot of WORN_SLOTS) {
+    const path_ = j.outfit[slot];
+    if (typeof path_ === 'string' && slot !== 'suit_store' && !chars.worn[path_]?.[slot]) missing.push(`${j.id} ${slot} ${path_}`);
+  }
+  ok(missing.length === 0, `every job's clothes can be drawn (${missing.slice(0, 3).join('; ')})`);
+  const looks = new Looks(chars);
+  let seed = 7;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const randoms = Array.from({ length: 200 }, () => looks.random(rand));
+  ok(randoms.every((l) => JSON.stringify(looks.sanitize(l)) === JSON.stringify(l)), 'random looks are already valid');
+  ok(new Set(randoms.map((l) => l.h)).size > 30, 'and varied');
 }
 
 console.log(`${pass} passed, ${fail} failed`);
