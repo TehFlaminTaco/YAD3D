@@ -173,11 +173,11 @@ writes `assets/ui.png`, `assets/ui.json` and `assets/overlays/` from the HUD ico
 ### Tests
 
 ```sh
-npm run test:sim      # 44 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, chat,
+npm run test:sim      # 51 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, chat,
                       #   consoles, drag and drop, death and ghosts)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
-npm run test:ui       # headless Chromium, local round: look and hands modes, hands, drag and drop, body panel, bags,
+npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, body panel, bags,
                       #   throwing, PDA, consoles, chat and runechat, screen effects, death (needs Playwright)
 npm run test:net      # starts the server and drives 3 browsers: lobby, round start, chat/radio, prediction, late join, ghosts, reset
 ```
