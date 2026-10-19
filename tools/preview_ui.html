@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><script type="importmap">{"imports":{"three":"../vendor/three.module.js"}}</script>
+<style>body{background:#222;margin:0;color:#ccc;font:12px monospace} canvas{image-rendering:pixelated;margin:4px;background:#3a4450}</style></head>
+<body><div id="out"></div>
+<script type="module">
+// dev preview of procedural UI art: node tools/shot.mjs can't load this, use tools/preview.mjs
+import { UiArt, paintHand, parseHex, HAND_W, HAND_H } from '../src/client/art.js';
+import { makeRects } from '../src/shared/leveldata.js';
+const art = await UiArt.load.call(UiArt).catch(async () => { const r = await fetch('../assets/ui.json'); return null; });
+const spr = await (await fetch('../assets/sprites.json')).json();
+const rects = makeRects(spr);
+const img = new Image(); img.src = '../assets/sprites.png'; await img.decode();
+const level = await (await fetch('../assets/level.json')).json();
+const find = (n) => Object.values(level.itemdefs).find((d) => d.n === n)?.s;
+const out = document.getElementById('out');
+const S = 5;
+const skins = [[241,200,165],[198,143,102],[122,75,46]];
+const items = ['crowbar','welding tool','flashlight','mechanical toolbox','emergency oxygen tank','energy gun','fire extinguisher','backpack','PDA','bruise pack','wrench','screwdriver'];
+let k = 0;
+for (const pose of ['open','push','claw','fist','hold']) {
+  for (const it of pose === 'hold' ? items : [null]) {
+    const cv = document.createElement('canvas'); cv.width = HAND_W; cv.height = HAND_H;
+    cv.style.width = HAND_W * 3 + 'px'; cv.style.height = HAND_H * 3 + 'px';
+    const s = it ? find(it) : null;
+    paintHand(cv.getContext('2d'), { pose, skin: skins[k++ % 3], sleeve: k % 2 ? [60, 70, 90] : null, item: s != null ? { img, rect: rects[s] } : null });
+    out.appendChild(cv);
+  }
+}
+window.done = true;
+</script></body></html>

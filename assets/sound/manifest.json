@@ -1,0 +1,280 @@
+{
+ "door_open": [
+  "machines__airlockopen.ogg"
+ ],
+ "door_close": [
+  "machines__airlockclose.ogg"
+ ],
+ "door_forced": [
+  "machines__airlockforced.ogg"
+ ],
+ "door_denied": [
+  "machines__deniedbeep.ogg"
+ ],
+ "door_bolt": [
+  "machines__boltsdown.ogg"
+ ],
+ "door_unbolt": [
+  "machines__boltsup.ogg"
+ ],
+ "terminal_on": [
+  "machines__terminal_on.ogg"
+ ],
+ "terminal_off": [
+  "machines__terminal_off.ogg"
+ ],
+ "terminal_key": [
+  "machines__terminal_button01.ogg",
+  "machines__terminal_button02.ogg",
+  "machines__terminal_button03.ogg",
+  "machines__terminal_button04.ogg",
+  "machines__terminal_button05.ogg",
+  "machines__terminal_button06.ogg",
+  "machines__terminal_button07.ogg",
+  "machines__terminal_button08.ogg"
+ ],
+ "terminal_ok": [
+  "machines__terminal_prompt_confirm.ogg"
+ ],
+ "terminal_no": [
+  "machines__terminal_prompt_deny.ogg"
+ ],
+ "terminal_alert": [
+  "machines__terminal_alert.ogg"
+ ],
+ "alarm": [
+  "machines__alarm.ogg"
+ ],
+ "beep": [
+  "machines__beep.ogg"
+ ],
+ "ping": [
+  "machines__ping.ogg"
+ ],
+ "chime": [
+  "machines__chime.ogg"
+ ],
+ "twobeep": [
+  "machines__twobeep.ogg"
+ ],
+ "triple_beep": [
+  "machines__triple_beep.ogg"
+ ],
+ "synth_yes": [
+  "machines__synth_yes.ogg"
+ ],
+ "synth_no": [
+  "machines__synth_no.ogg"
+ ],
+ "vend": [
+  "machines__machine_vend.ogg"
+ ],
+ "closet_open": [
+  "machines__closet_open.ogg"
+ ],
+ "closet_close": [
+  "machines__closet_close.ogg"
+ ],
+ "hiss": [
+  "machines__hiss.ogg"
+ ],
+ "wind": [
+  "effects__space_wind.ogg"
+ ],
+ "glass_break": [
+  "effects__glassbr1.ogg",
+  "effects__glassbr2.ogg",
+  "effects__glassbr3.ogg"
+ ],
+ "glass_hit": [
+  "effects__glasshit.ogg"
+ ],
+ "explosion": [
+  "effects__explosion1.ogg",
+  "effects__explosion2.ogg",
+  "effects__explosion3.ogg"
+ ],
+ "explosion_far": [
+  "effects__explosion_distant.ogg"
+ ],
+ "meteor": [
+  "effects__meteorimpact.ogg"
+ ],
+ "bodyfall": [
+  "effects__bodyfall1.ogg",
+  "effects__bodyfall2.ogg",
+  "effects__bodyfall3.ogg",
+  "effects__bodyfall4.ogg"
+ ],
+ "sparks": [
+  "effects__sparks1.ogg",
+  "effects__sparks2.ogg",
+  "effects__sparks3.ogg",
+  "effects__sparks4.ogg"
+ ],
+ "zzzt": [
+  "effects__zzzt.ogg"
+ ],
+ "spray": [
+  "effects__spray.ogg"
+ ],
+ "extinguish": [
+  "effects__extinguish.ogg"
+ ],
+ "laser": [
+  "weapons__laser.ogg",
+  "weapons__laser2.ogg",
+  "weapons__laser3.ogg"
+ ],
+ "taser": [
+  "weapons__taser.ogg"
+ ],
+ "punch": [
+  "weapons__punch1.ogg",
+  "weapons__punch2.ogg",
+  "weapons__punch3.ogg",
+  "weapons__punch4.ogg"
+ ],
+ "miss": [
+  "weapons__punchmiss.ogg"
+ ],
+ "baton": [
+  "weapons__genhit1.ogg",
+  "weapons__genhit2.ogg",
+  "weapons__genhit3.ogg"
+ ],
+ "slash": [
+  "weapons__slash.ogg"
+ ],
+ "bite": [
+  "weapons__bite.ogg"
+ ],
+ "pain_m": [
+  "voice__human__malescream_1.ogg",
+  "voice__human__malescream_2.ogg",
+  "voice__human__malescream_3.ogg",
+  "voice__human__malescream_4.ogg",
+  "voice__human__malescream_5.ogg",
+  "voice__human__malescream_6.ogg"
+ ],
+ "pain_f": [
+  "voice__human__femalescream_1.ogg",
+  "voice__human__femalescream_2.ogg",
+  "voice__human__femalescream_3.ogg",
+  "voice__human__femalescream_4.ogg",
+  "voice__human__femalescream_5.ogg"
+ ],
+ "heart_fast": [
+  "health__fastbeat.ogg"
+ ],
+ "heart_slow": [
+  "health__slowbeat.ogg"
+ ],
+ "pickup": [
+  "items__handling__crowbar_pickup.ogg",
+  "items__handling__component_pickup.ogg",
+  "items__handling__cloth_pickup.ogg"
+ ],
+ "drop": [
+  "items__handling__crowbar_drop.ogg",
+  "items__handling__component_drop.ogg",
+  "items__handling__cloth_drop.ogg"
+ ],
+ "equip": [
+  "items__equip__jumpsuit_equip.ogg",
+  "items__equip__toolbelt_equip.ogg"
+ ],
+ "welder": [
+  "items__welder.ogg",
+  "items__welder2.ogg"
+ ],
+ "welder_on": [
+  "items__welderactivate.ogg"
+ ],
+ "wrench": [
+  "items__ratchet.ogg"
+ ],
+ "screwdriver": [
+  "items__screwdriver.ogg",
+  "items__screwdriver2.ogg"
+ ],
+ "wirecutter": [
+  "items__wirecutter.ogg"
+ ],
+ "crowbar": [
+  "items__crowbar.ogg"
+ ],
+ "radio_static": [
+  "items__radiostatic.ogg"
+ ],
+ "step_floor": [
+  "effects__footstep__floor1.ogg",
+  "effects__footstep__floor2.ogg",
+  "effects__footstep__floor3.ogg",
+  "effects__footstep__floor4.ogg",
+  "effects__footstep__floor5.ogg"
+ ],
+ "step_plating": [
+  "effects__footstep__plating1.ogg",
+  "effects__footstep__plating2.ogg",
+  "effects__footstep__plating3.ogg",
+  "effects__footstep__plating4.ogg",
+  "effects__footstep__plating5.ogg"
+ ],
+ "step_catwalk": [
+  "effects__footstep__catwalk1.ogg",
+  "effects__footstep__catwalk2.ogg",
+  "effects__footstep__catwalk3.ogg",
+  "effects__footstep__catwalk4.ogg",
+  "effects__footstep__catwalk5.ogg"
+ ],
+ "step_carpet": [
+  "effects__footstep__carpet1.ogg",
+  "effects__footstep__carpet2.ogg",
+  "effects__footstep__carpet3.ogg",
+  "effects__footstep__carpet4.ogg",
+  "effects__footstep__carpet5.ogg"
+ ],
+ "step_wood": [
+  "effects__footstep__wood1.ogg",
+  "effects__footstep__wood2.ogg",
+  "effects__footstep__wood3.ogg",
+  "effects__footstep__wood4.ogg",
+  "effects__footstep__wood5.ogg"
+ ],
+ "amb_station": [
+  "ambience__ambigen1.ogg",
+  "ambience__ambigen2.ogg",
+  "ambience__ambigen3.ogg",
+  "ambience__ambigen4.ogg",
+  "ambience__ambigen5.ogg",
+  "ambience__ambigen6.ogg",
+  "ambience__ambigen7.ogg",
+  "ambience__ambigen8.ogg"
+ ],
+ "amb_maint": [
+  "ambience__ambimaint1.ogg",
+  "ambience__ambimaint2.ogg",
+  "ambience__ambimaint3.ogg",
+  "ambience__ambimaint4.ogg",
+  "ambience__ambimaint5.ogg"
+ ],
+ "amb_space": [
+  "ambience__ambispace.ogg",
+  "ambience__ambispace2.ogg"
+ ],
+ "amb_tech": [
+  "ambience__ambitech.ogg",
+  "ambience__ambitech2.ogg",
+  "ambience__ambitech3.ogg"
+ ],
+ "amb_danger": [
+  "ambience__ambidanger.ogg"
+ ],
+ "announce": [
+  "misc__notice1.ogg"
+ ],
+ "airraid": [
+  "misc__airraid.ogg"
+ ]
+}

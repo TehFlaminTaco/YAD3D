@@ -1,0 +1,525 @@
+{
+ "tiles": {
+  "uniform": [
+   0,
+   0,
+   32,
+   32
+  ],
+  "suit": [
+   32,
+   0,
+   32,
+   32
+  ],
+  "back": [
+   64,
+   0,
+   32,
+   32
+  ],
+  "id": [
+   96,
+   0,
+   32,
+   32
+  ],
+  "belt": [
+   128,
+   0,
+   32,
+   32
+  ],
+  "mask": [
+   160,
+   0,
+   32,
+   32
+  ],
+  "glasses": [
+   192,
+   0,
+   32,
+   32
+  ],
+  "ears": [
+   224,
+   0,
+   32,
+   32
+  ],
+  "head": [
+   256,
+   0,
+   32,
+   32
+  ],
+  "suit_storage": [
+   288,
+   0,
+   32,
+   32
+  ],
+  "pocket": [
+   320,
+   0,
+   32,
+   32
+  ],
+  "gloves": [
+   352,
+   0,
+   32,
+   32
+  ],
+  "shoes": [
+   384,
+   0,
+   32,
+   32
+  ],
+  "neck": [
+   416,
+   0,
+   32,
+   32
+  ],
+  "hand_r": [
+   448,
+   0,
+   32,
+   32
+  ],
+  "hand_l": [
+   480,
+   0,
+   32,
+   32
+  ],
+  "hand_active": [
+   0,
+   32,
+   32,
+   32
+  ],
+  "template": [
+   32,
+   32,
+   32,
+   32
+  ],
+  "template_active": [
+   64,
+   32,
+   32,
+   32
+  ],
+  "template_small": [
+   96,
+   32,
+   32,
+   32
+  ],
+  "swap_1": [
+   128,
+   32,
+   32,
+   32
+  ],
+  "swap_2": [
+   160,
+   32,
+   32,
+   32
+  ],
+  "act_throw_off": [
+   192,
+   32,
+   32,
+   32
+  ],
+  "act_throw_on": [
+   224,
+   32,
+   32,
+   32
+  ],
+  "act_drop": [
+   256,
+   32,
+   32,
+   32
+  ],
+  "act_equip": [
+   288,
+   32,
+   32,
+   32
+  ],
+  "act_resist": [
+   320,
+   32,
+   32,
+   32
+  ],
+  "harm": [
+   352,
+   32,
+   32,
+   32
+  ],
+  "help": [
+   384,
+   32,
+   32,
+   32
+  ],
+  "disarm": [
+   416,
+   32,
+   32,
+   32
+  ],
+  "grab": [
+   448,
+   32,
+   32,
+   32
+  ],
+  "toggle": [
+   480,
+   32,
+   32,
+   32
+  ],
+  "internal0": [
+   0,
+   64,
+   32,
+   32
+  ],
+  "internal1": [
+   32,
+   64,
+   32,
+   32
+  ],
+  "backpack_close": [
+   64,
+   64,
+   32,
+   32
+  ],
+  "healthdoll_OVERLAY": [
+   96,
+   64,
+   32,
+   32
+  ],
+  "healthdoll_DEAD": [
+   128,
+   64,
+   32,
+   32
+  ],
+  "head1": [
+   160,
+   64,
+   32,
+   32
+  ],
+  "head2": [
+   192,
+   64,
+   32,
+   32
+  ],
+  "head3": [
+   224,
+   64,
+   32,
+   32
+  ],
+  "head4": [
+   256,
+   64,
+   32,
+   32
+  ],
+  "head5": [
+   288,
+   64,
+   32,
+   32
+  ],
+  "head6": [
+   320,
+   64,
+   32,
+   32
+  ],
+  "head7": [
+   352,
+   64,
+   32,
+   32
+  ],
+  "chest1": [
+   384,
+   64,
+   32,
+   32
+  ],
+  "chest2": [
+   416,
+   64,
+   32,
+   32
+  ],
+  "chest3": [
+   448,
+   64,
+   32,
+   32
+  ],
+  "chest4": [
+   480,
+   64,
+   32,
+   32
+  ],
+  "chest5": [
+   0,
+   96,
+   32,
+   32
+  ],
+  "chest6": [
+   32,
+   96,
+   32,
+   32
+  ],
+  "chest7": [
+   64,
+   96,
+   32,
+   32
+  ],
+  "l_arm1": [
+   96,
+   96,
+   32,
+   32
+  ],
+  "l_arm2": [
+   128,
+   96,
+   32,
+   32
+  ],
+  "l_arm3": [
+   160,
+   96,
+   32,
+   32
+  ],
+  "l_arm4": [
+   192,
+   96,
+   32,
+   32
+  ],
+  "l_arm5": [
+   224,
+   96,
+   32,
+   32
+  ],
+  "l_arm6": [
+   256,
+   96,
+   32,
+   32
+  ],
+  "l_arm7": [
+   288,
+   96,
+   32,
+   32
+  ],
+  "r_arm1": [
+   320,
+   96,
+   32,
+   32
+  ],
+  "r_arm2": [
+   352,
+   96,
+   32,
+   32
+  ],
+  "r_arm3": [
+   384,
+   96,
+   32,
+   32
+  ],
+  "r_arm4": [
+   416,
+   96,
+   32,
+   32
+  ],
+  "r_arm5": [
+   448,
+   96,
+   32,
+   32
+  ],
+  "r_arm6": [
+   480,
+   96,
+   32,
+   32
+  ],
+  "r_arm7": [
+   0,
+   128,
+   32,
+   32
+  ],
+  "l_leg1": [
+   32,
+   128,
+   32,
+   32
+  ],
+  "l_leg2": [
+   64,
+   128,
+   32,
+   32
+  ],
+  "l_leg3": [
+   96,
+   128,
+   32,
+   32
+  ],
+  "l_leg4": [
+   128,
+   128,
+   32,
+   32
+  ],
+  "l_leg5": [
+   160,
+   128,
+   32,
+   32
+  ],
+  "l_leg6": [
+   192,
+   128,
+   32,
+   32
+  ],
+  "l_leg7": [
+   224,
+   128,
+   32,
+   32
+  ],
+  "r_leg1": [
+   256,
+   128,
+   32,
+   32
+  ],
+  "r_leg2": [
+   288,
+   128,
+   32,
+   32
+  ],
+  "r_leg3": [
+   320,
+   128,
+   32,
+   32
+  ],
+  "r_leg4": [
+   352,
+   128,
+   32,
+   32
+  ],
+  "r_leg5": [
+   384,
+   128,
+   32,
+   32
+  ],
+  "r_leg6": [
+   416,
+   128,
+   32,
+   32
+  ],
+  "r_leg7": [
+   448,
+   128,
+   32,
+   32
+  ],
+  "throw_target": [
+   480,
+   128,
+   32,
+   32
+  ]
+ },
+ "size": [
+  512,
+  160
+ ],
+ "overlays": {
+  "brutedamageoverlay": [
+   null,
+   "overlays/brutedamageoverlay1.png",
+   "overlays/brutedamageoverlay2.png",
+   "overlays/brutedamageoverlay3.png",
+   "overlays/brutedamageoverlay4.png",
+   "overlays/brutedamageoverlay5.png",
+   "overlays/brutedamageoverlay6.png"
+  ],
+  "oxydamageoverlay": [
+   null,
+   "overlays/oxydamageoverlay1.png",
+   "overlays/oxydamageoverlay2.png",
+   "overlays/oxydamageoverlay3.png",
+   "overlays/oxydamageoverlay4.png",
+   "overlays/oxydamageoverlay5.png",
+   "overlays/oxydamageoverlay6.png",
+   "overlays/oxydamageoverlay7.png",
+   "overlays/oxydamageoverlay8.png",
+   "overlays/oxydamageoverlay9.png",
+   "overlays/oxydamageoverlay10.png"
+  ],
+  "passage": [
+   null,
+   "overlays/passage1.png",
+   "overlays/passage2.png",
+   "overlays/passage3.png",
+   "overlays/passage4.png",
+   "overlays/passage5.png",
+   "overlays/passage6.png",
+   "overlays/passage7.png",
+   "overlays/passage8.png",
+   "overlays/passage9.png",
+   "overlays/passage10.png"
+  ]
+ }
+}

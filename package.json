@@ -1,0 +1,21 @@
+{
+  "name": "yad3d",
+  "version": "1.0.0",
+  "description": "YAD3D (Yet Another Dead 3D): a first-person, multiplayer Space Station 13 on BoxStation",
+  "scripts": {
+    "start": "node server/index.js",
+    "serve": "python3 tools/serve.py 8123",
+    "build": "python3 tools/build_jobs.py && python3 tools/build_level.py && python3 tools/build_sounds.py && python3 tools/build_ui.py",
+    "test:sim": "node tools/simtest2.mjs",
+    "test:soak": "node tools/simtest.mjs 12 --player",
+    "test:ui": "node tools/uitest.mjs",
+    "test:net": "node tools/nettest.mjs"
+  },
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "three": "^0.170.0",
+    "ws": "^8.22.0"
+  },
+  "type": "module",
+  "private": true
+}

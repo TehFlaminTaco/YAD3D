@@ -1,0 +1,5 @@
+# SS13 source trees used to generate assets/ and data/ (hundreds of MB; see README "Rebuilding the data")
+_src/
+node_modules/
+__pycache__/
+*.pyc

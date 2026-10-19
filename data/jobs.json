@@ -1,0 +1,1665 @@
+{
+ "jobs": [
+  {
+   "id": "assistant",
+   "title": "Assistant",
+   "supervisors": "absolutely everyone",
+   "total": 5,
+   "spawn": 5,
+   "color": "#dddddd",
+   "head": [],
+   "access": [
+    12
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/color/grey",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "atmospheric_technician",
+   "title": "Atmospheric Technician",
+   "supervisors": "the chief engineer",
+   "total": 3,
+   "spawn": 2,
+   "color": "#fff5cc",
+   "head": [
+    "Chief Engineer"
+   ],
+   "access": [
+    10,
+    11,
+    12,
+    13,
+    23,
+    24,
+    32,
+    64,
+    304
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/engineering/atmospheric_technician",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_eng",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/storage/belt/utility/atmostech",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/pda/atmos",
+    "rpocket": "/obj/item/analyzer",
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/industrial",
+    "box": "/obj/item/storage/box/survival/engineer",
+    "contents": [
+     [
+      "/obj/item/modular_computer/tablet/preset/advanced",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "bartender",
+   "title": "Bartender",
+   "supervisors": "the head of personnel",
+   "total": 1,
+   "spawn": 1,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    6,
+    25,
+    28,
+    35,
+    46,
+    64,
+    66
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/bartender",
+    "suit": "/obj/item/clothing/suit/armor/vest",
+    "shoes": "/obj/item/clothing/shoes/laceup",
+    "gloves": null,
+    "glasses": "/obj/item/clothing/glasses/sunglasses/reagent",
+    "ears": "/obj/item/radio/headset/headset_srv",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/bar",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/storage/box/beanbag",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "botanist",
+   "title": "Botanist",
+   "supervisors": "the head of personnel",
+   "total": 3,
+   "spawn": 2,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    6,
+    25,
+    28,
+    35,
+    64
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/hydroponics",
+    "suit": "/obj/item/clothing/suit/apron",
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": "/obj/item/clothing/gloves/botanic_leather",
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srv",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/botanist",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": "/obj/item/plant_analyzer",
+    "back": "/obj/item/storage/backpack/botany",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "captain",
+   "title": "Captain",
+   "supervisors": "Nanotrasen officials and Space law",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ccccff",
+   "head": [
+    "CentCom"
+   ],
+   "access": [],
+   "allAccess": true,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/captain",
+    "suit": "/obj/item/clothing/suit/armor/vest/capcarapace",
+    "shoes": "/obj/item/clothing/shoes/sneakers/brown",
+    "gloves": "/obj/item/clothing/gloves/color/captain",
+    "glasses": "/obj/item/clothing/glasses/sunglasses",
+    "ears": "/obj/item/radio/headset/heads/captain/alt",
+    "mask": null,
+    "head": "/obj/item/clothing/head/caphat",
+    "neck": null,
+    "belt": "/obj/item/pda/captain",
+    "id": "/obj/item/card/id/gold",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/captain",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/melee/classic_baton/telescopic",
+      1
+     ],
+     [
+      "/obj/item/station_charter",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "cargo_technician",
+   "title": "Cargo Technician",
+   "supervisors": "the quartermaster and the head of personnel",
+   "total": 3,
+   "spawn": 2,
+   "color": "#dcba97",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    12,
+    31,
+    41,
+    48,
+    50,
+    54,
+    64,
+    300
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/cargo/tech",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_cargo",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/cargo",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "chaplain",
+   "title": "Chaplain",
+   "supervisors": "the head of personnel",
+   "total": 1,
+   "spawn": 1,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    6,
+    22,
+    27,
+    46
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/chaplain",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srv",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/chaplain",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/cultpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/stamp/chap",
+      1
+     ],
+     [
+      "/obj/item/camera/spooky",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "chemist",
+   "title": "Chemist",
+   "supervisors": "the chief medical officer",
+   "total": 2,
+   "spawn": 2,
+   "color": "#ffeef0",
+   "head": [
+    "Chief Medical Officer"
+   ],
+   "access": [
+    5,
+    6,
+    33,
+    39,
+    45,
+    64,
+    69,
+    301
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/medical/chemist",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat/chemist",
+    "shoes": "/obj/item/clothing/shoes/sneakers/white",
+    "gloves": null,
+    "glasses": "/obj/item/clothing/glasses/science",
+    "ears": "/obj/item/radio/headset/headset_med",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/chemist",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/chemistry",
+    "box": "/obj/item/storage/box/survival/medical",
+    "contents": []
+   }
+  },
+  {
+   "id": "chief_engineer",
+   "title": "Chief Engineer",
+   "supervisors": "the captain",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ffeeaa",
+   "head": [
+    "Captain"
+   ],
+   "access": [
+    10,
+    11,
+    12,
+    13,
+    18,
+    19,
+    23,
+    24,
+    32,
+    56,
+    59,
+    60,
+    61,
+    63,
+    64,
+    65,
+    304
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/engineering/chief_engineer",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/brown",
+    "gloves": "/obj/item/clothing/gloves/color/black",
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/heads/ce",
+    "mask": null,
+    "head": "/obj/item/clothing/head/hardhat/white",
+    "neck": null,
+    "belt": "/obj/item/storage/belt/utility/chief/full",
+    "id": "/obj/item/card/id/silver",
+    "lpocket": "/obj/item/pda/heads/ce",
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/industrial",
+    "box": "/obj/item/storage/box/survival/engineer",
+    "contents": [
+     [
+      "/obj/item/melee/classic_baton/telescopic",
+      1
+     ],
+     [
+      "/obj/item/modular_computer/tablet/preset/advanced",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "chief_medical_officer",
+   "title": "Chief Medical Officer",
+   "supervisors": "the captain",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ffddf0",
+   "head": [
+    "Captain"
+   ],
+   "access": [
+    5,
+    6,
+    12,
+    19,
+    33,
+    39,
+    40,
+    45,
+    59,
+    60,
+    63,
+    64,
+    69,
+    70,
+    301
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/medical/chief_medical_officer",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat/cmo",
+    "shoes": "/obj/item/clothing/shoes/sneakers/brown",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/heads/cmo",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/heads/cmo",
+    "id": "/obj/item/card/id/silver",
+    "lpocket": "/obj/item/pinpointer/crew",
+    "rpocket": null,
+    "suit_store": "/obj/item/flashlight/pen/paramedic",
+    "back": "/obj/item/storage/backpack/medic",
+    "box": "/obj/item/storage/box/survival/medical",
+    "contents": [
+     [
+      "/obj/item/melee/classic_baton/telescopic",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "clown",
+   "title": "Clown",
+   "supervisors": "the head of personnel",
+   "total": 1,
+   "spawn": 1,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    46
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/clown",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/clown_shoes",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srv",
+    "mask": "/obj/item/clothing/mask/gas/clown_hat",
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/clown",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/bikehorn",
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/clown",
+    "box": "/obj/item/storage/box/hug/survival",
+    "contents": [
+     [
+      "/obj/item/stamp/clown",
+      1
+     ],
+     [
+      "/obj/item/reagent_containers/spray/waterflower",
+      1
+     ],
+     [
+      "/obj/item/reagent_containers/food/snacks/grown/banana",
+      1
+     ],
+     [
+      "/obj/item/instrument/bikehorn",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "cook",
+   "title": "Cook",
+   "supervisors": "the head of personnel",
+   "total": 2,
+   "spawn": 1,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    6,
+    25,
+    28,
+    35,
+    64
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/chef",
+    "suit": "/obj/item/clothing/suit/toggle/chef",
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srv",
+    "mask": "/obj/item/clothing/mask/fakemoustache/italian",
+    "head": "/obj/item/clothing/head/chefhat",
+    "neck": null,
+    "belt": "/obj/item/pda/cook",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/sharpener",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "curator",
+   "title": "Curator",
+   "supervisors": "the head of personnel",
+   "total": 1,
+   "spawn": 1,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    32,
+    37,
+    54
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/curator",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/laceup",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srv",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/curator",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/laser_pointer",
+    "rpocket": "/obj/item/key/displaycase",
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/choice_beacon/hero",
+      1
+     ],
+     [
+      "/obj/item/soapstone",
+      1
+     ],
+     [
+      "/obj/item/barcodescanner",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "detective",
+   "title": "Detective",
+   "supervisors": "the head of security",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ffeeee",
+   "head": [
+    "Head of Security"
+   ],
+   "access": [
+    2,
+    4,
+    6,
+    12,
+    42,
+    63,
+    64,
+    66,
+    302
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/security/detective",
+    "suit": "/obj/item/clothing/suit/det_suit",
+    "shoes": "/obj/item/clothing/shoes/sneakers/brown",
+    "gloves": "/obj/item/clothing/gloves/color/black",
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_sec/alt",
+    "mask": "/obj/item/clothing/mask/cigarette",
+    "head": "/obj/item/clothing/head/fedora/det_hat",
+    "neck": "/obj/item/clothing/neck/tie/detective",
+    "belt": "/obj/item/pda/detective",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/toy/crayon/white",
+    "rpocket": "/obj/item/lighter",
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/storage/box/evidence",
+      1
+     ],
+     [
+      "/obj/item/detective_scanner",
+      1
+     ],
+     [
+      "/obj/item/melee/classic_baton",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "geneticist",
+   "title": "Geneticist",
+   "supervisors": "the research director",
+   "total": 2,
+   "spawn": 2,
+   "color": "#ffeeff",
+   "head": [
+    "Research Director"
+   ],
+   "access": [
+    6,
+    7,
+    9,
+    23,
+    29,
+    47,
+    55,
+    64,
+    303
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/rnd/geneticist",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat/genetics",
+    "shoes": "/obj/item/clothing/shoes/sneakers/white",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_sci",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/geneticist",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/sequence_scanner",
+    "rpocket": null,
+    "suit_store": "/obj/item/flashlight/pen",
+    "back": "/obj/item/storage/backpack/genetics",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "head_of_personnel",
+   "title": "Head of Personnel",
+   "supervisors": "the captain",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ddddff",
+   "head": [
+    "Captain"
+   ],
+   "access": [
+    1,
+    5,
+    6,
+    10,
+    12,
+    15,
+    16,
+    18,
+    19,
+    21,
+    22,
+    25,
+    26,
+    27,
+    28,
+    31,
+    32,
+    35,
+    37,
+    38,
+    41,
+    42,
+    46,
+    47,
+    48,
+    50,
+    53,
+    54,
+    57,
+    59,
+    60,
+    62,
+    63,
+    64,
+    66,
+    70,
+    300,
+    301,
+    302,
+    303,
+    304
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/head_of_personnel",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/brown",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/heads/hop",
+    "mask": null,
+    "head": "/obj/item/clothing/head/hopcap",
+    "neck": null,
+    "belt": "/obj/item/pda/heads/hop",
+    "id": "/obj/item/card/id/silver",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/storage/box/ids",
+      1
+     ],
+     [
+      "/obj/item/melee/classic_baton/telescopic",
+      1
+     ],
+     [
+      "/obj/item/modular_computer/tablet/preset/advanced",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "head_of_security",
+   "title": "Head of Security",
+   "supervisors": "the captain",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ffdddd",
+   "head": [
+    "Captain"
+   ],
+   "access": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    10,
+    12,
+    19,
+    21,
+    32,
+    42,
+    47,
+    48,
+    50,
+    58,
+    59,
+    60,
+    62,
+    63,
+    64,
+    66,
+    302
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/security/head_of_security",
+    "suit": "/obj/item/clothing/suit/armor/hos/trenchcoat",
+    "shoes": "/obj/item/clothing/shoes/jackboots",
+    "gloves": "/obj/item/clothing/gloves/color/black",
+    "glasses": "/obj/item/clothing/glasses/hud/security/sunglasses",
+    "ears": "/obj/item/radio/headset/heads/hos/alt",
+    "mask": null,
+    "head": "/obj/item/clothing/head/hos/beret",
+    "neck": null,
+    "belt": "/obj/item/pda/heads/hos",
+    "id": "/obj/item/card/id/silver",
+    "lpocket": "/obj/item/restraints/handcuffs",
+    "rpocket": "/obj/item/assembly/flash/handheld",
+    "suit_store": "/obj/item/gun/energy/e_gun",
+    "back": "/obj/item/storage/backpack/security",
+    "box": "/obj/item/storage/box/survival/security",
+    "contents": [
+     [
+      "/obj/item/melee/baton/loaded",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "janitor",
+   "title": "Janitor",
+   "supervisors": "the head of personnel",
+   "total": 2,
+   "spawn": 1,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    12,
+    26,
+    64
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/janitor",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srv",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/janitor",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/modular_computer/tablet/preset/advanced",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "lawyer",
+   "title": "Lawyer",
+   "supervisors": "the head of personnel",
+   "total": 2,
+   "spawn": 2,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    38,
+    42,
+    63
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/lawyer/bluesuit",
+    "suit": "/obj/item/clothing/suit/toggle/lawyer",
+    "shoes": "/obj/item/clothing/shoes/laceup",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srvsec",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/lawyer",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/laser_pointer",
+    "rpocket": "/obj/item/clothing/accessory/lawyers_badge",
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "medical_doctor",
+   "title": "Medical Doctor",
+   "supervisors": "the chief medical officer",
+   "total": 5,
+   "spawn": 3,
+   "color": "#ffeef0",
+   "head": [
+    "Chief Medical Officer"
+   ],
+   "access": [
+    5,
+    6,
+    33,
+    39,
+    45,
+    64,
+    69,
+    301
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/medical/doctor",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat",
+    "shoes": "/obj/item/clothing/shoes/sneakers/white",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_med",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/medical",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": "/obj/item/flashlight/pen",
+    "back": "/obj/item/storage/backpack/medic",
+    "box": "/obj/item/storage/box/survival/medical",
+    "contents": []
+   }
+  },
+  {
+   "id": "mime",
+   "title": "Mime",
+   "supervisors": "the head of personnel",
+   "total": 1,
+   "spawn": 1,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    46
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/civilian/mime",
+    "suit": "/obj/item/clothing/suit/toggle/suspenders",
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": "/obj/item/clothing/gloves/color/white",
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srv",
+    "mask": "/obj/item/clothing/mask/gas/mime",
+    "head": "/obj/item/clothing/head/frenchberet",
+    "neck": null,
+    "belt": "/obj/item/pda/mime",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/mime",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/stamp/mime",
+      1
+     ],
+     [
+      "/obj/item/book/mimery",
+      1
+     ],
+     [
+      "/obj/item/reagent_containers/food/drinks/bottle/bottleofnothing",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "paramedic",
+   "title": "Paramedic",
+   "supervisors": "the chief medical officer",
+   "total": 2,
+   "spawn": 2,
+   "color": "#ffeef0",
+   "head": [
+    "Chief Medical Officer"
+   ],
+   "access": [
+    5,
+    6,
+    10,
+    12,
+    18,
+    31,
+    32,
+    35,
+    45,
+    47,
+    64,
+    301
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/medical/paramedic",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat/paramedic",
+    "shoes": "/obj/item/clothing/shoes/sneakers/blue",
+    "gloves": "/obj/item/clothing/gloves/color/latex/nitrile",
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_med",
+    "mask": null,
+    "head": "/obj/item/clothing/head/soft/paramedic",
+    "neck": null,
+    "belt": "/obj/item/storage/belt/medical/paramedic",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/pda/medical",
+    "rpocket": null,
+    "suit_store": "/obj/item/flashlight/pen/paramedic",
+    "back": "/obj/item/storage/backpack/medic",
+    "box": "/obj/item/storage/box/survival/medical",
+    "contents": [
+     [
+      "/obj/item/roller",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "prisoner",
+   "title": "Prisoner",
+   "supervisors": "the security team",
+   "total": 0,
+   "spawn": 2,
+   "color": "#ffe1c3",
+   "head": [
+    "The Security Team"
+   ],
+   "access": [],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/prisoner",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/orange",
+    "gloves": null,
+    "glasses": null,
+    "ears": null,
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": null,
+    "id": "/obj/item/card/id/prisoner",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "psychologist",
+   "title": "Psychologist",
+   "supervisors": "the head of personnel and the chief medical officer",
+   "total": 1,
+   "spawn": 1,
+   "color": "#bbe291",
+   "head": [
+    "Head of Personnel",
+    "Chief Medical Officer"
+   ],
+   "access": [
+    5,
+    70
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/suit/black",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/laceup",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_srvmed",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/medical",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/medic",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/storage/pill_bottle/mannitol",
+      1
+     ],
+     [
+      "/obj/item/storage/pill_bottle/psicodine",
+      1
+     ],
+     [
+      "/obj/item/storage/pill_bottle/paxpsych",
+      1
+     ],
+     [
+      "/obj/item/storage/pill_bottle/happinesspsych",
+      1
+     ],
+     [
+      "/obj/item/storage/pill_bottle/lsdpsych",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "quartermaster",
+   "title": "Quartermaster",
+   "supervisors": "the head of personnel",
+   "total": 1,
+   "spawn": 1,
+   "color": "#d7b088",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    12,
+    31,
+    41,
+    48,
+    50,
+    53,
+    54,
+    64,
+    300
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/cargo/qm",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/sneakers/brown",
+    "gloves": null,
+    "glasses": "/obj/item/clothing/glasses/sunglasses",
+    "ears": "/obj/item/radio/headset/headset_cargo",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/quartermaster",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "research_director",
+   "title": "Research Director",
+   "supervisors": "the captain",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ffddff",
+   "head": [
+    "Captain"
+   ],
+   "access": [
+    6,
+    7,
+    8,
+    9,
+    12,
+    16,
+    17,
+    19,
+    23,
+    29,
+    30,
+    47,
+    55,
+    59,
+    60,
+    62,
+    63,
+    64,
+    65,
+    67,
+    71,
+    303
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/rnd/research_director",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat",
+    "shoes": "/obj/item/clothing/shoes/sneakers/brown",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/heads/rd",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/heads/rd",
+    "id": "/obj/item/card/id/silver",
+    "lpocket": "/obj/item/laser_pointer",
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/science",
+    "box": "/obj/item/storage/box/survival",
+    "contents": [
+     [
+      "/obj/item/melee/classic_baton/telescopic",
+      1
+     ],
+     [
+      "/obj/item/modular_computer/tablet/preset/advanced",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "roboticist",
+   "title": "Roboticist",
+   "supervisors": "the research director",
+   "total": 2,
+   "spawn": 2,
+   "color": "#ffeeff",
+   "head": [
+    "Research Director"
+   ],
+   "access": [
+    6,
+    7,
+    8,
+    9,
+    23,
+    29,
+    47,
+    55,
+    64,
+    71,
+    303
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/rnd/roboticist",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat",
+    "shoes": "/obj/item/clothing/shoes/sneakers/black",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_sci",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/storage/belt/utility/full",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/pda/roboticist",
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/science",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "scientist",
+   "title": "Scientist",
+   "supervisors": "the research director",
+   "total": 5,
+   "spawn": 3,
+   "color": "#ffeeff",
+   "head": [
+    "Research Director"
+   ],
+   "access": [
+    7,
+    8,
+    9,
+    23,
+    29,
+    47,
+    55,
+    64,
+    71,
+    303
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/rnd/scientist",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat/science",
+    "shoes": "/obj/item/clothing/shoes/sneakers/white",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_sci",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/toxins",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/science",
+    "box": "/obj/item/storage/box/survival",
+    "contents": []
+   }
+  },
+  {
+   "id": "security_officer",
+   "title": "Security Officer",
+   "supervisors": "the head of security, and the head of your assigned department (if applicable)",
+   "total": 5,
+   "spawn": 5,
+   "color": "#ffeeee",
+   "head": [
+    "Head of Security"
+   ],
+   "access": [
+    1,
+    2,
+    4,
+    6,
+    12,
+    42,
+    63,
+    64,
+    66,
+    302
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/security/officer",
+    "suit": "/obj/item/clothing/suit/armor/vest/alt",
+    "shoes": "/obj/item/clothing/shoes/jackboots",
+    "gloves": "/obj/item/clothing/gloves/color/black",
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_sec/alt",
+    "mask": null,
+    "head": "/obj/item/clothing/head/helmet/sec",
+    "neck": null,
+    "belt": "/obj/item/pda/security",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/restraints/handcuffs",
+    "rpocket": "/obj/item/assembly/flash/handheld",
+    "suit_store": "/obj/item/gun/energy/disabler",
+    "back": "/obj/item/storage/backpack/security",
+    "box": "/obj/item/storage/box/survival/security",
+    "contents": [
+     [
+      "/obj/item/melee/baton/loaded",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "shaft_miner",
+   "title": "Shaft Miner",
+   "supervisors": "the quartermaster and the head of personnel",
+   "total": 3,
+   "spawn": 3,
+   "color": "#dcba97",
+   "head": [
+    "Head of Personnel"
+   ],
+   "access": [
+    12,
+    31,
+    41,
+    48,
+    50,
+    54,
+    64,
+    300
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/cargo/miner/lavaland",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/workboots/mining",
+    "gloves": "/obj/item/clothing/gloves/color/black",
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_cargo/mining",
+    "mask": null,
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/shaftminer",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/reagent_containers/hypospray/medipen/survival",
+    "rpocket": "/obj/item/storage/bag/ore",
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/explorer",
+    "box": "/obj/item/storage/box/survival/mining",
+    "contents": [
+     [
+      "/obj/item/flashlight/seclite",
+      1
+     ],
+     [
+      "/obj/item/kitchen/knife/combat/survival",
+      1
+     ],
+     [
+      "/obj/item/mining_voucher",
+      1
+     ],
+     [
+      "/obj/item/stack/marker_beacon/ten",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "station_engineer",
+   "title": "Station Engineer",
+   "supervisors": "the chief engineer",
+   "total": 5,
+   "spawn": 5,
+   "color": "#fff5cc",
+   "head": [
+    "Chief Engineer"
+   ],
+   "access": [
+    10,
+    11,
+    12,
+    13,
+    23,
+    24,
+    32,
+    61,
+    64,
+    304
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/engineering/engineer",
+    "suit": null,
+    "shoes": "/obj/item/clothing/shoes/workboots",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_eng",
+    "mask": null,
+    "head": "/obj/item/clothing/head/hardhat",
+    "neck": null,
+    "belt": "/obj/item/storage/belt/utility/full/engi",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/pda/engineering",
+    "rpocket": "/obj/item/t_scanner",
+    "suit_store": null,
+    "back": "/obj/item/storage/backpack/industrial",
+    "box": "/obj/item/storage/box/survival/engineer",
+    "contents": [
+     [
+      "/obj/item/modular_computer/tablet/preset/advanced",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "id": "virologist",
+   "title": "Virologist",
+   "supervisors": "the chief medical officer",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ffeef0",
+   "head": [
+    "Chief Medical Officer"
+   ],
+   "access": [
+    5,
+    6,
+    33,
+    39,
+    45,
+    64,
+    301
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/medical/virologist",
+    "suit": "/obj/item/clothing/suit/toggle/labcoat/virologist",
+    "shoes": "/obj/item/clothing/shoes/sneakers/white",
+    "gloves": null,
+    "glasses": null,
+    "ears": "/obj/item/radio/headset/headset_med",
+    "mask": "/obj/item/clothing/mask/surgical",
+    "head": null,
+    "neck": null,
+    "belt": "/obj/item/pda/viro",
+    "id": "/obj/item/card/id",
+    "lpocket": null,
+    "rpocket": null,
+    "suit_store": "/obj/item/flashlight/pen",
+    "back": "/obj/item/storage/backpack/virology",
+    "box": "/obj/item/storage/box/survival/medical",
+    "contents": []
+   }
+  },
+  {
+   "id": "warden",
+   "title": "Warden",
+   "supervisors": "the head of security",
+   "total": 1,
+   "spawn": 1,
+   "color": "#ffeeee",
+   "head": [
+    "Head of Security"
+   ],
+   "access": [
+    1,
+    2,
+    3,
+    4,
+    6,
+    12,
+    42,
+    63,
+    64,
+    66,
+    302
+   ],
+   "allAccess": false,
+   "outfit": {
+    "uniform": "/obj/item/clothing/under/rank/security/warden",
+    "suit": "/obj/item/clothing/suit/armor/vest/warden/alt",
+    "shoes": "/obj/item/clothing/shoes/jackboots",
+    "gloves": "/obj/item/clothing/gloves/color/black",
+    "glasses": "/obj/item/clothing/glasses/hud/security/sunglasses",
+    "ears": "/obj/item/radio/headset/headset_sec/alt",
+    "mask": null,
+    "head": "/obj/item/clothing/head/warden",
+    "neck": null,
+    "belt": "/obj/item/pda/warden",
+    "id": "/obj/item/card/id",
+    "lpocket": "/obj/item/restraints/handcuffs",
+    "rpocket": "/obj/item/assembly/flash/handheld",
+    "suit_store": "/obj/item/gun/energy/disabler",
+    "back": "/obj/item/storage/backpack/security",
+    "box": "/obj/item/storage/box/survival/security",
+    "contents": [
+     [
+      "/obj/item/melee/baton/loaded",
+      1
+     ]
+    ]
+   }
+  }
+ ],
+ "access": {
+  "1": "SECURITY",
+  "2": "BRIG",
+  "3": "ARMORY",
+  "4": "FORENSICS_LOCKERS",
+  "5": "MEDICAL",
+  "6": "MORGUE",
+  "7": "RND",
+  "8": "TOXINS",
+  "9": "GENETICS",
+  "10": "ENGINE",
+  "11": "ENGINE_EQUIP",
+  "12": "MAINT_TUNNELS",
+  "13": "EXTERNAL_AIRLOCKS",
+  "15": "CHANGE_IDS",
+  "16": "AI_UPLOAD",
+  "17": "TELEPORTER",
+  "18": "EVA",
+  "19": "HEADS",
+  "20": "CAPTAIN",
+  "21": "ALL_PERSONAL_LOCKERS",
+  "22": "CHAPEL_OFFICE",
+  "23": "TECH_STORAGE",
+  "24": "ATMOSPHERICS",
+  "25": "BAR",
+  "26": "JANITOR",
+  "27": "CREMATORIUM",
+  "28": "KITCHEN",
+  "29": "ROBOTICS",
+  "30": "RD",
+  "31": "CARGO",
+  "32": "CONSTRUCTION",
+  "33": "CHEMISTRY",
+  "35": "HYDROPONICS",
+  "37": "LIBRARY",
+  "38": "LAWYER",
+  "39": "VIROLOGY",
+  "40": "CMO",
+  "41": "QM",
+  "42": "COURT",
+  "45": "SURGERY",
+  "46": "THEATRE",
+  "47": "RESEARCH",
+  "48": "MINING",
+  "50": "MAILSORTING",
+  "53": "VAULT",
+  "54": "MINING_STATION",
+  "55": "XENOBIOLOGY",
+  "56": "CE",
+  "57": "HOP",
+  "58": "HOS",
+  "59": "RC_ANNOUNCE",
+  "60": "KEYCARD_AUTH",
+  "61": "TCOMSAT",
+  "62": "GATEWAY",
+  "63": "SEC_DOORS",
+  "64": "MINERAL_STOREROOM",
+  "65": "MINISAT",
+  "66": "WEAPONS",
+  "67": "NETWORK",
+  "69": "PHARMACY",
+  "70": "PSYCHOLOGY",
+  "71": "TOXINS_STORAGE",
+  "101": "CENT_GENERAL",
+  "102": "CENT_THUNDER",
+  "103": "CENT_SPECOPS",
+  "104": "CENT_MEDICAL",
+  "105": "CENT_LIVING",
+  "106": "CENT_STORAGE",
+  "107": "CENT_TELEPORTER",
+  "109": "CENT_CAPTAIN",
+  "110": "CENT_BAR",
+  "150": "SYNDICATE",
+  "151": "SYNDICATE_LEADER",
+  "200": "AWAY_GENERAL",
+  "201": "AWAY_MAINT",
+  "202": "AWAY_MED",
+  "203": "AWAY_SEC",
+  "204": "AWAY_ENGINE",
+  "205": "AWAY_GENERIC1",
+  "206": "AWAY_GENERIC2",
+  "207": "AWAY_GENERIC3",
+  "208": "AWAY_GENERIC4",
+  "250": "BLOODCULT",
+  "300": "MECH_MINING",
+  "301": "MECH_MEDICAL",
+  "302": "MECH_SECURITY",
+  "303": "MECH_SCIENCE",
+  "304": "MECH_ENGINE"
+ }
+}
