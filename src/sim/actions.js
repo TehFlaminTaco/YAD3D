@@ -435,7 +435,10 @@ export class Actions {
     const dist = Math.min(maxd, wall) - 0.4;
     detach(sim, item);
     const x = m.x + f.x * Math.max(0.5, hit ? hit.dist - 0.5 : dist), z = m.z + f.z * Math.max(0.5, hit ? hit.dist - 0.5 : dist);
-    place(sim, item, x, z);
+    const rec = place(sim, item, x, z);
+    // everyone nearby sees it sail from the thrower's hand to where it lands
+    const hx = m.x - Math.sin(m.yaw) * 0.45 + Math.cos(m.yaw) * 0.25, hz = m.z - Math.cos(m.yaw) * 0.45 - Math.sin(m.yaw) * 0.25;
+    sim.emit({ e: 'toss', id: item.id, a: [+hx.toFixed(2), +(EYE - 0.35).toFixed(2), +hz.toFixed(2)], b: [+x.toFixed(2), +rec.y.toFixed(2), +z.toFixed(2)] }, { near: [m.x, m.z, 40] });
     sim.sound('drop', x, z, 0.6);
     m.cool = 0.5;
     sim.chat.visible(m, `${m.name} has thrown the ${item.name}.`, 'notice', 10);

@@ -157,6 +157,7 @@ export class Game {
     rep.on('shake', (ev) => this.shake(ev.a));
     rep.on('hurt', (ev) => { this.fx.flash(Math.min(1, 0.4 + ev.a / 20)); this.shake(Math.min(0.5, ev.a / 25)); });
     rep.on('bubble', (ev) => this.hud.addBubble(ev.id, ev.text));
+    rep.on('toss', (ev) => this.view.addToss(ev.id, ev.a, ev.b, this.time));
     for (const m of rep.mobs.values()) this.view.addMob(m);
     this.phase = rep.myState === 'ghost' ? 'ghost' : 'lobby';
     this.lobby.update();

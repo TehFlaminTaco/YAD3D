@@ -140,6 +140,50 @@ export class WorldView {
     this.itemB.setTint(id, Math.min(1.35, t[0]), Math.min(1.35, t[1]), Math.min(1.35, t[2]));
   }
 
+  /** A floor item sprite slot (reusing freed ones). */
+  allocItemSprite(rc, x, y, z) {
+    const o = {
+      x, y, z, mode: 0, w: rc.w * PX * ITEM_SCALE, h: rc.h * PX * ITEM_SCALE,
+      ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX * ITEM_SCALE, oy: 0, rect: rc,
+    };
+    const free = this.itemFree.pop();
+    if (free === undefined) return this.itemB.add(o);
+    this.itemB.setPos(free, x, y, z);
+    this.itemB.setRect(free, rc, o.w, o.h, o.ox, o.oy);
+    this.itemB.setAlpha(free, 1);
+    this.itemB.setHighlight(free, 0);
+    return free;
+  }
+
+  /** Something thrown: fly a copy of it along an arc from a to b, then show the real one where it landed. */
+  addToss(id, a, b, now) {
+    const it = this.rep.items.get(id);
+    const rc = it && this.rects[it.s];
+    if (!rc) return;
+    const sid = this.allocItemSprite(rc, a[0], a[1], a[2]);
+    this.itemB.setTint(sid, 1, 1, 1);
+    this.hideItem(id, true);
+    const dist = Math.hypot(b[0] - a[0], b[2] - a[2]);
+    (this.tosses ||= []).push({ id, sid, a, b, t0: now, dur: Math.max(0.18, Math.min(0.7, dist / 10)), arc: 0.25 + Math.sqrt(dist) * 0.22 });
+  }
+
+  updateTosses(now) {
+    if (!this.tosses?.length) return;
+    for (let i = this.tosses.length - 1; i >= 0; i--) {
+      const T = this.tosses[i];
+      const k = Math.min(1, (now - T.t0) / T.dur);
+      const x = T.a[0] + (T.b[0] - T.a[0]) * k, z = T.a[2] + (T.b[2] - T.a[2]) * k;
+      const y = T.a[1] + (T.b[1] - T.a[1]) * k + 4 * T.arc * k * (1 - k);
+      this.itemB.setPos(T.sid, x, y, z);
+      if (k >= 1) {
+        this.itemB.setAlpha(T.sid, 0);
+        this.itemFree.push(T.sid);
+        this.hideItem(T.id, false);
+        this.tosses.splice(i, 1);
+      }
+    }
+  }
+
   /** Hide a floor item while it is being dragged (it reappears unless the server moves it). */
   hideItem(itemId, hide) {
     const id = this.itemSlot.get(itemId);
@@ -346,6 +390,7 @@ export class WorldView {
       if (f !== v.frame) { v.frame = f; const rc = this.rects[v.d.proto.fr[f]]; if (rc) this.setDoorRect(this.dyn, v.id, rc); }
     }
     this.updateMobs(dt, rt, cam, camYaw, selfId);
+    this.updateTosses(now);
     this.updateFlicker(now);
     for (let i = this.beams.length - 1; i >= 0; i--) {
       if (now >= this.beams[i].until) { this.scene.remove(this.beams[i].line); this.beams[i].line.geometry.dispose(); this.beams.splice(i, 1); }
