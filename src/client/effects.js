@@ -23,7 +23,7 @@ export class ScreenFX {
   setImg(key, el, url) {
     if (this.cur[key] === url) return;
     this.cur[key] = url;
-    if (url) { el.src = url; el.style.display = 'block'; } else el.style.display = 'none';
+    if (url) { el.src = 'assets/' + url; el.style.display = 'block'; } else el.style.display = 'none';
   }
 
   setOp(key, el, v) {
