@@ -1,8 +1,11 @@
 # YAD3D: Yet Another Dead 3D
 
 Space Station 13, in first person, in your browser. The map is the real BoxStation, the sprites and sounds are SS13's own,
-the jobs, access, outfits and most of the text come from the SS13 source. The HUD takes its look from Marathon (green
-phosphor terminals, a motion tracker). It plays like a round of SS13: lobby, job slots, a crew of other people, things going wrong.
+the jobs, access, outfits and most of the text come from the SS13 source. The interface borrows from two places: from SS13
+its slot icons, intents, health doll, damage overlays and speech floating over people's heads; from Marathon its steel
+plates and green phosphor screens. There is no radar and almost nothing on screen while you play: you see your two hands
+and what they hold, and you find out how hurt you are the way SS13 tells you, through the edges of your vision.
+It plays like a round of SS13: lobby, job slots, a crew of other people, things going wrong.
 
 * **Rounds.** Pick a job in the lobby, ready up, spawn on the station. Jobs have the real slot counts. Join late from
   Arrivals, or observe. Die and you become a ghost. A round ends with the evacuation shuttle (or when everyone is dead or gone)
@@ -10,12 +13,13 @@ phosphor terminals, a motion tracker). It plays like a round of SS13: lobby, job
 * **Multiplayer.** An authoritative server (`server/index.js`) runs the simulation; browsers connect over WebSocket. Empty
   job slots are filled by NPC crew so the station is never empty. With nobody else around, the browser hosts a round itself
   using the *same* simulation and protocol.
-* **SS13 inventory.** Two hands, a swap key, real worn slots (uniform, suit, shoes, gloves, glasses, ears, mask, head, neck,
-  belt, ID, back, both pockets, suit storage), nested containers with SS13's size classes, intents (help / disarm / grab / harm),
-  throw mode, internals.
+* **SS13 inventory, by hand.** Two hands, real worn slots (uniform, suit, shoes, gloves, glasses, ears, mask, head, neck,
+  belt, ID, back, both pockets, suit storage), nested containers with SS13's size classes, intents (help / disarm / grab /
+  harm), throw mode, internals. Free the mouse and you can pick things up off the floor or a table and drag them between the
+  world, your hands, your open bags and your body; drop them where you want them, or fling them across the room.
 * **SS13 chat.** `T` to speak, `;` for the common radio, `:e` `:m` `:s` `:n` `:u` `:v` `:c` for department channels (needs a
-  headset), `:h` for your own department, `Y` whisper, `M` emote, `O` OOC. Speech has a range and needs line of sight; the dead
-  talk to the dead.
+  headset), `:h` for your own department, `Y` whisper, `M` emote, `O` OOC. Speech has a range and needs line of sight; what
+  people say also floats over their heads for a few seconds. The dead talk to the dead.
 * **Systems.** Atmospherics with real partial pressures and decompression, APC power with emergency cells and a blackout, fire
   alarms and firelocks, access-controlled airlocks (crowbars work on dead ones), meteors that blow holes in the hull, space carp,
   welding breaches shut, escape pods and the emergency shuttle, console programs (APC, air alarm, crew monitor, power monitor,
@@ -34,52 +38,122 @@ Or, for a round hosted entirely in your own browser (no Node needed to play, jus
 python3 tools/serve.py 8123    # then open http://localhost:8123
 ```
 
-Pick a job, press **Ready** (a short countdown starts the round), or **Start now**. Click the view to capture the mouse.
-`?name=Alex` sets your name, `?bots=N` sets how many NPCs fill the crew (single player), `?local` forces a local round even when
-served by the game server.
+Pick a job, press **Ready** (a short countdown starts the round), or **Start now**. You arrive with the mouse free (hands
+mode, below); press `Space` to capture it and look around. `?name=Alex` sets your name, `?bots=N` sets how many NPCs fill
+the crew (single player), `?local` forces a local round even when served by the game server, `?auto&job=station_engineer`
+skips the lobby.
+
+### Two ways to use the mouse
+
+* **Look.** The pointer is captured and there is a small dot in the middle of the screen (it turns amber when it is on
+  something you can reach); the name of that thing is written under it. Left click is an SS13 click with your active hand
+  on what the dot is on: pick it up, open it, use what you hold on it, hit it on harm intent (hold the button to keep
+  swinging). Right click examines.
+* **Hands.** `Space` frees the pointer, and the pointer becomes a pixel hand: pointing, open over something you could pick
+  up, closed while you drag something, SS13's throw target in throw mode. A click does the same SS13 click on whatever is
+  under the cursor; right click examines it. Clicking your inactive hand swaps to it; clicking your active hand uses what it
+  holds, or opens it if it is a container. `Space` again goes back to look. Pressing `Esc` in look mode also lands you here.
+  Opening a window (`I`, `Tab`, a bag, a console, the help) switches to hands by itself; closing the last one takes you
+  back to look if that is where you were.
+
+In hands mode, press on anything you can carry (lying on the floor or a table, in either hand, in an open bag, in a slot on
+the body panel) and drag it:
+
+| Drop it on | and |
+| --- | --- |
+| An empty hand or body-panel slot, a bag window, or a container (in a hand, a slot or a bag) | it moves there, if SS13's storage rules allow it |
+| The floor or a table top within reach | it is put down there; a marker shows where it will land |
+| A person, door, machine or hull breach (something you are holding) | it is used on them, as if you had clicked them with it |
+| Somewhere it can't be put down, such as out of reach (something you are carrying) | it is thrown there |
+
+### On screen
+
+* **Your hands.** Two pixel-art hands at the bottom of the view, drawn by code (`paintHand` in `src/client/art.js`). The
+  active one is raised. A held item is the real SS13 sprite at twice the hand's pixel size. An empty active hand shows your
+  intent: open hand (help), push (disarm), claw (grab), fist (harm). Throw mode cocks the arm back. Sleeves take the
+  colour of your uniform or suit, gloves colour the hand, and the hands darken in the dark. Each hand hangs on loose,
+  under-damped springs for position, tilt and squash/stretch, and every gesture just kicks them: a click jabs, harm swings,
+  a throw lunges, catching something squashes the hand, changing intent makes it shake, footsteps jiggle both, turning your
+  head drags them behind the view. Something picked up off the floor flies from where it lay into the hand. It is dorky on
+  purpose.
+* **Bags.** An open container (click a worn or held one, or press `Z` with it in your hand) is a small window of SS13
+  storage slots, stacked on the left of the screen. Containers that take a total weight rather than a number of items
+  show how full they are. Drag a window by its strap to move it; the button on the strap closes it.
+* **Body panel** (`I`). SS13's paper doll: every worn slot with its SS13 slot icon, SS13's health doll, a one-line
+  description of how you feel ("You have some bruising."), and SS13's intent, internals, throw, drop and resist buttons.
+* **PDA** (`Tab`). Only if you carry one (every job except Prisoner starts with one): station time, where you are, the
+  pressure and oxygen of the air around you, and a map of the station that fills in as you see it. Ghosts see the whole map.
+* **Your condition.** SS13's own full-screen overlays (red at the edges as you get hurt, darkness closing in as you run out
+  of air, tunnel vision in critical condition), a red flash when you are hit, a pale blue edge in vacuum, a space helmet's visor
+  (or a mask's frame while you breathe from a tank) round the view, and colour draining out of the world as your health
+  drops.
+* **Text.** The chat log in the top left, names under the cursor, a progress bar for timed actions, speech over people's
+  heads (SS13 runechat), a line at the bottom when you are a ghost.
+* **Consoles** are drawn as a steel bezel round a green screen, with numbered keys under the glass (`1` to `9` press them).
 
 ### Controls
 
+The same list is in the game under `F1`.
+
 | Key | |
 | --- | --- |
-| `W A S D`, mouse, `Shift` | Move, look, run |
-| Left click | Use the item in your active hand on what the crosshair is on; pick up; open; attack (harm intent) |
+| `W A S D`, `Shift`, mouse | Move, run, look around |
+| `Space` | Hands: free the mouse to point, click and drag things. `Space` again to look around |
+| Left click | Use what is in your active hand on whatever you point at; with an empty hand, pick it up or open it |
+| Drag | (hands) Carry things between the floor, tables, your hands, your bags and your body. Drag far away to throw |
 | Right click | Examine |
-| `1 2 3 4` | Intent: help, disarm, grab, harm |
-| `X` | Swap active hand |
-| `E` | Equip the held item (draws from your belt with empty hands) |
-| `Z` | Use the held item in hand (light, tank, welder, medkit, ...) |
-| `Q` / `R` | Drop / toggle throw mode |
-| `I` | Inventory: click or drag items between slots, hands and open containers |
-| `V` / `F` | Toggle internals / flashlight |
-| `T` `Y` `M` `O` | Say / whisper / emote / OOC (`;` and `:x` prefixes work in Say) |
-| `Tab` | Station map |
-| `B` | Stop the timed action you are doing |
-| `F1`, `F2` | Help, mute |
+| `1 2 3 4` | Intent: help, disarm, grab, harm (watch your empty hand) |
+| `X` | Swap hands |
+| `E` | Wear or stow what you hold (empty hand: draw from your belt) |
+| `Z` | Use the item in your hand (light, welder, tank, medkit, ...; opens a bag) |
+| `Q` | Drop |
+| `R` | Throw mode: your next click throws what you hold |
+| `I` | Look yourself over: clothes, pockets, injuries (observing: back to the lobby) |
+| `Tab` | Your PDA: time, location, air, map |
+| `V` | Internals (mask and air tank) |
+| `F` | Flashlight |
+| `B` | Stop what you are doing |
+| `T` `Y` `M` `O` | Say (`;` common radio, `:h` department, `:e :m :s :n :u :v :c` other channels) / whisper / emote / OOC |
+| `F1`, `F2` | This list, mute |
+| `Esc` | Close the top window (in look mode: free the mouse) |
+
+Also: the arrow keys turn and look up and down, `Enter` opens Say, `/` opens Say with `;` already typed. In the chat line,
+`Tab` cycles Say / Whisper / Me / OOC and `Esc` cancels. While a console is open, `1` to `9` press its keys instead of
+changing intent.
 
 ## How it is put together
 
 ```
-assets/        generated: level.json (BoxStation + shuttles), terrain/sprite atlases, sounds
+assets/        generated: level.json (BoxStation + shuttles), terrain/sprite atlases, sounds,
+               ui.png + ui.json (SS13 HUD icons), overlays/ (SS13 full-screen overlays); fonts/ (copied, see ATTRIBUTION.md)
 data/          generated: jobs.json (jobs, slots, access, outfits), contents.json
-tools/         Python data pipeline (DMI/DMM/DM readers), test harnesses
+tools/         Python data pipeline (DMI/DMM/DM readers), test harnesses, screenshot helper
 src/shared/    rules both sides run: world & collision, movement, doors, atmos, power, items, chat rules
 src/sim/       the authoritative game: Sim, rounds, jobs, inventory, actions, chat, AI, director, consoles
 src/render/    Three.js terrain mesh, instanced sprites, lighting
-src/client/    transports, replica of the world, view, prediction, HUD and screens
+src/client/    transports, replica of the world, view, prediction, and the interface (below)
 server/        static files + WebSocket host
 ```
 
+The interface, in `src/client/`: `game.js` (look and hands modes, picking what is under the crosshair or cursor, prediction,
+the frame loop), `dnd.js` (clicks and drag and drop in hands mode), `hands.js`, `bags.js`, `bodypanel.js`, `pda.js`,
+`effects.js` (screen overlays), `hud.js` (crosshair, hover name, progress bar, runechat, ghost line), `chatui.js`,
+`terminalui.js`, `lobby.js`, `screens.js` (help, round report, disconnect) and `art.js` (SS13 icons from `assets/ui.png`,
+the steel frame and the hand cursors, painted at 1x and scaled up with nearest neighbour). Text uses three pixel fonts:
+Pixellari for the interface, Grand9K Pixel for speech and labels, VCR OSD Mono on the green screens.
+
 * **One simulation, two transports.** `Sim` is plain logic with no DOM or Three.js. The server instantiates it in Node; the
   browser instantiates the very same class for a local round. A client only sees `send(msg)` / `poll()` (`src/client/net.js`).
-* **Protocol.** Client to server: `hello`, `input` (batched WASD + look with sequence numbers), `click`, `key`, `inv`, `say`,
-  `term`, `examine`, `lobby`. Server to client: `welcome` (full world state), `snap` (10 Hz positions of mobs in range plus the
-  acknowledged input sequence) and `ev` batches (doors, tiles, items, chat, sounds, private inventory and vitals, ...). Events
+* **Protocol.** Client to server: `hello`, `input` (batched WASD + look with sequence numbers), `click`, `key`, `inv`
+  (inventory moves, including to and from a point on the floor, and throwing at a point), `say`, `term`, `examine`, `lobby`.
+  Server to client: `welcome` (full world state), `snap` (10 Hz positions of mobs in range plus the acknowledged input
+  sequence) and `ev` batches (doors, tiles, items, chat, speech over heads, sounds, private inventory and vitals, ...). Events
   carry a scope (everyone / one client / within earshot / ghosts only), so you never receive what you could not perceive.
 * **Prediction.** Your own movement is predicted with the same `stepMovement` the server uses and reconciled against each
   snapshot, so it feels instant at any latency (`?lag=150` simulates 150 ms each way). Other mobs are interpolated 130 ms in the past.
 * **Anti-cheat basics.** The server owns everything that matters: input time is budgeted (no speed-hacking), reach and line of
-  sight are checked on every click, inventory moves are validated against SS13's storage rules, chat is routed server-side.
+  sight are checked on every click and on every item put down on the floor, inventory moves are validated against SS13's
+  storage rules, chat is routed server-side.
 * **Late joiners** receive the welcome snapshot plus a log of hull changes and shuttle docking, so their world matches.
 
 ### Rebuilding the data
@@ -91,13 +165,20 @@ The shipped `assets/` and `data/` are generated. To rebuild you need a tgstation
 npm run build
 ```
 
+This runs `tools/build_jobs.py`, `tools/build_level.py`, `tools/build_sounds.py` and `tools/build_ui.py`. The last one
+writes `assets/ui.png`, `assets/ui.json` and `assets/overlays/` from the HUD icon files in the same tree. The fonts in
+`assets/fonts/` are not generated: they were copied unchanged from `interface/fonts/` of a current tgstation checkout (the
+2020 tree has no fonts directory).
+
 ### Tests
 
 ```sh
-npm run test:sim      # 37 assertions on the headless simulation (inventory, combat, doors, breaches, chat, consoles, ghosts)
+npm run test:sim      # 44 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, chat,
+                      #   consoles, drag and drop, death and ghosts)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
-npm run test:ui       # headless Chromium: HUD, targeting, inventory panel, consoles, chat, death (needs Playwright)
+npm run test:ui       # headless Chromium, local round: look and hands modes, hands, drag and drop, body panel, bags,
+                      #   throwing, PDA, consoles, chat and runechat, screen effects, death (needs Playwright)
 npm run test:net      # starts the server and drives 3 browsers: lobby, round start, chat/radio, prediction, late join, ghosts, reset
 ```
 
@@ -107,6 +188,6 @@ npm run test:net      # starts the server and drives 3 browsers: lobby, round st
 * NPC crew keep their roundstart look when their clothes change.
 * There is no antagonist game mode, chemistry, botany, cooking or construction. The goal is the feel of a round (a station full of
   people, a crisis, an evacuation), not a port of SS13's rules.
-* Mouse look needs pointer lock, so it does not work on touch devices.
+* Look mode needs pointer lock and everything else needs a mouse and keyboard, so it does not work on touch devices.
 
-See [ATTRIBUTION.md](ATTRIBUTION.md) for where the art, sound and data come from and under which licenses.
+See [ATTRIBUTION.md](ATTRIBUTION.md) for where the art, sound, fonts and data come from and under which licenses.

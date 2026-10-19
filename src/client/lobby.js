@@ -38,14 +38,15 @@ export class Lobby {
         </div>
         <div class="lb-cols">
           <div class="lb-jobs">
-            <div class="lb-row"><label for="lb-name">Name</label><input id="lb-name" maxlength="24" autocomplete="off" spellcheck="false"></div>
-            <div class="lb-sub"><span>Occupation</span><small>pick one, then Ready</small></div>
+            <div class="lb-sub"><span>Occupation</span><small id="lb-hint"></small></div>
             <div class="lb-screen crt">
               <div id="joblist" class="scroll"></div>
               <div id="jobinfo"></div>
             </div>
           </div>
           <div class="lb-side">
+            <div class="lb-sub"><label for="lb-name">Name</label></div>
+            <input id="lb-name" maxlength="24" autocomplete="off" spellcheck="false">
             <div class="lb-sub"><span>Crew</span><small id="lb-count"></small></div>
             <div class="lb-screen crt"><div id="players" class="scroll"></div></div>
             <div class="lb-btns">
@@ -191,10 +192,10 @@ export class Lobby {
         const left = Math.max(0, r.countdown - (performance.now() - rep.roundAt) / 1000);
         return `The round starts in ${Math.ceil(left)} seconds.`;
       }
-      return 'Waiting for the round to start. Pick a job and press Ready.';
+      return 'Waiting for the round to start.';
     }
-    if (r.state === 'playing') return 'The round is in progress. You can join the crew now.';
-    return 'The round is ending. A new round will start soon.';
+    if (r.state === 'playing') return 'Round in progress. You can join the crew now.';
+    return 'The round is ending. A new one starts soon.';
   }
 
   update() {
@@ -218,6 +219,7 @@ export class Lobby {
     btn('btn-observe', r.state !== 'ending');
     this.$('btn-ready').classList.toggle('lit', !!me?.ready);
     this.$('lb-status').classList.toggle('count', r.state === 'lobby' && r.countdown !== null);
+    this.$('lb-hint').textContent = r.state === 'lobby' ? 'pick one, then Ready' : r.state === 'playing' ? 'pick one, then Join' : '';
     this.info(this.selected);
   }
 

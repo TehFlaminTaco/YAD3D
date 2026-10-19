@@ -41,7 +41,6 @@ const section = async (name, fn) => {
   console.log('\n' + name);
   try { await fn(); } catch (e) { ok(false, `${name}: no exception`, e.message.split('\n')[0]); }
 };
-const self = () => ev(() => yad.self && { inv: yad.self.inv, hp: yad.self.hp, crit: yad.self.crit, dead: yad.self.dead });
 const diagInv = () => ({ mode: yad.mode, hands: yad.self?.inv?.hands.map((h) => h && [h.id, h.n]), active: yad.self?.inv?.active, open: yad.self?.inv?.open, cursor: yad.cursorTarget && [yad.cursorTarget.k, yad.cursorTarget.id ?? yad.cursorTarget.idx], target: yad.target && [yad.target.k, yad.target.id ?? yad.target.idx], log: [...document.querySelectorAll('#chatlog > div')].slice(-3).map((d) => d.textContent) });
 
 // ------------------------------------------------------------------ mouse helpers
@@ -66,7 +65,19 @@ async function hoverItem(id) {
   return xy;
 }
 const handXY = (i) => ev((i) => T.handXY(i), i);
-const centerOf = (sel) => ev((sel) => T.center(sel), sel);
+/** Centre of an element, once it has stopped moving (panels and consoles spring in with a CSS animation). */
+const centerOf = (sel) => ev((sel) => new Promise((res) => {
+  let last = '', same = 0, n = 0;
+  const f = () => {
+    const e = document.querySelector(sel);
+    if (!e) { res(null); return; }
+    const r = e.getBoundingClientRect(), k = [r.left, r.top, r.width, r.height].map(Math.round).join();
+    same = k === last ? same + 1 : 0; last = k;
+    if ((same >= 2 && !e.getAnimations({ subtree: false }).length && !document.getAnimations().some((a) => a.playState === 'running' && a.effect?.target?.contains?.(e) && a.effect.getTiming().iterations !== Infinity)) || ++n > 150) res([r.left + r.width / 2, r.top + r.height / 2]);
+    else requestAnimationFrame(f);
+  };
+  f();
+}), sel);
 async function setMode(m) {
   if (await ev(() => yad.mode) !== m) await key('Space');
   await wait((m) => yad.mode === m, m, 8000);
@@ -89,7 +100,7 @@ console.log(`  (booted in ${((Date.now() - t0) / 1000).toFixed(1)}s)`);
 
 // test fixtures, run inside the page: they only set the scene up; everything under test goes through input
 await ev(async () => {
-  const inv = await import('/src/sim/inventory.js');
+  const inv = await import(new URL('src/sim/inventory.js', location.href).href);      // the same module instance the sim uses
   const sim = yad.conn.sim, w = sim.world;
   const T = window.T = {
     sim, inv,
@@ -137,28 +148,42 @@ await ev(async () => {
     proj(x, y, z) { const v = new yad.camera.position.constructor(x, y, z).project(yad.camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; },
     center(sel) { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; },
     handXY(i) { const r = document.querySelector(`#hands [data-hand="${i}"]`).getBoundingClientRect(); return [r.left + r.width / 2, Math.min(innerHeight - 20, r.top + r.height * 0.62)]; },
-    /** A screen point where a drop puts a thing on the floor within reach, with nothing else under the cursor. */
-    dropSpot(minR = 1.0, maxR = 2.4) {
+    /** A screen point where a drop puts a thing on the floor within reach, with nothing else under the cursor
+     *  (and, given `away`, at least 0.6 m from that floor point). */
+    dropSpot(minR = 1.0, maxR = 2.4, away = null) {
       for (let y = innerHeight * 0.5; y < innerHeight * 0.95; y += 12) {
         for (let x = innerWidth * 0.4; x < innerWidth * 0.6; x += 16) {
           if (document.elementFromPoint(x, y) !== yad.canvas) continue;
           const r = yad.rayAt(x, y), fp = yad.floorPoint(r.o, r.d);
           if (!fp || !fp.ok || fp.reach < minR || fp.reach > maxR || yad.findTarget(r.o, r.d)) continue;
+          if (away && Math.hypot(fp.x - away[0], fp.z - away[1]) < 0.6) continue;
           return { xy: [x, y], fp: { x: fp.x, z: fp.z } };
         }
       }
       return null;
     },
-    /** Sample the springs of hand i for n frames into T.spr. */
-    sampleSprings(i, n) {
-      const H = yad.hands.h[i], out = [];
-      T.spr = { done: false, out };
+    /** Sample both hands' springs every frame into T.spr.out[frame][hand], for n frames or until T.spr.stop. */
+    sampleSprings(n) {
+      const out = [];
+      T.spr = { done: false, stop: false, out };
       const f = () => {
-        const m = /rotate\((-?[\d.]+)deg\) scale\((-?[\d.]+), (-?[\d.]+)\)/.exec(H.anim.style.transform) || [];
-        out.push({ r: H.sp.r.x, y: H.sp.y.x, sx: H.sp.sx.x, sy: H.sp.sy.x, domR: +m[1], domSx: +m[2], domSy: +m[3] });
-        if (out.length < n) requestAnimationFrame(f); else T.spr.done = true;
+        out.push(yad.hands.h.map((H) => {
+          const m = /rotate\((-?[\d.]+)deg\) scale\((-?[\d.]+), (-?[\d.]+)\)/.exec(H.anim.style.transform) || [];
+          return { x: H.sp.x.x, r: H.sp.r.x, y: H.sp.y.x, sx: H.sp.sx.x, sy: H.sp.sy.x, domR: +m[1] };
+        }));
+        if (out.length < n && !T.spr.stop) requestAnimationFrame(f); else T.spr.done = true;
       };
       requestAnimationFrame(f);
+    },
+    /** A point inside the element `sel` that the pointer would actually hit (not covered by something else). */
+    freePoint(sel) {
+      const e = document.querySelector(sel);
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      for (let y = r.top + r.height / 2, k = 0; k < 2; k++, y = r.top + r.height * 0.75) {
+        for (let x = r.right - 10; x > r.left; x -= 12) if (e.contains(document.elementFromPoint(x, y))) return [x, y];
+      }
+      return null;
     },
     /** Pixels with any alpha in a canvas, and a cheap fingerprint of what is drawn. */
     paint(cv) {
@@ -205,6 +230,8 @@ await section('HUD: nothing but a crosshair', async () => {
   const txt = await ev(() => T.textOutside(['#chat', '#toast:not(.on)', '#lobby', '.screen:not(.on)']));
   ok(txt.length === 0, 'no visible text outside the chat log (no readouts)', JSON.stringify(txt.slice(0, 6)));
   ok(await ev(() => !yad.pda.open && !yad.body.open && !yad.bags.openIds.length), 'no panels are open');
+  ok(await ev(() => ['Pixellari', 'Grand9K', 'VCR'].every((f) => document.fonts.check(`16px ${f}`))), 'the pixel fonts (Pixellari, Grand9K, VCR) are loaded');
+  ok(await ev(() => /Grand9K/.test(getComputedStyle(document.getElementById('hover')).fontFamily)), 'the hover label uses Grand9K');
   await shot('hud');
 });
 
@@ -229,10 +256,11 @@ await section('hands: visible, intents, springs', async () => {
 
   // dorky springs: an intent change kicks the hand, which wobbles past its rest pose and settles
   await frames(40);
-  await ev(() => T.sampleSprings(yad.self.inv.active, 75));
+  const act = await ev(() => yad.self.inv.active);
+  await ev(() => T.sampleSprings(75));
   await key('Digit4');
   await wait(() => T.spr.done, null, 60000);
-  const spr = await ev(() => T.spr.out);
+  const spr = (await ev(() => T.spr.out)).map((f) => f[act]);
   const rs = spr.map((s) => s.r);
   const peak = Math.max(...rs.map(Math.abs));
   let flips = 0;
@@ -244,6 +272,33 @@ await section('hands: visible, intents, springs', async () => {
   ok(spr.filter((s) => Number.isFinite(s.domR)).length > spr.length * 0.8 && spr.some((s) => Math.abs(s.domR - s.r) < 0.02 && Math.abs(s.domR) > 3), 'the wobble is applied to the hand on screen (CSS transform)');
   await key('Digit1');
   await until('back to help intent', () => yad.self.inv.intent === 'help');
+
+  // swapping hands bounces both of them
+  await frames(40);
+  await ev(() => T.sampleSprings(40));
+  await key('KeyX');
+  await wait(() => T.spr.done, null, 60000);
+  const sw = await ev(() => T.spr.out);
+  const dip = [0, 1].map((i) => Math.max(...sw.map((f) => f[i].y)));
+  ok(dip[0] > 16 && dip[1] > 16, 'X bounces both hands down and back up', JSON.stringify(dip.map((v) => +v.toFixed(1))));
+  await key('KeyX');
+  await until('swapped back', () => yad.self.inv.active === 0);
+
+  // walking: each footstep jiggles the hands
+  await home(0);
+  await frames(30);
+  const steps0 = await ev(() => yad.hands.stepN || 0);
+  await ev(() => T.sampleSprings(400));
+  await page.keyboard.down('KeyW');
+  const walked = await wait((n) => (yad.hands.stepN || 0) >= n + 2, steps0, 40000);
+  await page.keyboard.up('KeyW');
+  await ev(() => { T.spr.stop = true; });
+  await wait(() => T.spr.done);
+  ok(walked, 'walking takes footsteps');
+  const wk = await ev(() => T.spr.out);
+  const bob = [0, 1].map((i) => Math.max(...wk.map((f) => Math.abs(f[i].y - (i === 0 ? 0 : 9)))));
+  ok(bob[0] > 1.5 && bob[1] > 1.5, 'the hands jiggle with every step', JSON.stringify(bob.map((v) => +v.toFixed(2))));
+  await home();
 });
 
 // ------------------------------------------------------------------ keys
@@ -277,6 +332,7 @@ await section('keys: X, E, R, Q', async () => {
 await section('look / hands modes', async () => {
   await key('Space');
   await until('Space switches to hands mode', () => yad.mode === 'hands' && document.body.classList.contains('handsmode'));
+  await until('the first few times, a toast says how to get back', () => document.getElementById('toast').classList.contains('on') && /Space/.test(document.getElementById('toast').textContent));
   await until('the crosshair goes away in hands mode', () => getComputedStyle(document.getElementById('cross')).display === 'none');
   await moveTo([W / 2, H / 2]);
   await until('the cursor is a pixel hand', () => /--cur-point/.test(yad.canvas.style.cursor) && /^url\(/.test(getComputedStyle(document.documentElement).getPropertyValue('--cur-point').trim()), null, 8000, () => [yad.canvas.style.cursor, getComputedStyle(document.documentElement).getPropertyValue('--cur-point').slice(0, 40)]);
@@ -312,7 +368,6 @@ await section('look mode: crosshair click, examine', async () => {
 });
 
 // ------------------------------------------------------------------ hands mode: world <-> hands
-let floorItem = null;
 await section('hands mode: hover, click, drag between the world and your hands', async () => {
   await home(-0.5);
   const a = await ev(() => T.spawnAhead('/obj/item/screwdriver', 1.4, -0.25));
@@ -348,13 +403,11 @@ await section('hands mode: hover, click, drag between the world and your hands',
   const ds2 = await ev(() => T.dropSpot(1.0, 2.0));
   await drag(await handXY(1), ds2.xy);
   await until('drop it again', (id) => yad.rep.items.has(id), a.id, 15000, diagInv);
-  const ds3 = await ev((id) => { const i = yad.rep.items.get(id); const s = T.dropSpot(1.0, 2.4); return s && Math.hypot(s.fp.x - i.x, s.fp.z - i.z) > 0.4 ? s : null; }, a.id);
-  if (ds3) {
-    const f2 = await hoverItem(a.id);
-    await drag(f2, ds3.xy, { ready: () => wait((id) => yad.cursorTarget?.id === id, a.id, 8000) });
-    await until('drag floor -> floor slides it along the floor', (p) => { const i = yad.rep.items.get(p.id); return i && Math.hypot(i.x - p.fp.x, i.z - p.fp.z) < 0.3; }, { id: a.id, fp: ds3.fp }, 15000, diagInv);
-  }
-  floorItem = a;
+  const ds3 = await ev((id) => { const i = yad.rep.items.get(id); return T.dropSpot(1.0, 2.4, [i.x, i.z]); }, a.id);
+  ok(ds3, 'found another spot on the floor');
+  const f2 = await hoverItem(a.id);
+  await drag(f2, ds3.xy, { ready: () => wait((id) => yad.cursorTarget?.id === id, a.id, 8000) });
+  await until('drag floor -> floor slides it along the floor', (p) => { const i = yad.rep.items.get(p.id); return i && Math.hypot(i.x - p.fp.x, i.z - p.fp.z) < 0.3; }, { id: a.id, fp: ds3.fp }, 15000, diagInv);
 });
 
 // ------------------------------------------------------------------ body panel and bags
@@ -371,6 +424,7 @@ await section('body panel (I), bags', async () => {
   ok(await ev(() => T.paint(document.querySelector('#body .bp-doll')).n > 50), 'the SS13 health doll is drawn');
   ok(await ev(() => /You feel fine/.test(document.querySelector('#body .bp-cond').textContent)), 'the condition line says you feel fine');
   ok(await ev(() => document.querySelector('#body .bp-name').textContent === yad.self.name), 'it is your name on it');
+  ok(await ev(() => document.getElementById('body').classList.contains('panel-frame') && /^url\(/.test(getComputedStyle(document.getElementById('body')).borderImageSource)), 'in a steel frame (border-image)');
   // buttons
   const harm = await centerOf('#body .act[data-act=intent][data-v="3"]');
   await page.mouse.click(harm[0], harm[1]);
@@ -409,7 +463,7 @@ await section('body panel (I), bags', async () => {
   await wait((id) => yad.rep.items.has(id), b.id);
   const from = await hoverItem(b.id);
   ok(from, 'the item on the floor is under the pointer');
-  const grid = await ev(() => { const r = document.querySelector('#bags .bag-g').getBoundingClientRect(); return [r.right - 12, r.top + r.height / 2]; });
+  const grid = await ev((id) => T.freePoint(`#bags .bag[data-box="${id}"] .bag-g`), back.id);
   await drag(from, grid, { ready: () => wait((id) => yad.cursorTarget?.id === id, b.id, 8000) });
   await until('drag floor item -> bag window stows it', (p) => yad.self.inv.worn.back.c.some((c) => c.id === p.id), b, 15000, diagInv);
   await until('it shows up in the bag window', (id) => !!document.querySelector(`#bags [data-item="${id}"]`), b.id);
@@ -431,12 +485,21 @@ await section('body panel (I), bags', async () => {
   const beltXY = await centerOf('#body [data-slot=belt]');
   await page.mouse.click(beltXY[0], beltXY[1]);
   await until('clicking the belt opens a second window', (id) => yad.bags.openIds.length === 2 && yad.bags.openIds.includes(id), belt, 15000, diagInv);
+  ok(await ev(() => [...document.querySelectorAll('#bags .bag')].every((b) => b.classList.contains('panel-frame') && /^url\(/.test(getComputedStyle(b).borderImageSource))), 'bag windows have steel frames too');
   await shot('two_bags');
   await key('KeyX');
   await wait(() => yad.self.inv.active === 0);
+  // belt -> backpack: drag between two bag windows
+  const tool = await ev((id) => +document.querySelector(`#bags .bag[data-box="${id}"] .cell.full`).dataset.item, belt);
+  await drag(await centerOf(`#bags .bag[data-box="${belt}"] [data-item="${tool}"]`), await ev((id) => T.freePoint(`#bags .bag[data-box="${id}"] .bag-g`), back.id));
+  await until('drag from one bag window into another', (p) => yad.self.inv.worn.back.c.some((c) => c.id === p.tool) && !yad.self.inv.worn.belt.c.some((c) => c.id === p.tool), { tool }, 15000, diagInv);
+  // a bag window's close button
+  const bx = await centerOf(`#bags .bag[data-box="${belt}"] .bag-x`);
+  await page.mouse.click(bx[0], bx[1]);
+  await until('the close button shuts that bag', (id) => !yad.bags.openIds.includes(id) && yad.bags.openIds.length === 1, belt, 15000, diagInv);
   // Esc closes the top-most thing first; the cursor goes back to look mode when everything is closed
   await key('Escape');
-  await until('Esc closes the body panel first', () => !yad.body.open && yad.bags.openIds.length === 2);
+  await until('Esc closes the body panel first', () => !yad.body.open && yad.bags.openIds.length === 1);
   ok(await ev(() => yad.mode === 'hands'), 'still in hands mode while bags are open');
   await key('Escape');
   await until('Esc again closes the bags', () => yad.bags.openIds.length === 0 && !document.querySelector('#bags .bag'));
@@ -497,6 +560,7 @@ await section('drop a held item on a person or a door: use it on them', async ()
   await until('speech floats over the speaker (runechat)', (id) => { const sp = yad.hud.speakers.get(id); return sp && sp.box.style.display === 'block' && sp.box.textContent.includes('Hello there'); }, npc.id, 15000);
   const off = await ev((id) => { const sp = yad.hud.speakers.get(id), m = yad.rep.mobs.get(id); const r = sp.box.getBoundingClientRect(); const [x, y] = T.proj(m.x, 2.0, m.z); return [r.left + r.width / 2 - x, r.bottom - y]; }, npc.id);
   ok(Math.abs(off[0]) < 30 && Math.abs(off[1]) < 30, 'right above their head', JSON.stringify(off.map((v) => Math.round(v))));
+  ok(await ev((id) => /Grand9K/.test(getComputedStyle(yad.hud.speakers.get(id).box).fontFamily), npc.id), 'runechat is set in Grand9K');
   await shot('runechat');
   await setMode('hands');
   await ev(() => { T.clearHands(); T.give('/obj/item/stack/medical/bruise_pack', 0); });
@@ -507,7 +571,7 @@ await section('drop a held item on a person or a door: use it on them', async ()
   await drag(await handXY(0), at);
   await until('dropping a bruise pack on them treats them', (p) => T.sim.mobs.get(p.id).body.brute < p.brute - 10, npc, 15000, (p) => ({ brute: T.sim.mobs.get(p.id).body.brute, ...diagInv() }));
   ok(await ev(() => !!yad.self.inv.hands[0]), 'and you keep the pack');
-  await ev((id) => { const o = T.sim.mobs.get(id); o.x = 5; o.z = 5; }, npc.id);
+  await ev((id) => { const o = T.sim.mobs.get(id); o.x = o.home[0] * 2 + 1; o.z = o.home[1] * 2 + 1; o.stunned = 0; }, npc.id);      // out of the way
   // a door that opens for anyone
   const door = await ev(() => {
     const sim = T.sim, w = sim.world;
@@ -564,13 +628,18 @@ await section('PDA (Tab)', async () => {
 // ------------------------------------------------------------------ consoles
 await section('consoles', async () => {
   const term = await ev(() => {
-    const sim = T.sim, w = sim.world;
-    const comps = sim.props.interact.filter((p) => /computer/.test(p.path || '') && p.kind !== 'wm');
+    const sim = T.sim, w = sim.world, all = sim.props.interact;
+    // a computer you can walk up to with nothing else (a chair, another machine) between you and its screen
+    const segDist = (px, pz, ax, az, bx, bz) => { const vx = bx - ax, vz = bz - az, t = Math.max(0, Math.min(1, ((px - ax) * vx + (pz - az) * vz) / (vx * vx + vz * vz))); return Math.hypot(px - ax - vx * t, pz - az - vz * t); };
+    const comps = all.filter((p) => /computer/.test(p.path || '') && p.kind !== 'wm');
     for (const it of comps) {
+      if (/shuttle/i.test(w.areaAt(it.c, it.r)?.n || '')) continue;
       for (const [ox, oz] of [[0, 1.3], [0, -1.3], [1.3, 0], [-1.3, 0]]) {
         const x = it.x + ox, z = it.z + oz;
         if (w.collides(x, z, 0.4) || w.raycast(x, z, -ox, -oz, 1.3, 'shot') < 0.6) continue;
-        return { idx: it.idx, name: it.name, x: it.x, z: it.z, y: (it.y0 + Math.max(it.y0 + 1, it.y1)) / 2, me: [x, z] };
+        if (all.some((o) => o !== it && (segDist(o.x, o.z, x, z, it.x, it.z) < 1.0 || Math.hypot(o.x - it.x, o.z - it.z) < 1.2))) continue;
+        if (sim.doors.some((d) => Math.hypot(d.x - x, d.z - z) < 2.5)) continue;
+        return { idx: it.idx, name: it.name, path: it.path, x: it.x, z: it.z, y: (it.y0 + Math.max(it.y0 + 1, it.y1)) / 2, me: [x, z] };
       }
     }
     return null;
@@ -581,10 +650,11 @@ await section('consoles', async () => {
   await ev((p) => { const dx = p.x - yad.pred.x, dz = p.z - yad.pred.z; yad.yaw = Math.atan2(-dx, -dz); yad.pitch = Math.atan2(p.y - 1.45, Math.hypot(dx, dz)); }, term);
   await until('the crosshair finds the console', (i) => yad.target?.k === 'prop' && yad.target.idx === i, term.idx, 15000, diagInv);
   await page.mouse.click(W / 2, H / 2);
-  await until('clicking a computer opens its console', () => yad.term.open && document.getElementById('term-screen').classList.contains('on'), null, 15000, diagInv);
+  if (!await until('clicking a computer opens its console', () => yad.term.open && document.getElementById('term-screen').classList.contains('on'), null, 15000, diagInv)) return;
   ok(await ev(() => yad.mode === 'hands'), 'the console frees the hand');
   ok(await ev(() => document.getElementById('term-title').textContent.length > 2), 'the console has a title');
   ok(await ev(() => /VCR/.test(getComputedStyle(document.getElementById('term-body')).fontFamily)), 'console text is in the VCR font');
+  await centerOf('#term-body');                  // let the CRT warm up before the picture
   await shot('console');
   await key('Escape');
   await until('Esc closes the console', () => !yad.term.open && !document.getElementById('term-screen').classList.contains('on'));
@@ -595,11 +665,20 @@ await section('consoles', async () => {
   await moveTo(at);
   await until('the pointer finds the console', (i) => yad.cursorTarget?.k === 'prop' && yad.cursorTarget.idx === i, term.idx, 8000, diagInv);
   await page.mouse.click(at[0], at[1]);
-  await until('clicking it with the pointer opens it', () => yad.term.open);
+  if (!await until('clicking it with the pointer opens it', () => yad.term.open)) return;
   const close = await centerOf('#term-ft [data-close]');
   await page.mouse.click(close[0], close[1]);
   await until('its close button closes it', () => !yad.term.open);
   ok(await ev(() => yad.mode === 'hands'), 'you stay in hands mode (you chose it)');
+  // a held thing dropped on a machine is used on it: here, it just switches the console on
+  await ev(() => T.give('/obj/item/wrench', yad.self.inv.active));
+  await wait(() => !!yad.self.inv.hands[yad.self.inv.active]);
+  await drag(await handXY(await ev(() => yad.self.inv.active)), at);
+  await until('dropping a held item on a machine uses it on the machine (console opens)', () => yad.term.open, null, 15000, diagInv);
+  ok(await ev(() => !!yad.self.inv.hands[yad.self.inv.active]), 'and you still hold the item');
+  await key('Escape');
+  await until('Esc closes it', () => !yad.term.open);
+  await ev(() => T.clearHands());
   await setMode('look');
 });
 
@@ -626,6 +705,16 @@ await section('chat', async () => {
 });
 
 // ------------------------------------------------------------------ body effects
+await section('progress bar, B to stop', async () => {
+  await home(-0.1);
+  await setMode('look');
+  await ev(() => T.sim.actions.startTimed(T.mob, 'testing the progress bar', 8, () => true, () => {}));
+  await until('a timed action shows a progress bar', () => { const p = document.getElementById('progress'); return getComputedStyle(p).display === 'block' && parseFloat(p.firstElementChild.style.width) > 0; });
+  await shot('progress');
+  await key('KeyB');
+  await until('B stops it', () => getComputedStyle(document.getElementById('progress')).display === 'none' && [...document.querySelectorAll('#chatlog > div')].slice(-2).some((d) => /You stop testing/.test(d.textContent)), null, 15000, diagInv);
+});
+
 await section('damage, effects, death', async () => {
   await home(-0.1);
   await setMode('look');
@@ -687,7 +776,7 @@ await section('damage, effects, death', async () => {
     await until('back in the air', () => yad.rep.env.p > 80 && +getComputedStyle(document.getElementById('fx-vac')).opacity < 0.05);
   } else ok(false, 'found somewhere airless to stand');
   // critical, then dead
-  await ev(() => T.sim.hurt(T.mob, 75, 'brute', 'test'));
+  await ev(() => { T.healAll(); T.sim.hurt(T.mob, 115, 'brute', 'test'); });
   await until('in critical condition the view narrows (#fx-crit)', () => yad.self.crit && getComputedStyle(document.getElementById('fx-crit')).display === 'block', null, 15000, () => [yad.self.hp, yad.self.crit]);
   await shot('crit');
   await ev(() => T.sim.hurt(T.mob, 400, 'brute', 'test'));
