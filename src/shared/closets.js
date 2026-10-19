@@ -15,11 +15,12 @@ export function closetSolid(cl, cs) {
   return !(cs & CL.OPEN) || cl.dopen;
 }
 
-/** Apply a state to a closet record (`it`, from buildPropData) and to the tile it stands on. */
+/** Apply a state to a closet record (`it`, from buildPropData) and to the tile it stands on (a closed one is a locker-sized box standing on it). */
 export function setClosetState(world, it, cs, gone = false) {
   it.cs = cs;
   it.gone = gone;
-  world.solid[it.r * world.W + it.c] = !gone && closetSolid(it.cl, cs) ? 1 : 0;
+  it.dense = !gone && closetSolid(it.cl, cs);
+  if (gone) world.boxDrop(it); else world.boxSet(it);
 }
 
 /** The sprite id for the closet's current state, or -1 if that look does not exist (it falls back to closed). */

@@ -51,7 +51,7 @@ export class AI {
     const find = (re) => {
       for (let tries = 0; tries < 4000; tries++) {
         const i = Math.floor(this.rand() * w.W * w.H);
-        if (w.kind[i] !== KIND.FLOOR || w.solid[i]) continue;
+        if (w.kind[i] !== KIND.FLOOR || w.solid[i] || w.dyn[i]) continue;
         if (re.test(w.areas[w.areaIdx[i]].n)) return i;
       }
       return -1;
@@ -69,7 +69,7 @@ export class AI {
     this.budget = 3;
     for (const m of sim.mobs.values()) {
       m.speedNow = m.client ? m.speedNow : 0;
-      if (m.client || m.dead || m.ssd || m.evacuated || m.inside) continue;
+      if (m.client || m.dead || m.ssd || m.evacuated || m.inside || m.downed || (m.pulledBy && m.pulledBy.grab >= 1)) continue;
       m.fear = Math.max(0, m.fear - dt);
       if (m.stunned > 0 || m.body.crit) continue;
       if (m.kind === 'carp') this.thinkCarp(m, dt); else this.thinkCivil(m, dt);

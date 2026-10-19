@@ -138,6 +138,15 @@
  "miss": [
   "weapons__punchmiss.ogg"
  ],
+ "cuff": [
+  "weapons__handcuffs.ogg"
+ ],
+ "cablecuff": [
+  "weapons__cablecuff.ogg"
+ ],
+ "grab": [
+  "weapons__thudswoosh.ogg"
+ ],
  "baton": [
   "weapons__genhit1.ogg",
   "weapons__genhit2.ogg",

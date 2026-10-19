@@ -49,6 +49,7 @@ export class Actions {
   key(c, msg) {
     const sim = this.sim, m = c.mob;
     if (!m || m.dead || !m.humanoid) return;
+    if (m.cuffed && !['swap', 'intent', 'resist'].includes(msg.k)) { sim.people.restrained(m); return; }
     switch (msg.k) {
       case 'swap': swapHands(m); break;
       case 'drop': if (!m.busy) dropFromHand(sim, m); break;
@@ -58,7 +59,8 @@ export class Actions {
       case 'intent': m.intent = INTENTS[clamp(msg.v | 0, 0, 3)]; m.dirty = true; break;
       case 'internals': this.toggleInternals(m); break;
       case 'light': this.toggleLight(m); break;
-      case 'resist': if (m.inside) sim.closets.resist(m, m.inside); else if (m.busy) this.cancelBusy(m, 'stop'); break;
+      case 'resist': if (!sim.people.resist(m) && m.busy) this.cancelBusy(m, 'stop'); break;
+      case 'pull': sim.people.release(m); break;
       default: break;
     }
     c.selfJson = '';
@@ -143,6 +145,7 @@ export class Actions {
   click(c, msg) {
     const sim = this.sim, m = c.mob;
     if (!m || m.dead || m.body.crit || m.stunned > 0 || !m.humanoid || m.inside) return;
+    if (m.cuffed) { sim.people.restrained(m); return; }
     if (msg.yaw !== undefined) { m.yaw = msg.yaw; m.pitch = clamp(msg.pitch || 0, -1.5, 1.5); }
     if (m.busy) { this.cancelBusy(m, 'interrupt'); return; }
     if (m.cool > 0) return;
@@ -153,12 +156,13 @@ export class Actions {
     if (t && !this.inReach(m, t)) { if (t.k !== 'mob' || !held?.def.gun) return; }
     if (!t) return this.clickAir(m, held);
     c.selfJson = '';
+    if (msg.ctrl && ['mob', 'item', 'prop'].includes(t.k)) return sim.people.drag(m, t);        // Ctrl+click is SS13's pull
     switch (t.k) {
       case 'item': return this.clickItem(m, t.rec, held);
       case 'door': return this.clickDoor(m, t.idx, held);
       case 'fdoor': sim.firedoors.manualOpen(t.f, m); return;
       case 'prop': return this.clickProp(c, m, t.it, held, !!msg.alt);
-      case 'mob': return this.clickMob(m, t.o, held);
+      case 'mob': return this.clickMob(m, t.o, held, !!msg.alt);
       case 'breach': return this.clickBreach(m, t, held);
       default: return;
     }
@@ -295,10 +299,13 @@ export class Actions {
   }
 
   // ------------------------------------------------------------------ mobs & combat
-  clickMob(m, o, held) {
+  clickMob(m, o, held, alt = false) {
     const sim = this.sim;
+    if (alt) return sim.people.openStrip(m, o);                  // Alt+click: go through their things (SS13 drags them onto you)
+    if (held?.def.cuff) return sim.people.cuff(m, o, held);      // handcuffs work on any intent
     if (o.dead) {
-      if (m.intent === 'help' || m.intent === 'grab') {
+      if (m.intent === 'grab') return sim.people.grab(m, o);
+      if (m.intent === 'help') {
         if (o.worn?.id && !m.hands.every(Boolean)) {
           const id = o.worn.id; detach(sim, id); takeToHand(sim, m, id);
           sim.tell(m, 'notice', `You take ${o.name}'s ID card.`);
@@ -313,10 +320,7 @@ export class Actions {
         sim.chat.visible(m, `${m.name} hugs ${o.name} to make them feel better!`, 'notice', 8);
         o.fear = Math.max(0, o.fear - 1);
         return;
-      case 'grab':
-        o.stunned = Math.max(o.stunned, 0.8);
-        sim.chat.visible(m, `${m.name} has grabbed ${o.name} passively!`, 'warning', 10);
-        return;
+      case 'grab': return sim.people.grab(m, o);
       case 'disarm': {
         m.cool = 0.6;
         sim.sound('miss', o.x, o.z, 0.5);
@@ -558,6 +562,7 @@ export class Actions {
   inventory(c, msg) {
     const sim = this.sim, m = c.mob;
     if (!m || m.dead || !m.humanoid) return;
+    if (m.cuffed && msg.op !== 'close') { sim.tell(m, 'warning', "You can't do that right now!"); return; }
     const item = sim.items.get(msg.item);
     switch (msg.op) {
       case 'move': {
@@ -669,6 +674,10 @@ export class Actions {
       if (it) lines.push(...this.itemText(it));
     } else if (t.k === 'mob') {
       const o = sim.mobs.get(t.id);
+      if (o && o.look && m) {                                     // people: one line each, as SS13 prints them
+        for (const l of sim.people.examineLines(m, o)) sim.tellClient(c, 'info', l);
+        return;
+      }
       if (o) lines.push(...this.mobText(o));
     } else if (t.k === 'door') {
       const d = sim.doors[t.idx];

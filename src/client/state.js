@@ -1,7 +1,7 @@
 import { TILE, KIND } from '../shared/config.js';
 import { World } from '../shared/world.js';
 import { DoorCore } from '../shared/door.js';
-import { buildPropData } from '../shared/propdata.js';
+import { buildPropData, moveProp } from '../shared/propdata.js';
 import { setClosetState } from '../shared/closets.js';
 
 /**
@@ -48,6 +48,7 @@ export class Replica {
     for (const ev of w.tiles) this.setTile(ev);
     for (const [c, r, d] of w.panes) this.killPane(c, r, d);
     for (const [i, cs, g] of w.closets || []) this.setCloset(i, cs, !!g);
+    for (const [i, x, z, d] of w.moved || []) this.moveProp(i, x, z, d);
     if (w.evac) this.applyEvac(true);
     w.doors.forEach((st, i) => { if (st !== 'closed') this.doors[i]?.setState(st); });
     w.fdoors.forEach((c, i) => { if (c && this.fdoors[i]) this.setFdoor(this.fdoors[i], true); });
@@ -65,6 +66,11 @@ export class Replica {
   setCloset(i, cs, gone) {
     const it = this.props.interact[i];
     if (it?.kind === 'closet') setClosetState(this.world, it, cs, gone);
+  }
+
+  moveProp(i, x, z, d) {
+    const it = this.props.interact[i];
+    if (it) moveProp(this.world, it, x, z, d);
   }
 
   killPane(c, r, d) {
@@ -122,6 +128,8 @@ export class Replica {
       case 'fdoor': { const f = this.fdoors[ev.i]; if (f) this.setFdoor(f, !!ev.c); break; }
       case 'tile': this.setTile(ev); break;
       case 'cl': this.setCloset(ev.i, ev.cs, !!ev.g); break;
+      case 'pm': this.moveProp(ev.i, ev.x, ev.z, ev.d); break;
+      case 'imv': { const it = this.items.get(ev.id); if (it) { it.x = ev.x; it.z = ev.z; } break; }
       case 'pane': this.killPane(ev.c, ev.r, ev.d); break;
       case 'item+': this.items.set(ev.id, { id: ev.id, s: ev.s, n: ev.n, x: ev.x, y: ev.y, z: ev.z }); break;
       case 'item-': this.lastRemoved = this.items.get(ev.id) || null; this.items.delete(ev.id); break;
@@ -148,7 +156,7 @@ export class Replica {
       const [id, x, z, yaw, flags, speed] = row;
       const m = this.mobs.get(id);
       if (!m) continue;
-      m.flags = flags; m.speed = speed; m.dead = !!(flags & 1); m.crit = !!(flags & 2);
+      m.flags = flags; m.speed = speed; m.dead = !!(flags & 1); m.crit = !!(flags & 2); m.lying = !!(flags & 16);
       m.buf.push({ t: now, x, z, yaw });
       if (m.buf.length > 6) m.buf.shift();
       if (m.fresh) { m.fresh = false; m.x = x; m.z = z; m.yaw = yaw; }

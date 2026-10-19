@@ -169,6 +169,17 @@ def resolve(path, vars_=None):
     return r
 
 
+def dir_set(layers, dd):
+    """The same layers with the thing turned to `dd` (S, N, E or W). A layer whose state has no such view keeps its one picture,
+    spelled the same way for every dd so that identical pictures are stored once."""
+    out = []
+    for l in layers:
+        st = sl.get_dmi(l[0]).states[l[1]]
+        idx = sl.dir_index(st, dd)
+        out.append((l[0], l[1], {0: S, 1: N, 2: E, 3: W}[idx]) + tuple(l[3:]))
+    return out
+
+
 def dir_of(r, default=S):
     d = r.get('dir', default)
     if isinstance(d, str):
@@ -177,6 +188,16 @@ def dir_of(r, default=S):
             d = {'NORTH': 1, 'SOUTH': 2, 'EAST': 4, 'WEST': 8, 'NORTHEAST': 5, 'NORTHWEST': 9,
                  'SOUTHEAST': 6, 'SOUTHWEST': 10}.get(d, default)
     return d if isinstance(d, int) else default
+
+
+def delay_seconds(v):
+    """A DM time (40, '1 SECONDS', '2 MINUTES') in seconds, or None."""
+    if isinstance(v, (int, float)):
+        return v / 10
+    m = re.match(r'^(\d+(?:\.\d+)?)\s*(SECONDS?|MINUTES?)$', str(v or '').strip())
+    if m:
+        return float(m.group(1)) * (60 if m.group(2).startswith('MINUTE') else 1)
+    return None
 
 
 def clean_name(n):
@@ -430,6 +451,10 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
         num = lambda ns: sorted({dm.value(dm.defines[n]) for n in ns if n in dm.defines and isinstance(dm.value(dm.defines[n]), int)})
         acc = access_of(r)
         d = dict(base, k='closet', fr=fr, p=p.split('/', 2)[2], bb=1)
+        if r.get('anchored') in (True, 1):
+            d['anc'] = 1                                      # bolted down (the brig's lockers)
+        if isinstance(r.get('drag_slowdown'), (int, float)) and r['drag_slowdown'] > 0:
+            d['ds'] = r['drag_slowdown']                      # lockers slow you down like a prone body (1.5); crates do not
         secure = r.get('secure') is True
         if secure:
             d['sec'] = 1
@@ -727,9 +752,19 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                 sp = spr.add(layers)
                 if sp < 0:
                     continue
-                multi = dmi.states[st].dirs > 1
                 cont = 1 if p.startswith(('/obj/structure/closet', '/obj/structure/rack')) else 0
-                props.append(dict(base, k='sprite', s=sp, den=den, bb=0 if multi else 1, cont=cont, p=p.split('/', 2)[2]))
+                rec = dict(base, k='sprite', s=sp, den=den, bb=1, cont=cont, p=p.split('/', 2)[2])
+                if any(sl.get_dmi(l[0]).states[l[1]].dirs > 1 for l in layers):
+                    # it looks different from every side: the game picks the picture by where you stand (S, N, E, W as the thing is turned)
+                    fr = [spr.add(dir_set(layers, dd)) for dd in (S, N, E, W)]
+                    if all(f >= 0 for f in fr) and len(set(fr)) > 1:
+                        rec['fr'] = fr
+                        stats['directional'] += 1
+                if r.get('anchored') in (True, 1):
+                    rec['anc'] = 1
+                if isinstance(r.get('drag_slowdown'), (int, float)) and r['drag_slowdown'] > 0:
+                    rec['ds'] = r['drag_slowdown']
+                props.append(rec)
                 stats['sprite'] += 1
                 continue
 
@@ -790,6 +825,11 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
             itemdefs[pth] = {'n': clean_name(r.get('name', pth.split('/')[-1])), 's': sp,
                              'd': r.get('desc') if isinstance(r.get('desc'), str) else '',
                              'w': w, 'sl': slots, 'f': f if isinstance(f, (int, float)) else 0}
+            # seconds to take it off someone / put it on someone (SS13's strip_delay and equip_delay_other; defaults 4 and 2)
+            for key, var, dflt in (('sd', 'strip_delay', 4), ('ed', 'equip_delay_other', 2)):
+                secs = delay_seconds(r.get(var))
+                if secs is not None and slots and abs(secs - dflt) > 0.01:
+                    itemdefs[pth][key] = secs
         else:
             missing['ITEM ' + pth] += 1
 

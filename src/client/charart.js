@@ -1,7 +1,7 @@
 import { HIDE } from '../shared/looks.js';
 
 const CELL = 32;
-const PER_GROUP = 5;                 // four directions (S, N, E, W) and the person lying down
+const PER_GROUP = 6;                 // four directions (S, N, E, W), then lying down alive, then dead
 
 /**
  * People are not baked sprites: this stacks the layered SS13 art (assets/chars.png, see tools/build_chars.py) into a
@@ -71,6 +71,7 @@ export class CharArt {
     if (!(h & HIDE.FACIALHAIR)) this.layer(ctx, this.byName.facial.get(l.f) ?? -1, di, l.fc);
     worn('mask', HIDE.MASK);
     worn('head', 0);
+    if (o.cuffs !== undefined) this.layer(ctx, o.cuffs, di);                      // HANDCUFF_LAYER, over the clothes
   }
 
   /** A fresh 32x32 canvas of one direction, for the character screen and the first-person body. */
@@ -97,7 +98,7 @@ export class CharArt {
       this.paint(this.wctx, ap, 0);
       this.atlas.putLying(g, this.work);
       const s = this.atlas.sprites(g);
-      rec = { key, g, ref: 0, set: { d: [[s[0]], [s[1]], [s[2]], [s[3]]], dead: s[4] } };
+      rec = { key, g, ref: 0, set: { d: [[s[0]], [s[1]], [s[2]], [s[3]]], lie: s[4], dead: s[5] } };
       this.groups.set(key, rec);
     }
     rec.ref++;
@@ -141,7 +142,7 @@ export class DynAtlas {
 
   alloc() { return this.free_.length ? this.free_.pop() : -1; }
   free(g) { this.free_.push(g); }
-  sprites(g) { return [0, 1, 2, 3, 4].map((k) => this.first + g * PER_GROUP + k); }
+  sprites(g) { return [0, 1, 2, 3, 4, 5].map((k) => this.first + g * PER_GROUP + k); }
 
   /** Copy a 32x32 canvas into cell `k` of group `g` and set its sprite rectangle to the opaque part (like the baked sprites). */
   put(g, k, src) {
@@ -182,7 +183,8 @@ export class DynAtlas {
     t.fillRect(0, 0, CELL, CELL);
     t.globalCompositeOperation = 'destination-in';        // multiply coloured the empty pixels too
     t.drawImage(turned, 0, 0);
-    this.put(g, 4, grey);
+    this.put(g, 4, turned);                                // knocked down, alive
+    this.put(g, 5, grey);                                  // dead
   }
 
   /** Push what changed to the GPU (once per frame at most). */

@@ -6,7 +6,7 @@ const ITEM_CAP = 30;            // storage_capacity: items a locker will take
 const MOB_CAP = 3;              // mob_storage_capacity
 const NOBUDGE_COOLDOWN = 5;     // seconds between "door won't budge" messages
 
-const timeText = (s) => (s >= 60 && s % 60 === 0 ? `${s / 60} minute${s === 60 ? '' : 's'}` : `${s} second${s === 1 ? '' : 's'}`);
+export const timeText = (s) => (s >= 60 && s % 60 === 0 ? `${s / 60} minute${s === 60 ? '' : 's'}` : `${s} second${s === 1 ? '' : 's'}`);
 const the = (it) => `the ${it.name}`;
 
 /**
@@ -31,9 +31,12 @@ export class Closets {
     // anything lying on a closed closet's tile when the round starts is inside it (closets.dm take_contents on mapload)
     for (const rec of [...this.sim.floor.values()]) {
       if (it.contents.length >= ITEM_CAP) break;
-      if (rec.c === it.c && rec.r === it.r) this.store(it, rec.item);
+      if (this.under(it, rec)) this.store(it, rec.item);
     }
   }
+
+  /** Is this floor item lying where the closet stands (a free-standing box, so not a matter of tiles)? */
+  under(it, rec) { return Math.abs(rec.x - it.x) < 0.8 && Math.abs(rec.z - it.z) < 0.8; }
 
   /** PopulateContents(): rows are [item path, count, chance %, stack amount] or {pick: [[weight, rows]]}. */
   populate(it) {
@@ -139,12 +142,12 @@ export class Closets {
     const sim = this.sim;
     for (const rec of [...sim.floor.values()]) {
       if (it.contents.length >= ITEM_CAP) break;
-      if (rec.c === it.c && rec.r === it.r) this.store(it, rec.item);
+      if (this.under(it, rec)) this.store(it, rec.item);
     }
     for (const mob of sim.mobs.values()) {
       if (it.mobs.length >= MOB_CAP) break;
       if (mob.kind !== 'human' || mob.inside || mob.evacuated || (it.cl.hz && !mob.dead)) continue;
-      if (mob.tile[0] !== it.c || mob.tile[1] !== it.r) continue;
+      if (Math.abs(mob.x - it.x) >= 0.7 || Math.abs(mob.z - it.z) >= 0.7) continue;
       this.putInside(it, mob);
     }
   }
@@ -187,6 +190,7 @@ export class Closets {
     const welder = held?.def.tool === 'welder';
     if (it.cs & CL.OPEN) {
       if (welder) return this.cutApart(m, it, held);
+      if (!held && m.pulling) return this.stuff(m, it, m.pulling);       // someone in your grip goes in
       if (held) {                                    // put what you hold down on the closet's floor
         const x = it.x + (sim.rand() - 0.5) * (TILE - 0.9), z = it.z + (sim.rand() - 0.5) * (TILE - 0.9);
         detach(sim, held);
@@ -266,6 +270,27 @@ export class Closets {
         stop: () => (m.inside === it ? `You fail to break out of ${the(it)}!` : null),
         keep: true,
       });
+  }
+
+  /** Drag someone onto an open closet (or click it while holding them): four seconds standing still, and they are shut in. */
+  stuff(m, it, o) {
+    const sim = this.sim;
+    if (it.gone || !(it.cs & CL.OPEN) || !o || o === m || o.kind !== 'human' || o.inside || m.inside || m.cuffed || m.busy) return;
+    if (it.mobs.length >= MOB_CAP || (it.cl.hz && !o.dead)) return;
+    const close = (mob) => Math.hypot(mob.x - it.x, mob.z - it.z) < 3.6;
+    if (!sim.people.near(m, o) || !close(m)) return;
+    this.say(m, `You try to stuff ${o.name} into ${the(it)}.`, `${m.name} tries to stuff ${o.name} into ${the(it)}.`, 'warning', 'You hear clanging.');
+    const ox = o.x, oz = o.z;
+    sim.actions.startTimed(m, `stuffing ${o.name} into ${the(it)}`, 4,
+      () => !it.gone && (it.cs & CL.OPEN) && !o.inside && sim.people.near(m, o) && close(m) && Math.hypot(o.x - ox, o.z - oz) < 0.4,
+      () => {
+        this.say(m, `You stuff ${o.name} into ${the(it)}.`, `${m.name} stuffs ${o.name} into ${the(it)}.`, 'notice', 'You hear a loud metal bang.');
+        o.stunned = Math.max(o.stunned, 4);
+        if (o.pulledBy) sim.people.release(o.pulledBy);
+        sim.people.release(o);
+        o.x = it.x; o.z = it.z;
+        this.close(m, it);
+      }, null, { start: null, stop: null });
   }
 
   /** Late joiners need every closet that is not as the map left it. */

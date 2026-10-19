@@ -16,6 +16,7 @@ export class Nav {
     const w = this.world;
     if (!w.inb(c, r)) return false;
     const i = r * w.W + c;
+    if (w.dyn[i]) return false;                                   // a locker or tank stands there
     if (w.solid[i]) {
       const d = w.doorAt.get(i);
       if (d && who && d.allows(who)) return true;

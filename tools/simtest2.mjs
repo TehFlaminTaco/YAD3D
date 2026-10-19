@@ -5,7 +5,7 @@ import { loadSimData } from '../src/sim/load.js';
 import { Sim } from '../src/sim/sim.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
 import { CL } from '../src/shared/closets.js';
-import { recalc } from '../src/sim/inventory.js';
+import { recalc, place } from '../src/sim/inventory.js';
 import { HIDE } from '../src/shared/looks.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -200,6 +200,7 @@ section('closets', () => {
   const w = sim.world, cls = sim.closets;
   const find = (suffix) => cls.list.find((it) => it.path.endsWith(suffix));
   const click = (c, it, alt) => { sim.handle(c, { t: 'click', target: { k: 'prop', idx: it.idx }, alt }); step(0.1); };
+  const blocks = (it) => w.collides(it.x, it.z, 0.1);       // is something solid standing there (a closed locker is a box, not a tile)
   // stand on a free tile next to the closet (k picks which), where a click can reach it
   const freeAround = (it) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dc, dr]) => [it.c + dc, it.r + dr]).filter(([c, r]) => w.kind[r * w.W + c] === 1 && !w.solid[r * w.W + c]);
   const stand = (m, it, k = 0) => {
@@ -214,7 +215,7 @@ section('closets', () => {
 
   // a locker holds what the DM says it holds
   const eng = find('secure_closet/engineering_welding');
-  ok(eng && eng.contents.length === 6 && eng.cs === (CL.LOCKED) && w.solid[eng.r * w.W + eng.c], 'welding locker starts closed and locked with its 3 hoods and 3 welders');
+  ok(eng && eng.contents.length === 6 && eng.cs === (CL.LOCKED) && blocks(eng), 'welding locker starts closed and locked with its 3 hoods and 3 welders');
   ok(eng.cl.sec && eng.cl.a.length === 1, 'and wants one access');
   const em = cls.list.filter((it) => it.path.endsWith('closet/emcloset'));
   ok(em.length > 20 && em.some((it) => it.contents.length) && new Set(em.map((it) => it.contents.length)).size > 2, 'emergency closets are stocked at random (different contents each)');
@@ -233,13 +234,13 @@ section('closets', () => {
   ok(!(eng.cs & CL.LOCKED) && !(eng.cs & CL.OPEN), 'an empty hand on a locked locker with the right ID unlocks it');
   ok(texts(inbox.a).includes('You unlock the welding supplies locker.') && texts(inbox.b).includes(`${a.name} unlocks the welding supplies locker.`), 'you and onlookers get the lock messages');
   click(A, eng);
-  ok((eng.cs & CL.OPEN) && !w.solid[eng.r * w.W + eng.c], 'then it opens, and stops blocking the way');
+  ok((eng.cs & CL.OPEN) && !blocks(eng), 'then it opens, and stops blocking the way');
   const spilled = [...sim.floor.values()].filter((f) => f.c === eng.c && f.r === eng.r);
   ok(spilled.length === 6 && eng.contents.length === 0, 'its contents lie on its tile');
   // closing takes in what lies there, including something someone dropped
   const junk = sim.newItem('/obj/item/crowbar'); place_(junk, eng);
   click(A, eng);
-  ok(!(eng.cs & CL.OPEN) && eng.contents.length === 7 && w.solid[eng.r * w.W + eng.c] && ![...sim.floor.values()].some((f) => f.c === eng.c && f.r === eng.r), 'closing takes everything on the tile inside and blocks it again');
+  ok(!(eng.cs & CL.OPEN) && eng.contents.length === 7 && blocks(eng) && ![...sim.floor.values()].some((f) => f.c === eng.c && f.r === eng.r), 'closing takes everything on the tile inside and blocks it again');
   // alt-click locks and unlocks without opening
   click(A, eng, true);
   ok((eng.cs & CL.LOCKED) && !(eng.cs & CL.OPEN), 'alt-click locks a closed locker you have the access for');
@@ -281,7 +282,7 @@ section('closets', () => {
   hand(a, t);
   click(A, eng); // open: with a lit welder this cuts it apart
   step(4.5);
-  ok(eng.gone && !w.solid[eng.r * w.W + eng.c] && [...sim.floor.values()].some((f) => f.item.path.includes('sheet/metal') && f.c === eng.c && f.r === eng.r), 'cutting an open locker apart removes it and leaves 2 metal');
+  ok(eng.gone && !blocks(eng) && [...sim.floor.values()].some((f) => f.item.path.includes('sheet/metal') && f.c === eng.c && f.r === eng.r), 'cutting an open locker apart removes it and leaves 2 metal');
 
   // personal lockers belong to whoever swipes first
   const pl = cls.list.find((it) => it.cl.pl && freeAround(it).length);
@@ -298,7 +299,7 @@ section('closets', () => {
   const crate = cls.list.find((it) => it.cl.hz && it.cs === 0);
   stand(a, crate); a.hands[0] = a.hands[1] = null;
   click(A, crate);
-  ok((crate.cs & CL.OPEN) && w.solid[crate.r * w.W + crate.c], 'an open crate still blocks the tile');
+  ok((crate.cs & CL.OPEN) && blocks(crate), 'an open crate still blocks the tile');
 
   function place_(item, it) { item.loc = null; sim.floor.set(item.id, { item, x: it.x + 0.3, y: 0.01, z: it.z, c: it.c, r: it.r }); item.loc = { t: 'floor' }; }
 });
@@ -354,6 +355,307 @@ section('looks', () => {
   sim.handle(A, { t: 'mirror', look: { h: other, hc: '#00ff00', g: 'm', sk: DATA.chars.skin[0].n } });
   ok(a.look.h === other && a.look.hc === '#00ff00' && a.look.g === 'f' && a.look.sk === skin, 'at a mirror you change hair and its colour, nothing else');
 });
+
+section('people', () => {
+  const { sim, A, B, a, b, step, inbox, evs, hand, floorTiles } = setup();
+  const W = sim.world.W;
+  const texts = (inb) => inb.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((x) => x.e === 'msg').map((x) => x.text);
+  const clear = () => { inbox.a.length = 0; inbox.b.length = 0; };
+  const t0 = floorTiles.find((i) => [1, -1, W, -W].every((d) => sim.world.kind[i + d] === 1 && !sim.world.solid[i + d]));
+  const place2 = () => { a.x = (t0 % W) * TILE + 0.5; a.z = Math.floor(t0 / W) * TILE + 1; b.x = a.x + 1.2; b.z = a.z; a.vx = a.vz = b.vx = b.vz = 0; a.cool = 0; b.cool = 0; };
+  const clickMob = (c, o, extra = {}) => { sim.handle(c, { t: 'click', target: { k: 'mob', id: o.id }, ...extra }); step(0.1); };
+  place2();
+
+  // --- handcuffs: three seconds standing next to them, then they cannot use their hands
+  const cuffs = sim.newItem('/obj/item/restraints/handcuffs');
+  a.hands[0] = null; hand(a, cuffs, 0); a.active = 0;
+  const bobItem = sim.newItem('/obj/item/crowbar'); hand(b, bobItem, 0);
+  clear();
+  clickMob(A, b);
+  ok(a.busy && texts(inbox.b).includes(`${a.name} is trying to put handcuffs on you!`), 'cuffing someone warns them (and takes time)');
+  step(2.5);
+  ok(!b.cuffed, 'not yet after two and a half seconds');
+  step(0.8);
+  ok(b.cuffed === cuffs && !b.hands[0] && sim.floor.has(bobItem.id), 'three seconds later they are cuffed and drop what they held');
+  ok(texts(inbox.a).includes(`${a.name} handcuffs ${b.name}.`) && texts(inbox.b).includes(`${a.name} handcuffs you.`), 'the SS13 messages');
+  ok(sim.appearanceOf(b).o.cuffs === sim.looks.meta.cuffs, 'the cuffs show on their sprite');
+  clear();
+  sim.handle(B, { t: 'click', target: { k: 'mob', id: a.id } }); step(0.1);
+  ok(texts(inbox.b).some((x) => x.startsWith("You're handcuffed and can't act")), 'a cuffed person cannot use their hands');
+
+  // --- stripping: the window, obscured slots, delays and the floor
+  clear();
+  sim.handle(A, { t: 'strip', op: 'open', id: b.id }); step(0.1);
+  const view = evs(inbox.a, 'strip').pop();
+  ok(view && view.id === b.id && view.cuffs && view.slots.find((s) => s.k === 'uniform').it, 'the strip window lists what they wear and their handcuffs');
+  ok(view.pockets.length === 2 && view.pockets[0].full !== undefined, 'pockets only say full or empty');
+  sim.handle(A, { t: 'strip', op: 'take', id: b.id, slot: 'shoes' }); step(0.2);
+  ok(a.busy && texts(inbox.b).some((x) => x.startsWith(`${a.name} tries to remove your `)), 'taking something off warns them');
+  step(8.5);
+  ok(!b.worn.shoes, "it comes off after the item's strip delay");
+  ok([...sim.floor.values()].some((f) => f.item.path.includes('shoes') && Math.hypot(f.x - b.x, f.z - b.z) < 1.5), 'and lies at their feet');
+  // a space helmet covers the mask
+  const mask = sim.newItem('/obj/item/clothing/mask/breath'); mask.loc = { t: 'slot', mob: b, slot: 'mask' }; b.worn.mask = mask;
+  const helm = sim.newItem('/obj/item/clothing/head/helmet/space/emergency');
+  b.worn.head = helm; helm.loc = { t: 'slot', mob: b, slot: 'head' }; recalc(sim, b);
+  clear();
+  sim.handle(A, { t: 'strip', op: 'take', id: b.id, slot: 'mask' }); step(0.2);
+  ok(texts(inbox.a).includes("You can't reach that! Something is covering it.") && !a.busy, 'what is covered cannot be reached');
+  // putting something on them
+  const shoes = sim.newItem('/obj/item/clothing/shoes/sneakers/black');
+  a.hands[0] = null; hand(a, shoes, 0);
+  sim.handle(A, { t: 'strip', op: 'put', id: b.id, slot: 'shoes' }); step(2.3);
+  ok(b.worn.shoes === shoes && !a.hands[0], 'dressing someone takes two seconds and puts it on them');
+  // pockets are quiet
+  const pen = sim.newItem('/obj/item/pen'); pen.loc = { t: 'slot', mob: b, slot: 'lpocket' }; b.worn.lpocket = pen;
+  clear();
+  sim.handle(A, { t: 'strip', op: 'pocket', id: b.id, slot: 'lpocket' }); step(4.3);
+  ok(!b.worn.lpocket && !texts(inbox.b).some((x) => x.includes('pocket')), 'emptying a pocket takes four seconds and they are not told');
+  // taking the cuffs off
+  sim.handle(A, { t: 'strip', op: 'take', id: b.id, slot: 'cuffs' }); step(4.3);
+  ok(!b.cuffed && sim.floor.has(cuffs.id), 'the handcuffs come off');
+  sim.handle(A, { t: 'strip', op: 'close', id: b.id });
+
+  // --- breaking out of cuffs takes a minute and standing still
+  place2(); detachFloor(cuffs); a.hands[0] = null; hand(a, cuffs, 0);
+  clickMob(A, b); step(3.3);
+  ok(b.cuffed === cuffs, 'cuffed again');
+  clear();
+  sim.handle(B, { t: 'key', k: 'resist' }); step(0.1);
+  ok(b.busy && texts(inbox.b).some((x) => x.includes('This will take around 1 minute and you need to stand still.')), 'resisting starts a minute-long attempt');
+  step(30);
+  b.x += 1;                                               // moving spoils it
+  step(0.2);
+  ok(!b.busy && b.cuffed, 'walking away spoils the attempt');
+  b.x -= 1; sim.handle(B, { t: 'key', k: 'resist' }); step(61);
+  ok(!b.cuffed, 'standing still for a minute frees them');
+
+  // --- grabs
+  place2(); a.intent = 'grab'; a.hands[0] = null; a.active = 0; b.hands[0] = null;
+  clear();
+  clickMob(A, b);
+  ok(a.pulling === b && b.pulledBy === a && a.grab === 0 && texts(inbox.a).includes(`You grab ${b.name} passively!`) && texts(inbox.b).includes(`${a.name} grabs you passively!`), 'a grab intent click holds them passively');
+  a.x += 2.6; step(0.3);
+  ok(Math.hypot(a.x - b.x, a.z - b.z) < 1.8, 'a person you hold trails behind you');
+  place2(); a.pulling = b; b.pulledBy = a;
+  const held = sim.newItem('/obj/item/crowbar'); hand(b, held, 0);
+  a.cool = 0; clear();
+  clickMob(A, b);
+  ok(a.grab === 1 && !b.hands[0] && texts(inbox.b).includes(`${a.name} grabs you aggressively!`), 'the next click grabs aggressively at once and makes them drop what they hold');
+  a.cool = 0; clear();
+  clickMob(A, b); step(3.2);
+  ok(a.grab === 2 && b.downed && texts(inbox.b).includes(`${a.name} grabs you by the neck!`), 'a third click, three seconds later, is a neck grab: they go down');
+  ok(evs(inbox.a, 'msg').length >= 0, 'no crash');
+  // they can try to break free: 30% each try at a neck grab
+  let freed = false;
+  for (let k = 0; k < 60 && !freed; k++) { sim.handle(B, { t: 'key', k: 'resist' }); step(2.1); freed = !b.pulledBy; }
+  ok(freed && !b.downed, 'resisting eventually breaks a neck grab');
+  // passive holds just let go
+  place2(); a.cool = 0; clickMob(A, b);
+  sim.handle(B, { t: 'key', k: 'resist' }); step(0.2);
+  ok(!b.pulledBy && !a.pulling, 'resisting a passive hold breaks it at once');
+  a.cool = 0; clickMob(A, b); sim.handle(A, { t: 'key', k: 'pull' }); step(0.1);
+  ok(!a.pulling, 'P lets go');
+
+  // --- examine
+  place2(); a.cool = 0; a.intent = 'help'; detachFloor(cuffs); a.hands[0] = null; hand(a, cuffs, 0);
+  clickMob(A, b); step(3.3);
+  clear();
+  sim.actions.examine(A, { target: { k: 'mob', id: b.id } }); step(0.1);
+  const seen = texts(inbox.a);
+  ok(seen[0] === `This is ${b.name}!` && seen.some((x) => /is wearing/.test(x)) && seen.some((x) => x.endsWith('is handcuffed!')), 'examining a person lists what they wear and that they are handcuffed');
+
+  // --- shut in a locker by someone else
+  const cl = sim.closets.list.find((it) => it.path.endsWith('closet/emcloset') && !(it.cs & 1));
+  sim.people.uncuff(b); sim.closets.open(a, cl);
+  const free = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dc, dr]) => [cl.c + dc, cl.r + dr]).find(([c, r]) => sim.world.kind[r * W + c] === 1 && !sim.world.solid[r * W + c]);
+  a.x = free[0] * TILE + 1; a.z = free[1] * TILE + 1; b.x = a.x + 0.6; b.z = a.z; a.cool = 0; a.vx = a.vz = 0;
+  a.hands[0] = null; sim.handle(A, { t: 'stuff', idx: cl.idx, id: b.id }); step(4.3);
+  ok(b.inside === cl && !(cl.cs & 1), 'dragging someone onto an open closet shuts them in after four seconds');
+
+  function detachFloor(item) { sim.floor.delete(item.id); item.loc = null; }
+});
+
+section('structures', () => {
+  const { sim, A, B, a, b, step, inbox, evs } = setup();
+  const w = sim.world, W = w.W, TL = TILE;
+  const clear = () => { inbox.a.length = 0; inbox.b.length = 0; };
+  const free = (c, r) => w.inb(c, r) && w.kind[r * W + c] === 1 && !w.solid[r * W + c] && !w.dyn[r * W + c] && !w.edge[r * W + c];
+  // a closet with three free tiles in a row on one side of it (room to drag it along)
+  const lineOf = (it) => [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dc, dr]) => [1, 2, 3].every((k) => free(it.c + dc * k, it.r + dr * k)));
+  const spot = (m, x, z) => { m.x = x; m.z = z; m.vx = m.vz = 0; m.cool = 0; m.stunned = 0; };
+  const tileSpot = (m, c, r) => spot(m, c * TL + TL / 2, r * TL + TL / 2);
+  const ctrlClick = (c, target) => { sim.handle(c, { t: 'click', target, ctrl: true }); step(0.1); };
+  const blocks = (it) => w.collides(it.x, it.z, 0.1);
+  /** Walk `m` along (dx, dz) for `metres`, a quarter metre at a time, letting the world react. */
+  const walk = (m, dx, dz, metres) => { for (let k = 0; k < metres / 0.25; k++) { m.x += dx * 0.25; m.z += dz * 0.25; step(0.05); } };
+  const lockers = sim.closets.list.filter((it) => it.path.endsWith('closet/emcloset') && !it.anc && !(it.cs & CL.OPEN) && lineOf(it));
+  const lk = lockers[0];
+  ok(lk, 'found a locker with room to be dragged');
+  const [dc, dr] = lineOf(lk);
+  const x0 = lk.x, z0 = lk.z, tile0 = lk.r * W + lk.c;
+
+  // --- a closed locker is a box about as wide as it looks, not the whole tile
+  ok(lk.half > 0.4 && lk.half < 0.8 && blocks(lk), 'a closed locker is a box smaller than its tile');
+  const probe = (d) => w.collides(lk.x + dc * d, lk.z + dr * d, 0.32);
+  ok(probe(0.7) && !probe(0.95), 'you can stand right beside it, but not in it');
+  ok(!w.solid[tile0] && w.dyn[tile0] > 0, 'it is not a flag on the tile, but pathfinding goes round it');
+
+  // --- Ctrl+click takes hold; it trails you wherever you go, not tile by tile
+  tileSpot(a, lk.c + dc, lk.r + dr);
+  ctrlClick(A, { k: 'prop', idx: lk.idx });
+  ok(a.hauling && a.hauling.it === lk && lk.draggedBy === a, 'Ctrl+click takes hold of a locker');
+  clear();
+  walk(a, dc, dr, 4);
+  const gone = (lk.x - x0) * dc + (lk.z - z0) * dr;
+  ok(gone > 2.5, 'it follows you along the way you walk');
+  ok(Math.abs(Math.hypot(lk.x - a.x, lk.z - a.z) - (lk.half + 0.32 + 0.3)) < 0.06, 'and trails a short way behind you');
+  const along = (((lk.x - TL / 2) * Math.abs(dc) + (lk.z - TL / 2) * Math.abs(dr)) % TL + TL) % TL;
+  ok(along > 0.05 && along < TL - 0.05, 'it is not snapped to the tile grid');
+  ok(!blocks({ x: x0, z: z0 }) && blocks(lk), 'it blocks where it is now and no longer where it was');
+  ok(w.dyn[tile0] === 0 && w.dyn[Math.floor(lk.z / TL) * W + Math.floor(lk.x / TL)] > 0, 'pathfinding knows where it is');
+  const pms = evs(inbox.b, 'pm');
+  ok(pms.length > 5 && pms.at(-1).i === lk.idx && Math.abs(pms.at(-1).x - lk.x) < 1e-6, 'everyone is told where it goes');
+  ok(!w.collides(a.x, a.z, 0.32), 'and it never traps you');
+  ok(sim.people.moved().some((m) => m[0] === lk.idx && Math.abs(m[1] - lk.x) < 1e-6), 'someone who joins later is told it moved');
+  const late = [];
+  sim.addClient('Carol', (m) => late.push(m));
+  ok(late.find((m) => m.t === 'welcome').moved.some((m) => m[0] === lk.idx && Math.abs(m[1] - lk.x) < 1e-6 && Math.abs(m[2] - lk.z) < 1e-6), 'the welcome carries moved structures');
+
+  // --- it turns to face the way it goes
+  ok(lk.d === (dc > 0 ? 4 : dc < 0 ? 8 : dr > 0 ? 2 : 1), 'it faces the way you are going');
+
+  // --- it is heavy
+  ok(sim.people.dragSlow(a) < 0.7 && sim.people.dragSlow(a) > 0.4, 'dragging a locker slows you down');
+  sim.people.release(a);
+  ok(sim.people.dragSlow(a) === 1 && !lk.draggedBy, 'letting go frees you');
+  const stopAt = [lk.x, lk.z];
+  walk(a, dc, dr, 1);
+  ok(lk.x === stopAt[0] && lk.z === stopAt[1], 'and it stays where you left it');
+
+  // --- shut someone inside, weld it, drag it all the same: they go along
+  sim.closets.putInside(lk, b);
+  sim.closets.set(lk, lk.cs | CL.WELDED | CL.LOCKED);
+  tileSpot(a, Math.floor(lk.x / TL), Math.floor(lk.z / TL));
+  spot(a, lk.x - dc * 1.2, lk.z - dr * 1.2);
+  ctrlClick(A, { k: 'prop', idx: lk.idx });
+  ok(a.hauling?.it === lk, 'a welded, locked locker can be dragged all the same');
+  const at = [lk.x, lk.z];
+  walk(a, -dc, -dr, 2);
+  ok(Math.hypot(lk.x - at[0], lk.z - at[1]) > 1 && b.x === lk.x && b.z === lk.z, 'whoever is inside goes along');
+  sim.people.release(a);
+  sim.closets.set(lk, lk.cs & ~(CL.WELDED | CL.LOCKED));
+  b.inside = null; lk.mobs.length = 0; b.x = 2; b.z = 2;
+
+  // --- walls and people are in its way
+  let ahead = -1;                                              // the first tile along its way that the box is not already touching
+  for (let k = 0; k < 40 && ahead < 0; k++) {
+    const t = Math.floor((lk.z + dr * (lk.half + 0.02 + k * 0.1)) / TL) * W + Math.floor((lk.x + dc * (lk.half + 0.02 + k * 0.1)) / TL);
+    if (!lk.tiles.includes(t)) ahead = t;
+  }
+  const was = w.solid[ahead];
+  w.solid[ahead] = 1;
+  const grip = () => { sim.people.release(a); a.hauling = { k: 'prop', it: lk, name: lk.name }; lk.draggedBy = a; };
+  spot(a, lk.x + dc * 1.3, lk.z + dr * 1.3);                 // you stand on the wall's side of it
+  grip();
+  walk(a, dc, dr, 1.5);
+  ok(!w.collides(lk.x, lk.z, lk.half - 0.01, lk), 'it will not be dragged into a wall');
+  w.solid[ahead] = was;
+  sim.people.release(a);
+  spot(a, lk.x + dc * 3, lk.z + dr * 3);
+  b.x = lk.x + dc * (lk.half + 0.4); b.z = lk.z + dr * (lk.half + 0.4);       // someone stands between you and it
+  grip();
+  step(1);
+  ok(Math.abs(b.x - lk.x) >= lk.half + 0.29 || Math.abs(b.z - lk.z) >= lk.half + 0.29, 'it does not slide through a person standing in its way');
+  sim.people.release(a);
+  b.x = 2; b.z = 2;
+
+  // --- you pass through what you drag; when you let go the two of you move apart
+  {
+    const yawTo = (x, z) => Math.atan2(-(x - a.x), -(z - a.z));
+    sim.people.release(a);
+    spot(a, lk.x - dc * 1.3, lk.z - dr * 1.3);
+    grip();
+    const yaw = yawTo(lk.x, lk.z);
+    sim.handle(A, { t: 'input', list: Array.from({ length: 12 }, (_, k) => ({ seq: 100 + k, dt: 0.05, f: 1, b: 0, l: 0, r: 0, run: 0, yaw, pitch: 0 })) });
+    step(0.6);
+    ok(Math.abs(a.x - lk.x) < lk.half && Math.abs(a.z - lk.z) < lk.half, 'you can walk straight into what you are dragging');
+    ok(sim.selfState(A).haul === lk.idx, 'the client is told what you drag so it can predict the same');
+    const was = [a.x, a.z, lk.x, lk.z];
+    sim.people.release(a);
+    const clear = (m, it) => Math.abs(m.x - it.x) >= it.half + 0.3 || Math.abs(m.z - it.z) >= it.half + 0.3;
+    ok(clear(a, lk) && !w.collides(a.x, a.z, 0.32) && !w.collides(lk.x, lk.z, lk.half - 0.01, lk), 'let go, and you and it end up apart');
+    ok(Math.hypot(a.x - was[0], a.z - was[1]) > 0.05 && Math.hypot(lk.x - was[2], lk.z - was[3]) > 0.05, 'each of you moves');
+    // exactly on top of it, with a wall behind you: it still gets you out
+    let beyond = -1;
+    for (let k = 0; k < 40 && beyond < 0; k++) {
+      const t = Math.floor((lk.z + dr * (lk.half + 0.02 + k * 0.1)) / TL) * W + Math.floor((lk.x + dc * (lk.half + 0.02 + k * 0.1)) / TL);
+      if (!lk.tiles.includes(t)) beyond = t;
+    }
+    const wasSolid = w.solid[beyond];
+    w.solid[beyond] = 1;
+    spot(a, lk.x, lk.z); a.yaw = Math.atan2(dc, dr);          // "behind you" is toward the wall
+    grip();
+    sim.people.release(a);
+    ok(clear(a, lk) && !w.collides(a.x, a.z, 0.32) && !w.collides(lk.x, lk.z, lk.half - 0.01, lk), 'even exactly on it with a wall in the way');
+    w.solid[beyond] = wasSolid;
+  }
+
+  // --- what is bolted down stays put (anchored in the DM), and what is not can be dragged
+  const open = (it) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([x, y]) => free(it.c + x, it.r + y));
+  const brig = sim.closets.list.find((it) => it.anc && open(it));
+  const rack = sim.props.interact.find((it) => it.path === 'structure/rack' && open(it));
+  const chair = sim.props.interact.find((it) => it.path === 'structure/chair' && it.anc && open(it));
+  const tank = sim.props.interact.find((it) => it.path === 'structure/reagent_dispensers/fueltank' && !it.anc && open(it));
+  const crate = sim.closets.list.find((it) => it.path === 'structure/closet/crate' && !it.anc && open(it));
+  ok(brig && rack && chair && tank && crate, 'found a brig locker, a rack, a chair, a fuel tank and a crate');
+  const beside = (it) => { const [c, r] = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([x, y]) => [it.c + x, it.r + y]).find(([c, r]) => free(c, r)); tileSpot(a, c, r); a.hauling = null; };
+  for (const [name, it] of [['a brig locker', brig], ['a rack', rack], ['a chair', chair]]) {
+    beside(it);
+    sim.handle(A, { t: 'click', target: { k: 'prop', idx: it.idx }, ctrl: true }); step(0.1);
+    ok(!a.hauling && !a.busy, `${name} is bolted down and cannot be dragged`);
+  }
+  for (const [name, it] of [['a fuel tank', tank], ['a crate', crate]]) {
+    beside(it);
+    sim.handle(A, { t: 'click', target: { k: 'prop', idx: it.idx }, ctrl: true }); step(0.1);
+    ok(a.hauling?.it === it, `${name} can be dragged`);
+    sim.people.release(a);
+  }
+  ok(sim.people.dragSlow(a) === 1 && crate.ds === 0 && lk.ds === 1.5, 'lockers are heavy (drag_slowdown 1.5) and crates are not');
+  ok(blocks(tank) && tank.half > 0.8 && tank.half <= 0.95, 'a tank is a wide box, nearly the whole tile');
+
+  // --- loose items follow you across the floor
+  tileSpot(a, Math.floor(lk.x / TL) + dc, Math.floor(lk.z / TL) + dr);
+  const bar = sim.newItem('/obj/item/crowbar');
+  place(sim, bar, a.x + 0.5, a.z, 0.01);
+  clear();
+  ctrlClick(A, { k: 'item', id: bar.id });
+  ok(a.hauling?.k === 'item' && sim.floor.has(bar.id), 'Ctrl+click on a loose item drags it, it does not pick it up');
+  walk(a, dc, dr, 2.5);
+  const rec = sim.floor.get(bar.id);
+  ok(Math.hypot(rec.x - a.x, rec.z - a.z) < 1.2 && evs(inbox.a, 'imv').length > 0, 'it slides along behind you');
+  sim.people.release(a);
+
+  // --- people: Ctrl+click is a plain hold; the strip window moved to Alt+click
+  tileSpot(a, Math.floor(lk.x / TL) + dc, Math.floor(lk.z / TL) + dr); b.inside = null; b.x = a.x + 1.0; b.z = a.z; b.vx = b.vz = 0; a.intent = 'help'; a.hands[0] = null; a.hands[1] = null;
+  clear();
+  ctrlClick(A, { k: 'mob', id: b.id });
+  ok(a.pulling === b && a.grab === 0 && b.pulledBy === a, 'Ctrl+click on a person grabs them passively');
+  a.cool = 0; ctrlClick(A, { k: 'mob', id: b.id });
+  ok(!a.pulling && !b.pulledBy, 'and Ctrl+click again lets go (it never tightens)');
+  a.cool = 0; clear();
+  sim.handle(A, { t: 'click', target: { k: 'mob', id: b.id }, alt: true }); step(0.1);
+  ok(evs(inbox.a, 'strip').pop()?.id === b.id, 'Alt+click on a person opens their strip window');
+  sim.people.closeStrip(A);
+  // a body on the floor is a dead weight until you hold it up
+  a.cool = 0; ctrlClick(A, { k: 'mob', id: b.id });
+  b.stunned = 5;
+  ok(sim.people.dragSlow(a) < 0.7, 'dragging someone who is down slows you');
+  a.grab = 1;
+  ok(sim.people.dragSlow(a) === 1, 'holding them up does not');
+  sim.people.release(a);
+});
+
 
 section('chat', () => {
   const { sim, A, a, b, step, inbox, evs, floorTiles } = setup();

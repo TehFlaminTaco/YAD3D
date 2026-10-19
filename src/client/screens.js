@@ -6,18 +6,21 @@ const HELP = [
   ['Hands', [
     ['Left click', 'Use what is in your active hand on whatever you point at; with an empty hand, pick it up or open it'],
     ['Drag', '(hands) Carry things between the floor, tables, your hands, your bags and your body. Drag far away to throw'],
+    ['Ctrl+click', 'Drag something along behind you: a person, a loose item, a locker or tank (not what is bolted down). Again to let go'],
+    ['Alt+click', 'Lock or unlock a locker; on a person, go through their things (or drag them onto your hands)'],
     ['Right click', 'Examine'], ['1 2 3 4', 'Intent: help, disarm, grab, harm (watch your empty hand)'],
     ['X', 'Swap hands'], ['E', 'Wear or stow what you hold (empty hand: draw from your belt)'], ['Z', 'Use the item in your hand'],
     ['Q', 'Drop'], ['R', 'Throw mode: your next click throws what you hold'],
   ]],
   ['Yourself', [
     ['I', 'Look yourself over: clothes, pockets, injuries'], ['Tab', 'Your PDA: time, location, air, map'],
-    ['V', 'Internals (mask and air tank)'], ['F', 'Flashlight'], ['B', 'Stop what you are doing'],
+    ['V', 'Internals (mask and air tank)'], ['F', 'Flashlight'], ['B', 'Stop what you are doing; resist (a grab, handcuffs, a locker)'],
+    ['P', 'Let go of whoever you are holding'],
   ]],
   ['Talking', [
     ['T', 'Say  (; common radio, :h department, :e :m :s :n :u :v :c other channels)'], ['Y', 'Whisper'], ['M', 'Emote'], ['O', 'OOC'],
   ]],
-  ['Other', [['F1', 'This list'], ['F2', 'Mute'], ['Esc', 'Close the top window']]],
+  ['Other', [['F1', 'This list'], ['F2', 'Mute'], ['F4', 'Fullscreen (and Ctrl+W, Ctrl+T cannot close the page by accident)'], ['Esc', 'Close the top window']]],
 ];
 // Two columns that come out about the same height.
 const HELP_COLS = [['Moving', 'Hands'], ['Yourself', 'Talking', 'Other']];

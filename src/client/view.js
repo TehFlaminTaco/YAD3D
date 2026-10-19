@@ -42,6 +42,16 @@ void main() {
 }
 `;
 
+/**
+ * Which of a thing's four pictures (0 front, 1 back, 2 faces your right, 3 faces your left: SS13's S, N, E, W) you should see,
+ * given the way it faces (fx, fz), where it is from the camera (vx, vz) and the camera's right (camRx, camRz).
+ */
+export function viewIndex(fx, fz, vx, vz, camRx, camRz) {
+  const dot = (fx * vx + fz * vz) / (Math.hypot(vx, vz) || 1);
+  const side = fx * camRx + fz * camRz;
+  return dot > 0.62 ? 1 : dot < -0.62 ? 0 : side > 0 ? 2 : 3;
+}
+
 /** Everything you can see: terrain mesh, sprite batches (props, doors, items, mobs), lights. Reads the Replica, never writes it. */
 export class WorldView {
   constructor(scene, assets, rep, opts = {}) {
@@ -55,6 +65,7 @@ export class WorldView {
     this.dyn = new SpriteBatch(3000, mat);
     this.itemB = new SpriteBatch(6000, mat);
     this.lit = [];                               // sprites whose tint follows the light field
+    this.facing = [];                            // statics that show a different picture from each side
     this.lightScale = 1;
     this.flicker = null;
     this.ambient = opts.fullbright ? [0.85, 0.85, 0.85] : AMBIENT;
@@ -105,7 +116,9 @@ export class WorldView {
       const rc = this.rects[s.rect];
       if (!rc) continue;
       s.id = this.stat.add({ x: s.x, y: s.y, z: s.z, mode: s.mode, w: s.w, h: s.h, ox: s.ox, oy: s.oy, yaw: s.yaw, rect: rc, emit: s.emit });
-      if (s.lit) this.lit.push({ batch: this.stat, id: s.id, sx: s.lit[0], sz: s.lit[1] });
+      if (s.lit) this.lit.push(s.litRef = { batch: this.stat, id: s.id, sx: s.lit[0], sz: s.lit[1] });
+      s.dx = s.x; s.dz = s.z;                           // where it is drawn right now (it slides when dragged)
+      if (s.views) { s.vi = -1; this.facing.push(s); }
     }
   }
 
@@ -183,6 +196,46 @@ export class WorldView {
       const t = this.tmpC;
       u.uTint.value.set(Math.min(1.15, t[0] * 0.9), Math.min(1.15, t[1] * 0.97), Math.min(1.2, t[2] * 1.08));
       m.mesh.visible = true;
+    }
+  }
+
+  // ------------------------------------------------------------------ things that get dragged about
+  /** A structure was dragged (its record already says where): the picture eases over to the new spot. */
+  propMoved(it) {
+    const s = it?.st;
+    if (!s || s.id === undefined) return;
+    if (s.litRef) { s.litRef.sx = s.x; s.litRef.sz = s.z; }
+    (this.slides ||= new Set()).add(s);
+  }
+
+  updateSlides(dt) {
+    if (!this.slides?.size) return;
+    const k = 1 - Math.exp(-dt * 22);
+    for (const s of this.slides) {
+      const done = Math.abs(s.x - s.dx) < 0.002 && Math.abs(s.z - s.dz) < 0.002;
+      s.dx = done ? s.x : s.dx + (s.x - s.dx) * k;
+      s.dz = done ? s.z : s.dz + (s.z - s.dz) * k;
+      this.stat.setPos(s.id, s.dx, s.y, s.dz);
+      if (done) {
+        this.slides.delete(s);
+        this.lightField.sample(s.x, s.z, this.tmpC);
+        const t = this.tmpC;
+        this.stat.setTint(s.id, Math.min(1.35, t[0]), Math.min(1.35, t[1]), Math.min(1.35, t[2]));
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ things with four sides
+  /** Chairs, consoles and the like: each turns the picture of the side you are looking at (see viewIndex). */
+  updateFacing(cam, camYaw) {
+    const camRx = Math.cos(camYaw), camRz = -Math.sin(camYaw);
+    for (const s of this.facing) {
+      const f = DV[s.face] || DV[2];
+      const vi = viewIndex(f[0], f[1], s.x - cam.x, s.z - cam.z, camRx, camRz);
+      if (vi === s.vi) continue;
+      s.vi = vi;
+      const rc = this.rects[s.views[vi]];
+      if (rc) this.stat.setRect(s.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, 0);
     }
   }
 
@@ -294,6 +347,16 @@ export class WorldView {
     }
   }
 
+  /** A loose item was dragged along the floor. */
+  moveItem(itemId) {
+    const id = this.itemSlot.get(itemId), it = this.rep.items.get(itemId);
+    if (id === undefined || !it) return;
+    this.itemB.setPos(id, it.x, it.y, it.z);
+    this.lightField.sample(it.x, it.z, this.tmpC);
+    const t = this.tmpC;
+    this.itemB.setTint(id, Math.min(1.35, t[0]), Math.min(1.35, t[1]), Math.min(1.35, t[2]));
+  }
+
   /** Hide a floor item while it is being dragged (it reappears unless the server moves it). */
   hideItem(itemId, hide) {
     const id = this.itemSlot.get(itemId);
@@ -370,14 +433,9 @@ export class WorldView {
       if (mid === selfId) { this.dyn.setAlpha(v.id, 0); continue; }
       this.interpolate(m, rt);
       let sid;
-      if (m.dead && v.set.dead >= 0 && v.set.dead !== undefined) sid = v.set.dead;
+      if ((m.dead || m.lying) && (m.dead ? v.set.dead : v.set.lie ?? v.set.dead) >= 0) sid = m.dead ? v.set.dead : v.set.lie ?? v.set.dead;       // dead, stunned or held down: on their side
       else {
-        const vx = m.x - cam.x, vz = m.z - cam.z;
-        const vl = Math.hypot(vx, vz) || 1;
-        const fx = -Math.sin(m.yaw), fz = -Math.cos(m.yaw);
-        const dot = (fx * vx + fz * vz) / vl;
-        const side = fx * camRx + fz * camRz;
-        const di = dot > 0.62 ? 1 : dot < -0.62 ? 0 : side > 0 ? 2 : 3;
+        const di = viewIndex(-Math.sin(m.yaw), -Math.cos(m.yaw), m.x - cam.x, m.z - cam.z, camRx, camRz);
         const frames = v.set.d[di];
         v.anim += m.speed * dt * 1.6;
         sid = frames[Math.floor(v.anim) % frames.length];
@@ -512,6 +570,8 @@ export class WorldView {
       const f = this.doorFrame(v.d);
       if (f !== v.frame) { v.frame = f; const rc = this.rects[v.d.proto.fr[f]]; if (rc) this.setDoorRect(this.dyn, v.id, rc); }
     }
+    this.updateSlides(dt);
+    this.updateFacing(cam, camYaw);
     this.updateMobs(dt, rt, cam, camYaw, selfId);
     this.updateMirrors(selfId, cam, camYaw);
     this.updateTosses(now);

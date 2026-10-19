@@ -88,7 +88,7 @@ export class ChatSys {
     for (const c of sim.clients.values()) {
       const lm = c.mob;
       if (c.state === 'ghost') { c.outbox.push({ e: 'msg', k: kind, text }); continue; }
-      if (!lm || lm.dead || lm === except) continue;
+      if (!lm || lm.dead || (Array.isArray(except) ? except.includes(lm) : lm === except)) continue;
       if ((lm.x - origin.x) ** 2 + (lm.z - origin.z) ** 2 > range * range) continue;
       if (lm !== origin && !sim.world.los(origin.x, origin.z, lm.x, lm.z)) continue;
       c.outbox.push({ e: 'msg', k: kind, text });
@@ -99,7 +99,7 @@ export class ChatSys {
   heard(origin, text, kind = 'notice', range = 10, except = null) {
     for (const c of this.sim.clients.values()) {
       const lm = c.mob;
-      if (!lm || lm.dead || lm === except || c.state === 'ghost') continue;
+      if (!lm || lm.dead || (Array.isArray(except) ? except.includes(lm) : lm === except) || c.state === 'ghost') continue;
       if ((lm.x - origin.x) ** 2 + (lm.z - origin.z) ** 2 > range * range) continue;
       c.outbox.push({ e: 'msg', k: kind, text });
     }

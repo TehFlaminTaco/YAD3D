@@ -19,7 +19,7 @@ OUT = os.path.join(ROOT, 'assets')
 
 MIDNIGHT = ['uniform', 'suit', 'back', 'id', 'belt', 'mask', 'glasses', 'ears', 'head', 'suit_storage', 'pocket', 'gloves', 'shoes',
             'neck', 'hand_r', 'hand_l', 'hand_active', 'template', 'template_active', 'template_small', 'swap_1', 'swap_2',
-            'act_throw_off', 'act_throw_on', 'act_drop', 'act_equip', 'act_resist', 'harm', 'help', 'disarm', 'grab', 'toggle']
+            'act_throw_off', 'act_throw_on', 'act_drop', 'act_equip', 'act_resist', 'pull', 'pull0', 'harm', 'help', 'disarm', 'grab', 'toggle']
 GEN = ['internal0', 'internal1', 'backpack_close', 'healthdoll_OVERLAY', 'healthdoll_DEAD']
 PARTS = ['head', 'chest', 'l_arm', 'r_arm', 'l_leg', 'r_leg']
 

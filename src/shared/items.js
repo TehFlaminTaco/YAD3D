@@ -8,6 +8,9 @@ const MED = ['/obj/item/stack/medical', '/obj/item/reagent_containers', '/obj/it
 const SEC = ['/obj/item/melee/baton', '/obj/item/restraints', '/obj/item/assembly/flash', '/obj/item/gun/energy', '/obj/item/stock_parts/cell', '/obj/item/flashlight'];
 
 export const BEHAVIORS = [
+  ['/obj/item/restraints/handcuffs/cable/zipties', { cuff: 45 }],
+  ['/obj/item/restraints/handcuffs/cable', { cuff: 30 }],
+  ['/obj/item/restraints/handcuffs', { cuff: 60 }],
   ['/obj/item/crowbar', { tool: 'crowbar' }],
   ['/obj/item/wrench', { tool: 'wrench' }],
   ['/obj/item/screwdriver', { tool: 'screwdriver' }],

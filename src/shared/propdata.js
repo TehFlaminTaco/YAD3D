@@ -8,6 +8,14 @@ const WM_Y = {
   sign: 1.85, noticeboard: 1.5, mirror: 1.5, vending: 1.4, sink: 1.0, shower: 1.9, keycard_auth: 1.4, misc: 1.5,
 };
 export const TABLE_H = 0.92;
+
+/**
+ * How big the box is that blocks you for a free-standing thing of this visible width (half-width, metres): a locker is not
+ * two metres wide, so you can stand right beside one. Never the whole tile (a tank is nearly that wide, so 0.95).
+ */
+export function blockHalf(widthM) {
+  return Math.round(Math.min(0.95, Math.max(0.45, widthM / 2 + 0.1)) * 20) / 20;
+}
 export const ITEM_SCALE = 0.5;               // SS13 item icons are drawn big for a top-down view; shrink them for first person
 
 /**
@@ -84,21 +92,25 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const w = rc.w * PX, h = rc.h * PX;
         // stand on the floor (or on the table it shares a tile with): the empty rows under an SS13 sprite are top-down depth, not height
         const y = world.tableH[i] > 0 ? world.tableH[i] + 0.005 : 0;
-        const st = sprite({ tag: 'sprite', rect: p.s, mode: p.bb ? 0 : 1, x: cx, y, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz] });
-        if (p.den) world.solid[i] = 1;
-        const it = { idx: out.interact.length, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st };
+        // a thing that looks different from each side (a chair, a console) gets its four pictures, picked by where you stand
+        const st = sprite({ tag: 'sprite', rect: p.s, mode: p.bb ? 0 : 1, x: cx, y, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz], ...(p.fr ? { views: p.fr, face: p.d } : {}) });
+        // what is bolted down fills its tile; what is loose is a box of its own size that can be dragged about
+        const loose = !!p.den && !p.anc;
+        const it = { idx: out.interact.length, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0 };
+        if (loose) world.boxAdd(it); else if (p.den) world.solid[i] = 1;
         out.interact.push(it); out.added.interact.push(it);
         break;
       }
       case 'closet': {
         const cs = (p.op ? CL.OPEN : 0) | (p.lk ? CL.LOCKED : 0);
         const cl = { fr: p.fr, sec: !!p.sec, pl: !!p.pl, a: p.a || [], o: p.o || [], hz: !!p.hz, dopen: !!p.do, nw: !!p.nw, bt: p.bt ?? 120 };
-        const it = { idx: out.interact.length, kind: 'closet', name: p.n || 'closet', path: p.p, c, r, x: cx, z: cz, y0: 0, rad: 0.9, cl, cs, cs0: cs, gone: false };
+        const it = { idx: out.interact.length, kind: 'closet', name: p.n || 'closet', path: p.p, c, r, x: cx, z: cz, y0: 0, rad: 0.9, cl, cs, cs0: cs, gone: false, anc: !!p.anc, ds: p.ds || 0, x0: cx, z0: cz, d: 2, d0: 2, half: 0.55 };
         const sp = closetSprite(it);
         const rc = rects[sp];
         if (!rc) break;
         const w = rc.w * PX, h = rc.h * PX;
         it.y1 = Math.max(1.0, h);
+        it.half = blockHalf(rc.w * PX);
         it.st = sprite({ tag: 'closet', rect: sp, mode: 0, x: cx, y: 0, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: 0, lit: [cx, cz] });
         setClosetState(world, it, cs);
         out.interact.push(it); out.added.interact.push(it);
@@ -144,4 +156,18 @@ export function buildPropData(world, rects, props, level, prev = null) {
     }
   }
   return out;
+}
+
+/** A loose structure (a locker, a tank) is at (x, z), turned to `d`. The server moves it and tells everyone; both sides run this. */
+export function moveProp(world, it, x, z, d) {
+  it.x = x; it.z = z;
+  it.c = Math.floor(x / TILE); it.r = Math.floor(z / TILE);
+  if (d) it.d = d;
+  const st = it.st;
+  if (st) {
+    st.x = x; st.z = z;
+    if (st.views) st.face = it.d;
+    if (st.lit) st.lit = [x, z];
+  }
+  if (!it.gone) world.boxMove(it, x, z);
 }

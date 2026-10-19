@@ -3,7 +3,7 @@ import { describeState, storageReason, fitsSlot, EQUIP_ORDER } from '../shared/i
 
 /**
  * SS13 inventory rules, server side. An item lives in exactly one place (item.loc):
- *   {t:'floor'} | {t:'hand', mob, i} | {t:'slot', mob, slot} | {t:'box', box} | {t:'closet', cl}
+ *   {t:'floor'} | {t:'hand', mob, i} | {t:'slot', mob, slot} | {t:'box', box} | {t:'closet', cl} | {t:'cuffs', mob}
  * Worn slots: uniform suit shoes gloves glasses ears mask head neck belt id back lpocket rpocket suit_store.
  */
 
@@ -28,6 +28,7 @@ export function detach(sim, item) {
   else if (l.t === 'slot') l.mob.worn[l.slot] = null;
   else if (l.t === 'box') l.box.contents.splice(l.box.contents.indexOf(item), 1);
   else if (l.t === 'closet') l.cl.contents.splice(l.cl.contents.indexOf(item), 1);
+  else if (l.t === 'cuffs') { l.mob.cuffed = null; l.mob.apDirty = true; }
   else if (l.t === 'floor') { sim.floor.delete(item.id); sim.emit({ e: 'item-', id: item.id }); }
   item.loc = null;
   const m = l.mob || (l.t === 'box' ? rootMob(l.box) : null);
@@ -39,6 +40,7 @@ export function attach(sim, item, loc) {
   else if (loc.t === 'slot') loc.mob.worn[loc.slot] = item;
   else if (loc.t === 'box') loc.box.contents.push(item);
   else if (loc.t === 'closet') loc.cl.contents.push(item);
+  else if (loc.t === 'cuffs') { loc.mob.cuffed = item; loc.mob.apDirty = true; }
   item.loc = loc;
   const m = loc.mob || (loc.t === 'box' ? rootMob(loc.box) : null);
   if (m) recalc(sim, m);
@@ -54,6 +56,13 @@ export function place(sim, item, x, z, y) {
   item.loc = { t: 'floor' };
   sim.emit({ e: 'item+', id: item.id, s: item.sprite, n: item.name, x, y: yy, z });
   return rec;
+}
+
+/** A loose item slides to another spot on the floor (someone is dragging it). */
+export function shiftItem(sim, rec, x, z) {
+  rec.x = x; rec.z = z;
+  rec.c = Math.floor(x / TILE); rec.r = Math.floor(z / TILE);
+  sim.emit({ e: 'imv', id: rec.item.id, x, z });
 }
 
 /** Derived state: access, internals validity, suit flags. */

@@ -31,6 +31,13 @@ export class Mob {
     this.active = 0;
     this.worn = {};
     for (const s of SLOTS) this.worn[s] = null;
+    this.cuffed = null;                      // the handcuffs on their wrists
+    this.pulling = null;                     // who they are holding, and how tightly (0 passive, 1 aggressive, 2 neck)
+    this.pulledBy = null;
+    this.hauling = null;                     // an item or a structure they are dragging: {k: 'item' | 'prop', id | it, name}
+    this.grab = 0;
+    this.downed = false;                     // held by the neck: on the floor
+    this.resistAt = 0;
     this.intent = 'help';
     this.throwMode = false;
     this.internals = false;

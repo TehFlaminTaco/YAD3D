@@ -32,7 +32,8 @@ export class BodyPanel {
         <button class="act" data-act="internals" title="Internals (V)"></button>
         <button class="act wide" data-act="throw" title="Throw mode (R)"></button>
         <button class="act wide" data-act="drop" title="Drop (Q)"></button>
-        <button class="act wide" data-act="resist" title="Stop (B)"></button>
+        <button class="act wide" data-act="resist" title="Resist (B)"></button>
+        <button class="act" data-act="pull" title="Stop pulling (P)"></button>
       </div>`;
     document.body.appendChild(root);
     this.root = root;
@@ -93,9 +94,10 @@ export class BodyPanel {
     acts.forEach((b) => {
       const act = b.dataset.act;
       let icon = act === 'intent' ? INTENTS[+b.dataset.v] : act === 'internals' ? (inv.internals ? 'internal1' : 'internal0')
-        : act === 'throw' ? (inv.throwMode ? 'act_throw_on' : 'act_throw_off') : act === 'drop' ? 'act_drop' : 'act_resist';
+        : act === 'throw' ? (inv.throwMode ? 'act_throw_on' : 'act_throw_off') : act === 'drop' ? 'act_drop' : act === 'pull' ? 'pull' : 'act_resist';
       if (b._icon !== icon) { b._icon = icon; b.style.backgroundImage = `url(${art.url(icon)})`; }
       b.classList.toggle('on', act === 'intent' && INTENTS[+b.dataset.v] === inv.intent);
+      if (act === 'pull') b.style.visibility = s.pulling ? '' : 'hidden';          // SS13 draws nothing for the pull button while you pull nothing
     });
     // health doll
     const [hp, max, brute, burn, tox, oxy] = s.hp;

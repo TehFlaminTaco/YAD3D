@@ -6,6 +6,7 @@ order S, N, E, W, and `base` is the first cell's index. The cell sheet is `COLS`
 
 chars.json
     cols, cells
+    cuffs      base cell of the handcuff overlay
     body       {head_m, head_f, chest_m, chest_f, r_arm, l_arm, r_hand, l_hand, r_leg, l_leg}: greyscale parts, tinted by skin
     eyes       base cell of the eyes (tinted by eye colour)
     hair, facial, underwear, undershirt, socks: [{n: name, c: base (-1: none), g: 'M' | 'F' | 'N'}]
@@ -96,6 +97,7 @@ def build(itemdefs, resolve, dm, out_dir):
     parts = 'icons/mob/human_parts_greyscale.dmi'
     meta['body'] = {k: group(parts, v) for k, v in BODY.items()}
     meta['eyes'] = group('icons/mob/human_face.dmi', 'eyes')
+    meta['cuffs'] = group('icons/mob/mob.dmi', 'handcuff1')            # worn over everything while handcuffed
 
     def accessories(cat):
         out = []

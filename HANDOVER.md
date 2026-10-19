@@ -12,7 +12,7 @@ browser. It works end to end and is pushed.
 * **Branch** `claude/yad3d-game` on `TehFlaminTaco/YAD3D`, open as **[PR #1](https://github.com/TehFlaminTaco/YAD3D/pull/1)**
   into `main` (which holds only an "Initial commit"). Pushing to the branch updates the PR. The user said not to worry about
   the repo's original Unlicense: the project is now **AGPL-3.0** (`LICENSE`), art and sound CC BY-SA 3.0.
-* **Tests:** `node tools/simtest2.mjs` 98/98 and `node tools/leveltest.mjs` 18/18 pass now. `node tools/uitest.mjs` (191/191,
+* **Tests:** `node tools/simtest2.mjs` 127/127 and `node tools/leveltest.mjs` 18/18 pass now. `node tools/uitest.mjs` (191/191,
   about 4 min) and `node tools/nettest.mjs` (29/29) were last run before the window work, and **could not be run in the
   Windows session that did it** (Playwright path below): re-run both before you say "all green". The window change touches
   tile events (`brk`) and rendering, so the multiplayer suite is the one most worth running.
@@ -58,7 +58,7 @@ The user is casual and direct ("Get that shit goin'"). Their actual feedback so 
 ```sh
 git clone https://github.com/TehFlaminTaco/YAD3D && cd YAD3D && git checkout claude/yad3d-game
 npm install                        # three (vendored copy is what the page loads), ws
-node tools/simtest2.mjs            # sanity: 51 passed
+node tools/simtest2.mjs            # sanity: 127 passed
 python3 tools/serve.py 8123 &      # static server; needed by uitest.mjs and shot.mjs
 npm start                          # or the multiplayer server on :8080
 ```
@@ -180,10 +180,10 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 
 | What | Command | Notes |
 | --- | --- | --- |
-| Sim logic (no browser) | `node tools/simtest2.mjs` | 98 assertions, seconds. Add a `section()` for any new server rule. |
+| Sim logic (no browser) | `node tools/simtest2.mjs` | 127 assertions, seconds. Add a `section()` for any new server rule. |
 | Long soak | `node tools/simtest.mjs 12 --player` | a 12-minute simulated shift, ~4 s |
 | Browser UI (local round) | `node tools/uitest.mjs` | needs :8123 static server; ~4 min; `BASE=`, `SHOTS=` env; drives the real mouse/keyboard |
-| Closets (in simtest2) | `node tools/simtest2.mjs` | the `closets` section: DM contents, locks, welding, breakout, personal lockers |
+| Closets, people (in simtest2) | `node tools/simtest2.mjs` | the `closets` section: DM contents, locks, welding, breakout, personal lockers; the `people` section: handcuffs, strip window, pockets, grabs, examine, stuffing |
 | Level mesh geometry | `node tools/leveltest.mjs` | no browser or WebGL; 18 assertions: glass, floor, grille, smashed windows, the character art data |
 | Multiplayer | `node tools/nettest.mjs` | spawns `server/index.js` on :8191 with `--debug`, three browsers |
 | Screenshots | `node tools/shot.mjs "<query>" <prefix> --w 1280 --h 720 --steps '[…]'` | per step runs: `eval`, then `key`/`down`/`up`/`click`, then `wait`, then `snap` |
@@ -236,16 +236,15 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
    feedback); `tools/preview_ui.html` is a leftover dev page for eyeballing procedural art (works with the static server);
    the lobby's "pick one, then Ready" hint disappears during a running round by design.
 6. **Roadmap the user agreed (2026-10-19), in this order.** Research for it came from eight Haiku drone reports over the 2020 TG
-   source (see the memory note about checking their numbers). (1) Foundations + closets/lockers/crates: **done**, except
-   stuffing someone into a closet (needs grabs) and body bags. Still to build for the foundations: a generic tool dispatch
+   source (see the memory note about checking their numbers). (1) Foundations + closets/lockers/crates: **done**, except body bags. Still to build for the foundations: a generic tool dispatch
    (`startTimed` now takes `{start, stop}` messages and `welderReady` mirrors SS13's tool check), stacks (merge, split, craft
    menu), mutable tiles/structures beyond closets. (2) **Dynamic character sprites** (DONE, see section 10): compose a human at runtime in the
    browser from the layered DMIs (what `tools/build_mobs.py` does at build time: greyscale body parts tinted by skin, uniform,
    shoes, gloves, suit, eyes, `human_face.dmi` hair, mask, head; 176 hair styles, 36 facial hair, 31 underwear, 55
    undershirts, 33 socks), so worn clothes show on everyone; then a setup screen with a live preview, **mirrors on the map**
    (10 on BoxStation; change hair there) and **your body visible when looking down**. The user does *not* want a third-person
-   toggle. Save characters in `localStorage`. (3) People interactions: strip menu (4 s per item, 2 s to dress someone),
-   handcuffs (3 s on, 60 s to break out), grab states, pulling, resist, buckling, body bags, examine text. (4) Item
+   toggle. Save characters in `localStorage`. (3) People interactions (DONE, see section 11): strip menu, handcuffs, grab states, pulling, resist, examine text,
+   stuffing people into closets; **buckling and body bags were left out**. (4) Item
    interactions: welder, extinguisher, lights, medical (bruise pack heals 40, 4 s on yourself / 2 s on someone), food and
    hunger, vending machines (79 on the map). (5) Construction: girders/walls (2 metal, 4 s), windows, floor tiles, tables,
    airlock assemblies, the stack craft menu.
@@ -294,3 +293,67 @@ reference counted), so the normal sprite batches draw them. Dead people are the 
 * NPCs get random looks (`Looks.random`). Map items now all have definitions (913), so clothing found on the map can be worn.
 * Not done: held items are not drawn on people, no species (human only), no job-specific uniform variants (skirts), no persistent
   server-side characters, no third-person toggle (the user does not want one).
+
+## 11. People: handcuffs, grabs, the strip window (roadmap step 3, done)
+All of it is `src/sim/people.js` (class `People`, `sim.people`), with `src/client/strip.js` for the window. Numbers come from the DM source
+(check the DM, not drone reports, before adding more: see the memory note).
+
+* **Handcuffs** (`restraints/handcuffs`, `def.cuff` = seconds to break out): click a person with them in your hand (any intent) to start a
+  3 s timed action; they are told ("X is trying to put handcuffs on you!"). A cuffed mob drops what it holds, can't use its hands (clicks,
+  inventory moves, keys are refused with SS13's "You're handcuffed and can't act" line) and shows the cuffs on its sprite (`ap.o.cuffs`,
+  painted last in `charart.js`). `B` starts a resist (60 s for plain cuffs, 30 for cable restraints, 45 for zipties; `keep:true` so it only fails if you move).
+  Someone else frees them through the strip window ("Handcuffed" row; takes the item's strip delay).
+* **Grabs**: a grab-intent click is passive (the target trails you, `DRAG`=1.5 m, let go past 3.4 m); the next click is aggressive at
+  once (they drop what they hold); the third is a 3 s neck grab that puts them down (`downed`). Resisting: passive breaks at once,
+  an aggressive hold breaks 60% of tries, a neck hold 30% (`60 / grab state`, one try per 2 s; `resistGrab`). `P` releases. Moves of the holder are not slowed (SS13 does slow); no strangling/killing grab.
+* **Strip window**: Alt+click a person (`clickMob(alt)`; the client puts ctrl/alt into the click code as +20/+10) or drag them onto your
+  hands (`dnd.js` `startMob`/`dropMob`). The server sends `{e:'strip', id, name, hands, slots, pockets, cuffs}` after every change and
+  `{close:1}` when they move away. Ops (`{t:'strip', op}`): `take` (delay = the item's `sd`, e.g. jackboots), `put` (2 s, `ed`), `pocket`
+  (4 s, silent, only says "Full"/"Empty"); slots covered by another item's hide flags show as "Obscured" and refuse. Stripping is
+  announced to the victim ("X tries to remove your Y!") except pockets.
+* **Lying people** draw a separate `lie` cell (the sprite turned on its side, untinted) and the dead a grey `dead` one (`PER_GROUP = 6`
+  in `charart.js`); `view.js` picks by `m.lying`/`m.dead`. Snapshot flag 16 means stunned *or* downed.
+* **Closets**: drag a pulled/any person onto an open closet, or click it empty-handed while pulling someone, to stuff them in (4 s, then it
+  closes; `Closets.stuff`).
+* **Examine** on a human now prints SS13's list ("This is X!", "X is wearing ...", "X is handcuffed!") one line per message.
+* **Hover picking**: doors get a 2x worse score in `Game.findTarget` so a person standing in front of one is the target (they were not).
+* **Left out on purpose**: buckling to chairs and beds, body bags, strangling, legcuffs, pulled-body slowdown, resisting out of a pull by
+  moving. The `people` section of `tools/simtest2.mjs` is the spec.
+
+## 12. Structures: four sides, hitboxes, dragging (structure rework, done)
+* **Four-sided pictures.** The build (`tools/build_level.py`, "standing structures" block) gives every structure whose DMI has more than one
+  direction a `fr: [S, N, E, W]` list of sprite ids (`dir_set` canonicalises directions so identical pictures are stored once; 455 props +
+  62 on the shuttle: chairs, consoles, toilets, morgue trays, engines). `propdata.js` puts `views` + `face` on the static, `WorldView.updateFacing`
+  picks the picture each frame with `viewIndex` (the same rule mobs use: the way it faces against where the camera is), and these are
+  billboards now, not planes at a fixed yaw. Wall mounts and windoors stay planes on purpose.
+* **Anchored** comes from the DM (`anchored` resolved over the class chain plus the map's own override) as `anc`; `ds` is `drag_slowdown`
+  (lockers 1.5, crates 0). Machinery is bolted by default, structures are not: chairs, racks, vending machines, brig lockers are anchored;
+  lockers, crates, canisters, tanks, space heaters, scrubbers, office chairs, roller beds, IV drips are loose.
+* **Free-standing boxes, not tiles.** Anything loose and dense (closets and crates always, plus every unanchored dense prop: canisters, tanks,
+  heaters, scrubbers) is a box with its own `x, z, half` (`blockHalf` from the sprite's visible width: a locker 0.55 m, a tank 0.95) kept in
+  `World.boxes` (tile -> boxes touching it), `bcount` (fast skip in `World.collides`, which takes an optional `ignore` box) and `dyn` (boxes
+  whose middle is in the tile: `Nav.passable` and the AI go round those tiles). `boxAdd/boxSet/boxMove/boxDrop`; `setClosetState` toggles
+  `dense` when a closet opens or closes. Bolted-down dense props (racks, vending machines, bolted machines) still just set `solid` on their tile.
+  `World.part`/blockers from the first version of this rework are gone. A closet's contents and occupants are matched by distance
+  (`Closets.under`, 0.8 m; 0.7 m for people), not by tile.
+* **Dragging** (`People.drag/haul/towProp/dragSlow/moved`, Ctrl+click, `P` lets go; `m.hauling` is `{k: 'item'|'prop', ...}`, mobs still use
+  `m.pulling`). A structure is dragged **freely, not tile by tile**: each tick, if its middle is further from you than
+  `half + 0.32 + 0.3` m, it slides toward you by the excess (`towProp`), along walls (axis by axis), never into another box or anyone's body, and
+  turns to face the way it goes. Blocked, it just stays; you lose your grip when you get more than 3.4 m past its own size from it. Items trail 0.9 m
+  behind you the same way. The server sends `pm {i, x, z, d}` / `imv {id, x, z}` per tick it moves (positions rounded to 1 mm so both sides agree), late joiners get
+  `welcome.moved: [[idx, x, z, d]]`; both sides apply it with `moveProp` (record, box and the static's position) and `WorldView.propMoved/updateSlides`
+  ease the picture over to it. People inside a dragged closet go with it. Slowdown is `1 / (1 + ds * 0.45)` (about 0.6 for a locker); dragging someone
+  who is down also slows you unless your grip is aggressive or better. The body panel shows SS13's own `pull` icon while you drag (SS13 draws nothing otherwise).
+* **Controls changed**: Ctrl+click used to open the strip window; it now drags (SS13's meaning), and the strip window is Alt+click on a person or
+  dragging them onto your hands. Alt+click on a closet is still lock/unlock.
+* Not done: dragged structures cannot be stood on or buckled to (no buckling yet); a box dragged into a doorway just blocks it (the door still
+  opens and closes round it); tables, windows and wall mounts are not draggable (anchored in the DM anyway); no sound or message when a thing
+  will not budge (SS13 says nothing either). The `structures` section of `tools/simtest2.mjs` is the spec.
+* **You pass through what you drag, then you eject.** `stepMovement`'s `ctx.ignore` (server: `m.hauling.it`; client prediction: `selfState.haul`, the
+  index of the dragged prop) lets you walk through its box, so you can never get wedged against it. `People.release` calls `eject(m, it)`: if you
+  are standing in it you and it move apart (half the distance each along the line between you, else whoever has room; tries eight directions;
+  tested exactly on top of it with a wall behind you). Release happens for many reasons (P, Ctrl+click again, losing your grip, a stun, cuffs), all via `release`.
+* **Browser shortcuts while you play.** `Input.guard` (true in a round) makes `Input` call `preventDefault` on every Ctrl/Cmd chord except text-field
+  editing keys and Ctrl+Shift+I/J/C/K/R (devtools, hard reload), on Alt+Arrow (back) and on Ctrl+wheel (zoom). Ctrl+W, Ctrl+T and Ctrl+N cannot be prevented
+  by a page: `Game` asks before leaving a round (`beforeunload`; off for `?nolock` so headless runs and tests are not blocked) and `F4` goes fullscreen
+  and calls `navigator.keyboard.lock(['KeyW','KeyT','KeyN','Tab','PageUp','PageDown'])` (Chromium only), which does let those through to the game.

@@ -21,6 +21,7 @@ import { Lobby } from './lobby.js';
 import { Screens } from './screens.js';
 import { CharEditor } from './charedit.js';
 import { BodyView } from './bodyview.js';
+import { StripWindow } from './strip.js';
 
 const SEND_EVERY = 0.045;             // seconds between input batches
 const INTERP_DELAY = 0.13;            // remote mobs are drawn this far in the past
@@ -57,6 +58,10 @@ export class Game {
 
     this.input = new Input(canvas);
     if (opts.nolock) this.input.force();
+    this.input.guard = () => this.inWorld();
+    // what the page may not swallow (Ctrl+W closes the tab whatever we do): ask before leaving a round. Not in headless runs.
+    addEventListener('beforeunload', (e) => { if (this.inWorld() && !this.input.forced) { e.preventDefault(); e.returnValue = ''; } });
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) navigator.keyboard?.unlock?.(); });
     this.audio = new AudioSys();
     this.pred = { x: 0, z: 0, vx: 0, vz: 0 };
     this.corr = { x: 0, z: 0 };
@@ -94,6 +99,7 @@ export class Game {
     this.lobby = new Lobby(this);
     this.screens = new Screens(this);
     this.charedit = new CharEditor(this);
+    this.strip = new StripWindow(this);
     this.dnd = new DragDrop(this);
     this.hands.show(false);
 
@@ -155,11 +161,14 @@ export class Game {
     rep.on('tile', (ev) => this.view.tilesChanged([[ev.i % rep.world.W, Math.floor(ev.i / rep.world.W)]]));
     rep.on('pane', (ev) => this.view.tilesChanged([[ev.c, ev.r]]));
     rep.on('evac', (ev) => this.view.onEvac(ev));
+    rep.on('pm', (ev) => this.view.propMoved(rep.props.interact[ev.i]));
+    rep.on('imv', (ev) => this.view.moveItem(ev.id));
     rep.on('item+', (ev) => this.view.addItem(rep.items.get(ev.id)));
     rep.on('item-', (ev) => { this.noteVanished(rep.lastRemoved); this.view.removeItem(ev.id); });
     rep.on('mob+', (ev) => { this.view.addMob(rep.mobs.get(ev.id)); if (ev.id === rep.you?.id) this.ownLookChanged(); });
     rep.on('mob-', (ev) => this.view.removeMob(ev.id));
     rep.on('look', (ev) => { this.view.refreshMob(ev.id); if (ev.id === rep.you?.id) this.ownLookChanged(); });
+    rep.on('strip', (ev) => this.strip.show(ev));
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('power', () => this.view.rebuildLights());
     rep.on('area', () => this.view.rebuildLights());
@@ -198,6 +207,7 @@ export class Game {
     const before = this.bags.openIds.length;
     const mine = this.myAppearance(), hex = mine && this.assets.chars.skin.find((k) => k.n === mine.l.sk)?.hex;
     if (hex) this.hands.setSkin(hex); else this.hands.setOwner(s.name);
+    this.hands.root.classList.toggle('cuffed', !!s.cuffed);
     this.hands.render();
     this.bags.render();
     this.body.render();
@@ -278,7 +288,7 @@ export class Game {
     else this.input.lock();
   }
 
-  get panelOpen() { return this.body.open || this.pda.open || this.term.open || this.screens.reportOpen || this.screens.helpOpen || this.charedit.open; }
+  get panelOpen() { return this.body.open || this.pda.open || this.term.open || this.screens.reportOpen || this.screens.helpOpen || this.charedit.open || this.strip.open; }
 
   /** A panel closed: if it was the reason we freed the pointer, capture it again. */
   panelsChanged() {
@@ -288,6 +298,7 @@ export class Game {
   /** Escape: close the top-most thing that is open. */
   closeTop() {
     if (this.charedit.open) return this.charedit.close();
+    if (this.strip.open) return this.strip.close();
     if (this.term.open) return this.term.close();
     if (this.screens.helpOpen) return this.screens.toggleHelp();
     if (this.pda.open) return this.pda.close();
@@ -300,7 +311,7 @@ export class Game {
   predictCtx() {
     const s = this.self;
     if (this.phase === 'ghost') return { noclip: true };
-    return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind };
+    return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind, ignore: s?.haul >= 0 ? this.rep.props.interact[s.haul] : null };   // you pass through what you drag
   }
 
   frozen() {
@@ -412,7 +423,8 @@ export class Game {
       }
       const hd = Math.hypot(x - px, z - pz);
       if (bestPerp > rad || hd > REACH + rad) return;
-      const score = bestPerp / rad + hd * 0.08;
+      // doors are big, forgiving targets: a person or thing standing in front of one wins over it
+      const score = (bestPerp / rad + hd * 0.08) * (extra.bias ?? 1);
       if (score >= bs) return;
       if (!extra.through) {
         const wd = world.raycast(px, pz, x - px, z - pz, hd, 'shot');
@@ -430,16 +442,16 @@ export class Game {
     for (let i = 0; i < rep.doors.length; i++) {
       const d = rep.doors[i];
       if (!near(d.x, d.z)) continue;
-      consider({ k: 'door', idx: i }, d.x, 0.2, d.z, 1.05, { y1: 2.2, name: d.name, through: true });
+      consider({ k: 'door', idx: i }, d.x, 0.2, d.z, 1.05, { y1: 2.2, name: d.name, through: true, bias: 2 });
     }
     for (const fd of rep.fdoors) {
       if (!fd.closed || !near(fd.x, fd.z)) continue;
-      consider({ k: 'fdoor', idx: fd.idx }, fd.x, 0.2, fd.z, 1.05, { y1: 2.2, name: 'firelock', through: true });
+      consider({ k: 'fdoor', idx: fd.idx }, fd.x, 0.2, fd.z, 1.05, { y1: 2.2, name: 'firelock', through: true, bias: 2 });
     }
     for (const it of rep.props.interact) {
       if (it.gone || !near(it.x, it.z)) continue;
       if (it.kind === 'wm') consider({ k: 'prop', idx: it.idx }, it.x, it.y0, it.z, 0.7, { y1: it.y1, name: it.name, through: true, prop: it });
-      else consider({ k: 'prop', idx: it.idx }, it.x, it.y0 + 0.1, it.z, 0.9, { y1: Math.max(it.y0 + 1.0, it.y1), name: it.name, prop: it });
+      else consider({ k: 'prop', idx: it.idx }, it.x, it.y0 + 0.1, it.z, it.half ? Math.min(0.9, it.half + 0.1) : 0.9, { y1: Math.max(it.y0 + 1.0, it.y1), name: it.name, prop: it });   // as wide as the thing really is
     }
     for (const m of rep.mobs.values()) {
       if (m.id === rep.you?.id || !near(m.x, m.z)) continue;
@@ -504,9 +516,9 @@ export class Game {
   }
 
   /** SS13 click: use what is in your active hand on `t` (or swing / shoot along `dir` at nothing). */
-  clickWorld(t, dir, alt = false) {
+  clickWorld(t, dir, mods = {}) {
     const yaw = Math.atan2(-dir.x, -dir.z), pitch = Math.asin(clamp(dir.y, -1, 1));
-    this.send({ t: 'click', target: this.ref(t), yaw: +yaw.toFixed(4), pitch: +pitch.toFixed(4), ...(alt ? { alt: 1 } : {}) });
+    this.send({ t: 'click', target: this.ref(t), yaw: +yaw.toFixed(4), pitch: +pitch.toFixed(4), ...(mods.alt ? { alt: 1 } : {}), ...(mods.ctrl ? { ctrl: 1 } : {}) });
     const inv = this.self?.inv;
     if (!inv) return;
     const held = inv.hands[inv.active];
@@ -523,11 +535,19 @@ export class Game {
 
   shake(a) { this.shakeAmt = Math.min(1.2, this.shakeAmt + a); }
 
+  /** Fullscreen, with the keyboard locked so that Ctrl+W, Ctrl+T, Ctrl+N and Ctrl+Tab reach the game instead of closing it (Chromium; elsewhere it is just fullscreen). */
+  toggleFullscreen() {
+    if (document.fullscreenElement) { document.exitFullscreen?.(); return; }
+    const p = document.documentElement.requestFullscreen?.();
+    if (p?.then) p.then(() => navigator.keyboard?.lock?.(['KeyW', 'KeyT', 'KeyN', 'Tab', 'PageUp', 'PageDown'])).catch(() => {});
+  }
+
   // ---------------------------------------------------------------- keys
   handleKeys() {
     const input = this.input;
     if (input.pressed('F2')) this.hud.say(this.audio.toggleMute() ? 'Sound muted.' : 'Sound on.', 'notice');
     if (input.pressed('F1')) this.screens.toggleHelp();
+    if (input.pressed('F4')) this.toggleFullscreen();
     if (!this.inWorld()) { input.takeClicks(); return; }
     if (this.chat.isOpen) { input.takeClicks(); return; }
     if (input.pressed('Escape')) this.closeTop();
@@ -558,13 +578,15 @@ export class Game {
     if (input.pressed('KeyV')) this.key('internals');
     if (input.pressed('KeyF')) this.key('light');
     if (input.pressed('KeyB')) this.key('resist');
+    if (input.pressed('KeyP')) this.key('pull');
     // look mode: the crosshair is the hand
     const clicks = input.takeClicks();
     if (this.mode !== 'look' || this.panelOpen) { this.holdT = 0; return; }
     const dir = this.lookRay().d;
-    for (const b of clicks) {
-      if (b === 0 || b === 10) this.clickWorld(this.target, dir, b === 10);
-      else if (b === 2 || b === 12) this.examineTarget(this.target);
+    for (const c of clicks) {
+      const b = c % 10, mod = Math.floor(c / 10);
+      if (b === 0) this.clickWorld(this.target, dir, { alt: mod === 1, ctrl: mod === 2 });
+      else if (b === 2) this.examineTarget(this.target);
     }
     // holding the button keeps swinging
     if (input.buttons.has(0) && !clicks.length && this.self?.inv?.intent === 'harm') {

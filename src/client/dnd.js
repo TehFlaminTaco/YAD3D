@@ -42,7 +42,7 @@ export class DragDrop {
     }
     if (e.target === this.game.canvas) {
       const t = this.game.cursorTarget;
-      this.pending = { kind: 'world', target: t, id: t && t.k === 'item' ? t.id : 0, x: e.clientX, y: e.clientY };
+      this.pending = { kind: 'world', target: t, id: t && t.k === 'item' ? t.id : 0, mobId: t && t.k === 'mob' ? t.id : 0, x: e.clientX, y: e.clientY };
       e.preventDefault();
     }
   }
@@ -52,11 +52,28 @@ export class DragDrop {
     g.mouse.x = e.clientX; g.mouse.y = e.clientY;
     g.mouse.overCanvas = e.target === g.canvas;
     const p = this.pending;
-    if (p && !this.drag && p.id && Math.hypot(e.clientX - p.x, e.clientY - p.y) > DRAG_START) this.start(p);
+    if (p && !this.drag && (p.id || p.mobId) && Math.hypot(e.clientX - p.x, e.clientY - p.y) > DRAG_START) this.start(p);
     if (this.drag) this.placeGhost(e.clientX, e.clientY);
   }
 
+  /** Dragging a person: onto your hands to go through their things, onto an open closet to stuff them in. */
+  startMob(p) {
+    const g = this.game, m = g.rep.mobs.get(p.mobId);
+    if (!m) { this.pending = null; return; }
+    this.drag = { ...p, mob: true };
+    this.ghost.width = this.ghost.height = 32;
+    this.ghost._s = undefined;
+    const c = this.ghost.getContext('2d');
+    c.clearRect(0, 0, 32, 32);
+    if (m.ap) c.drawImage(g.assets.charart.portrait(m.ap, 0), 0, 0);
+    this.ghost.style.width = this.ghost.style.height = 48 * (g.ui.P + 1) + 'px';
+    this.ghost.style.display = 'block';
+    this.placeGhost(p.x, p.y);
+    document.body.classList.add('dragging');
+  }
+
   start(p) {
+    if (p.mobId) { this.startMob(p); return; }
     const g = this.game;
     const info = p.kind === 'world' ? g.rep.items.get(p.id) : g.invIndex.get(p.id)?.it;
     if (!info) { this.pending = null; return; }
@@ -88,7 +105,7 @@ export class DragDrop {
       this.ghost.style.display = 'none';
       document.body.classList.remove('dragging');
       if (d.kind === 'ui') d.el.classList.remove('lifted');
-      if (this.enabled()) this.drop(e, d);
+      if (this.enabled()) { if (d.mob) this.dropMob(e, d); else this.drop(e, d); }
       if (d.kind === 'world') setTimeout(() => this.game.view.hideItem(d.id, false), 700);
       return;
     }
@@ -100,7 +117,7 @@ export class DragDrop {
     const g = this.game, inv = g.self.inv;
     const held = inv.hands[inv.active];
     const send = (m) => g.send({ t: 'inv', ...m });
-    if (p.kind === 'world') { g.clickWorld(p.target, g.rayAt(e.clientX, e.clientY).d, e.altKey); return; }
+    if (p.kind === 'world') { g.clickWorld(p.target, g.rayAt(e.clientX, e.clientY).d, { alt: e.altKey, ctrl: e.ctrlKey }); return; }
     const el = p.el;
     const it = p.id ? g.invIndex.get(p.id)?.it : null;
     const toggle = (id) => send({ op: inv.open.includes(id) ? 'close' : 'open', item: id });
@@ -140,6 +157,16 @@ export class DragDrop {
   }
 
   // ---------------------------------------------------------------- drops
+  dropMob(e, d) {
+    const g = this.game;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (this.uiCell(el)) { g.send({ t: 'strip', op: 'open', id: d.mobId }); return; }      // onto your hands: go through their things
+    if (el !== g.canvas) return;
+    const { o, d: dir } = g.rayAt(e.clientX, e.clientY);
+    const t = g.findTarget(o, dir);
+    if (t && t.k === 'prop' && g.rep.props.interact[t.idx]?.kind === 'closet') g.send({ t: 'stuff', idx: t.idx, id: d.mobId });
+  }
+
   drop(e, d) {
     const g = this.game, inv = g.self.inv;
     const id = d.id;

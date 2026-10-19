@@ -26,6 +26,9 @@ It plays like a round of SS13: lobby, job slots, a crew of other people, things 
   clothes they really wear, a hairdresser's mirror, and your own body when you look down,
   closets, lockers and crates that really open, close, lock (ID access, Alt+click), weld shut, hold what the DM says they
   hold, and shut people in (they break out in two minutes),
+  handcuffs (three seconds to put on, a minute to break out of), grabs that tighten from passive to aggressive to a neck
+  hold, dragging people, loose items and unbolted structures (lockers, tanks, office chairs) around behind you, going through
+  people's clothes and pockets in a strip window, dragging them into lockers,
   smashed windows (they open up to whatever is behind them: only a window that touches space vents the room, and the grille
   stays standing), welding breaches shut, escape pods and the emergency shuttle, console programs (APC, air alarm, crew monitor, power monitor,
   comms, ...).
@@ -69,6 +72,8 @@ the body panel) and drag it:
 | An empty hand or body-panel slot, a bag window, or a container (in a hand, a slot or a bag) | it moves there, if SS13's storage rules allow it |
 | The floor or a table top within reach | it is put down there; a marker shows where it will land |
 | A person, door, machine or hull breach (something you are holding) | it is used on them, as if you had clicked them with it |
+| Your hands, with a *person* picked up from the world | their strip window opens (same as `Alt`+click on them) |
+| An open locker, with a person picked up from the world | you stuff them in (four seconds; you stay next to them) |
 | Somewhere it can't be put down, such as out of reach (something you are carrying) | it is thrown there |
 
 ### On screen
@@ -117,11 +122,15 @@ The same list is in the game under `F1`.
 | `Tab` | Your PDA: time, location, air, map |
 | `V` | Internals (mask and air tank) |
 | `F` | Flashlight |
-| `B` | Stop what you are doing; shut in a locker, push the door (breaks out of a locked or welded one in two minutes) |
-| `Alt`+click | Lock or unlock a closed locker you have the access for, without opening it |
+| `B` | Stop what you are doing; resist: a grab (a passive one lets go at once), handcuffs (a minute standing still), a locker you are shut in (two minutes) |
+| `P` | Let go of whoever or whatever you are dragging |
+| `Alt`+click | Lock or unlock a closed locker you have the access for, without opening it. On a person: their strip window; click what they wear to take it off them (their items take SS13's delays, pockets four seconds and they are not told), click an empty slot to put what you hold on them |
+| `Ctrl`+click | Drag it: SS13's pull. A person (a passive hold, never tighter), a loose item, or a structure that is not anchored in the DM (lockers, tanks, canisters, office chairs; not racks, vending machines or most chairs). It trails a little way behind you and slides along walls, lockers slow you down like a body does, `Ctrl`+click again or `P` lets go |
 | `T` `Y` `M` `O` | Say (`;` common radio, `:h` department, `:e :m :s :n :u :v :c` other channels) / whisper / emote / OOC |
-| `F1`, `F2` | This list, mute |
+| `F1`, `F2`, `F4` | This list, mute, fullscreen (with the keyboard locked on Chromium, so `Ctrl`+`W`, `Ctrl`+`T` and `Ctrl`+`N` cannot close the page) |
 | `Esc` | Close the top window (in look mode: free the mouse) |
+
+While a round is on, every browser shortcut the page is allowed to swallow is swallowed (`Ctrl`+`S`, `D`, `P`, `R`, `F`, `U`, `Alt`+`Left`, `Ctrl`+wheel zoom and so on; developer tools and `Ctrl`+`Shift`+`R` still work, and so does editing text in the chat line). The browser reserves `Ctrl`+`W`, `Ctrl`+`T` and `Ctrl`+`N`, so leaving the page asks first (not in `?nolock` runs), and fullscreen (`F4`) locks the keyboard so they reach the game.
 
 Also: the arrow keys turn and look up and down, `Enter` opens Say, `/` opens Say with `;` already typed. In the chat line,
 `Tab` cycles Say / Whisper / Me / OOC and `Esc` cancels. While a console is open, `1` to `9` press its keys instead of
@@ -179,8 +188,8 @@ writes `assets/ui.png`, `assets/ui.json` and `assets/overlays/` from the HUD ico
 ### Tests
 
 ```sh
-npm run test:sim      # 98 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, chat,
-                      #   consoles, drag and drop, death and ghosts)
+npm run test:sim      # 127 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, closets,
+                      #   characters, handcuffs/grabs/stripping, chat, consoles, drag and drop, death and ghosts)
 npm run test:level    # level mesh geometry and the character art data (no browser)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:

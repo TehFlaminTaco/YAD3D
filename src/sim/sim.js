@@ -18,6 +18,7 @@ import { Director } from './director.js';
 import { Terminals } from './terminals.js';
 import { Actions } from './actions.js';
 import { Closets } from './closets.js';
+import { People } from './people.js';
 import { Looks, WORN_SLOTS } from '../shared/looks.js';
 import { AI } from './ai.js';
 import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, rootMob } from './inventory.js';
@@ -96,6 +97,7 @@ export class Sim {
       const item = this.newItem(it.path || '/obj/item', { name: it.name, sprite: it.sprite });
       place(this, item, it.x, it.z, it.y);
     }
+    this.people = new People(this);
     this.closets = new Closets(this, data.closets);       // after the floor items: closed closets swallow what lies on them
   }
 
@@ -156,7 +158,7 @@ export class Sim {
       areaOn: [...this.power.areaOn], areaLights: [...this.power.areaLights],
       doors: this.doors.map((d) => d.state), fdoors: this.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       items: [...this.floor.values()].map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z]),
-      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(),
+      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(), moved: this.people.moved(),
       jobs: this.jobs.list.map((j) => ({ id: j.id, title: j.title, color: j.color, supervisors: j.supervisors, slots: this.jobs.slots(j), total: j.id === 'assistant' ? 99 : j.total, ap: this.outfitPreview(j) })),
     };
   }
@@ -167,6 +169,7 @@ export class Sim {
     this.tick++;
     this.round.update(dt);
     this.applyPlayerInputs(dt);
+    this.people.update();
     this.updateDoors(dt);
     this.firedoors.update(dt);
     this.atmos.update(dt);
@@ -204,10 +207,11 @@ export class Sim {
         m.yaw = inp.yaw; m.pitch = clamp(inp.pitch || 0, -1.5, 1.5);
         m.input = inp;
         if (m.inside) { m.vx = m.vz = 0; if (inp.f || inp.b || inp.l || inp.r) this.closets.relaymove(m); continue; }
+        if (m.downed || (m.pulledBy && m.pulledBy.grab >= 1)) { m.vx = m.vz = 0; if (inp.f || inp.b || inp.l || inp.r) this.people.resistGrab(m); continue; }
         if (m.dead || m.stunned > 0 || m.body.crit) { m.vx = m.vz = 0; continue; }
         const run = inp.run && !(m.body.health < 30);
         const wind = this.atmos.windAt(m.x, m.z);
-        m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw }, this.world, d, { slow: moveSlow(m) * (m.body.crit ? 0.35 : 1), wind });
+        m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw }, this.world, d, { slow: moveSlow(m) * this.people.dragSlow(m) * (m.body.crit ? 0.35 : 1), wind, ignore: m.hauling?.it });
         moved = true;
       }
       void moved;
@@ -472,6 +476,7 @@ export class Sim {
       const by = {};
       for (const slot of WORN_SLOTS) if (m.worn[slot]) by[slot] = m.worn[slot].path;
       m.ap = this.looks.appearance(m.look, by);
+      if (m.cuffed) m.ap.o.cuffs = this.looks.meta.cuffs;
       m.apDirty = false;
     }
     return m.ap;
@@ -505,7 +510,7 @@ export class Sim {
         if (dx * dx + dz * dz > INTEREST * INTEREST && m !== c.mob) continue;
         seen.add(m.id);
         if (!c.known.has(m.id)) { c.known.add(m.id); c.outbox.push({ e: 'mob+', id: m.id, n: m.name, job: m.job, set: m.set, kind: m.kind, ap: m.look ? this.appearanceOf(m) : undefined }); }
-        const flags = (m.dead ? 1 : 0) | (m.body.crit ? 2 : 0) | (m.speedNow > 3.8 ? 8 : 0) | (m.stunned > 0 ? 16 : 0);
+        const flags = (m.dead ? 1 : 0) | (m.body.crit ? 2 : 0) | (m.speedNow > 3.8 ? 8 : 0) | (m.stunned > 0 || m.downed ? 16 : 0);
         list.push([m.id, +m.x.toFixed(2), +m.z.toFixed(2), +m.yaw.toFixed(2), flags, +(m.speedNow || 0).toFixed(1)]);
       }
       for (const id of [...c.known]) if (!seen.has(id)) { c.known.delete(id); c.outbox.push({ e: 'mob-', id }); }
@@ -535,8 +540,9 @@ export class Sim {
       inv: m.humanoid ? serializeInv(m) : null,
       hp: [Math.round(b.health), b.max, Math.round(b.brute), Math.round(b.burn), Math.round(b.tox), Math.round(b.oxy)],
       crit: b.crit, dead: b.dead, stunned: m.stunned > 0, inside: m.inside ? m.inside.name : null,
+      cuffed: !!m.cuffed, grabbed: m.pulledBy ? m.pulledBy.grab : -1, pulling: m.pulling ? m.pulling.name : m.hauling ? m.hauling.name : null, haul: m.hauling?.it ? m.hauling.it.idx : -1,
       job: m.job, name: m.name, access: [...m.access],
-      suit: spaceSafe(m), slow: moveSlow(m),
+      suit: spaceSafe(m), slow: moveSlow(m) * this.people.dragSlow(m),
     };
   }
 
@@ -548,6 +554,8 @@ export class Sim {
         if (msg.look) c.look = this.looks.sanitize(msg.look);
         break;
       case 'mirror': this.actions.mirror(c, msg); break;
+      case 'strip': this.people.handle(c, msg); break;
+      case 'stuff': { const it = this.props.interact[msg.idx]; if (c.mob && it?.kind === 'closet') this.closets.stuff(c.mob, it, this.mobs.get(msg.id)); break; }
       case 'input':
         for (const inp of msg.list || [msg]) { if (c.inputs.length < 60) c.inputs.push(inp); }
         break;

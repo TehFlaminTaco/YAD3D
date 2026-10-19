@@ -20,6 +20,9 @@ export class World {
     const n = w * h;
     this.glass = new Uint8Array(n);          // wall-like block that is see-through (window)
     this.solid = new Uint8Array(n);          // blocks movement (walls, dense props, closed doors)
+    this.boxes = new Map();                  // tile index -> the free-standing things (lockers, tanks) whose box touches it
+    this.bcount = new Uint8Array(n);         // how many dense boxes touch the tile (so collides can skip most tiles quickly)
+    this.dyn = new Uint8Array(n);            // how many dense boxes have their middle in the tile (pathfinding goes round them)
     this.edge = new Uint8Array(n);           // thin blockers on tile edges (bit per direction)
     this.edgeGlass = new Uint8Array(n);      // which of those edges are glass (for rays)
     this.tableH = new Float32Array(n);       // surface height of tables (items rest on them)
@@ -101,6 +104,64 @@ export class World {
   walkable(c, r) { return this.inb(c, r) && !this.solid[r * this.W + c]; }
   areaAt(c, r) { return this.areas[this.areaIdx[r * this.W + c]]; }
 
+  // ------------------------------------------------------------------ free-standing things
+  /*
+   * A locker, tank or crate is not part of the tile grid: it is a box (`rec.x`, `rec.z`, half-width `rec.half`) that blocks you
+   * while `rec.dense`, wherever it stands, so it can be dragged about smoothly. The tiles it touches list it for collision.
+   */
+  boxTiles(rec) {
+    const T = TILE, e = 1e-4, out = [];
+    const c0 = Math.floor((rec.x - rec.half) / T), c1 = Math.floor((rec.x + rec.half - e) / T);
+    const r0 = Math.floor((rec.z - rec.half) / T), r1 = Math.floor((rec.z + rec.half - e) / T);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.inb(c, r)) out.push(r * this.W + c);
+    return out;
+  }
+
+  /** Start tracking a free-standing box (it blocks if `rec.dense`). */
+  boxAdd(rec) {
+    this.boxDrop(rec);
+    rec.tiles = this.boxTiles(rec);
+    rec.mid = Math.floor(rec.z / TILE) * this.W + Math.floor(rec.x / TILE);
+    rec.counted = false;
+    for (const i of rec.tiles) {
+      let list = this.boxes.get(i);
+      if (!list) this.boxes.set(i, list = []);
+      list.push(rec);
+    }
+    this.boxSet(rec);
+  }
+
+  /** Apply `rec.dense` (it changed, or it was just added). */
+  boxSet(rec) {
+    if (!rec.tiles) { this.boxAdd(rec); return; }
+    const want = !!rec.dense;
+    if (want === !!rec.counted) return;
+    rec.counted = want;
+    const d = want ? 1 : -1;
+    for (const i of rec.tiles) this.bcount[i] += d;
+    this.dyn[rec.mid] += d;
+  }
+
+  boxDrop(rec) {
+    if (!rec.tiles) return;
+    if (rec.counted) { for (const i of rec.tiles) this.bcount[i]--; this.dyn[rec.mid]--; }
+    for (const i of rec.tiles) {
+      const list = this.boxes.get(i);
+      if (!list) continue;
+      const k = list.indexOf(rec);
+      if (k >= 0) list.splice(k, 1);
+      if (!list.length) this.boxes.delete(i);
+    }
+    rec.tiles = null; rec.counted = false;
+  }
+
+  /** Put a free-standing box somewhere else. */
+  boxMove(rec, x, z) {
+    this.boxDrop(rec);
+    rec.x = x; rec.z = z;
+    this.boxAdd(rec);
+  }
+
   /** Mark a thin blocker on the `d` edge of tile (c, r) (mirrored on the neighbour). */
   addEdge(c, r, d, glass = false) {
     if (!this.inb(c, r)) return;
@@ -127,8 +188,8 @@ export class World {
     }
   }
 
-  /** Axis-aligned box (half-size `h`) vs tiles + thin edges. */
-  collides(x, z, h) {
+  /** Axis-aligned box (half-size `h`) vs tiles + thin edges + free-standing boxes (not `ignore`, which is the one being moved). */
+  collides(x, z, h, ignore = null) {
     const c0 = Math.floor((x - h) / TILE), c1 = Math.floor((x + h) / TILE);
     const r0 = Math.floor((z - h) / TILE), r1 = Math.floor((z + h) / TILE);
     const T = TILE, th = 0.07;
@@ -137,6 +198,9 @@ export class World {
         if (!this.inb(c, r)) return true;
         const i = r * this.W + c;
         if (this.solid[i]) return true;
+        if (this.bcount[i]) {
+          for (const b of this.boxes.get(i)) if (b !== ignore && b.dense && Math.abs(x - b.x) < b.half + h && Math.abs(z - b.z) < b.half + h) return true;
+        }
         const e = this.edge[i];
         if (e) {
           const x0 = c * T, z0 = r * T, x1 = x0 + T, z1 = z0 + T;
@@ -151,13 +215,13 @@ export class World {
   }
 
   /** Slide an entity with half-size h by (dx, dz); returns true if blocked on either axis. */
-  move(pos, dx, dz, h) {
+  move(pos, dx, dz, h, ignore = null) {
     let blocked = false;
     if (dx !== 0) {
-      if (!this.collides(pos.x + dx, pos.z, h)) pos.x += dx; else blocked = true;
+      if (!this.collides(pos.x + dx, pos.z, h, ignore)) pos.x += dx; else blocked = true;
     }
     if (dz !== 0) {
-      if (!this.collides(pos.x, pos.z + dz, h)) pos.z += dz; else blocked = true;
+      if (!this.collides(pos.x, pos.z + dz, h, ignore)) pos.z += dz; else blocked = true;
     }
     return blocked;
   }
