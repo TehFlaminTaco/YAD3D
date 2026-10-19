@@ -311,6 +311,24 @@ export class WorldView {
     this.rebuildLights();
   }
 
+  /** While dragging: a ring on the floor where the thing will land (green) or the way it will be thrown (red). */
+  setDropMarker(fp, now) {
+    if (!this.marker) {
+      const g = new THREE.RingGeometry(0.16, 0.24, 20);
+      g.rotateX(-Math.PI / 2);
+      this.marker = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x46e08a, transparent: true, opacity: 0.85, depthWrite: false, fog: false }));
+      this.marker.renderOrder = 3;
+      this.scene.add(this.marker);
+    }
+    const m = this.marker;
+    m.visible = !!fp;
+    if (!fp) return;
+    m.position.set(fp.x, fp.y + 0.015, fp.z);
+    m.material.color.setHex(fp.ok ? 0x46e08a : 0xff4a3b);
+    const s = 1 + Math.sin(now * 10) * 0.08;
+    m.scale.set(s, 1, s);
+  }
+
   /** A short-lived laser trace. */
   addBeam(a, b, col, now) {
     const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]);

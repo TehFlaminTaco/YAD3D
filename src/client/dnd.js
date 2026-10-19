@@ -75,7 +75,8 @@ export class DragDrop {
 
   placeGhost(x, y) {
     const w = this.ghost.offsetWidth;
-    this.ghost.style.transform = `translate(${x - w / 2}px, ${y - w / 2}px)`;
+    // held just above the fingertip, so you can see where it will land
+    this.ghost.style.transform = `translate(${x - w / 2}px, ${y - w * 1.05}px)`;
   }
 
   up(e) {

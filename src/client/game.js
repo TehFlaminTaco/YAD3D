@@ -574,6 +574,7 @@ export class Game {
     this.target = playing && this.mode === 'look' ? this.findTarget(...Object.values(this.lookRay())) : null;
     this.cursorTarget = playing && this.mode === 'hands' && this.mouse.overCanvas && !this.dnd.drag ? this.findTarget(...Object.values(this.rayAt(this.mouse.x, this.mouse.y))) : null;
     this.view.setTarget(this.mode === 'look' ? this.target : this.cursorTarget);
+    this.updateDragPreview();
     this.updateCursor();
 
     this.view.update(dt, this.time, this.time - INTERP_DELAY, cam.position, this.yaw, this.phase === 'playing' ? rep.you?.id : -1);
@@ -605,6 +606,18 @@ export class Game {
     this.screens.update(dt);
     if (!this.opts.norender) this.renderer.render(this.scene, cam);
     this.input.endFrame();
+  }
+
+  /** While dragging over the world: highlight who you would use it on, or mark where it would land. */
+  updateDragPreview() {
+    const d = this.dnd.drag;
+    if (!d || !this.mouse.overCanvas || this.phase !== 'playing') { this.view.setDropMarker(null, this.time); return; }
+    const { o, d: dir } = this.rayAt(this.mouse.x, this.mouse.y);
+    const src = d.kind === 'world' ? null : this.invIndex.get(d.id)?.where;
+    const t = src?.t === 'hand' ? this.findTarget(o, dir) : null;
+    if (t && t.k !== 'item') { this.view.setTarget(t); this.view.setDropMarker(null, this.time); return; }
+    const fp = this.floorPoint(o, dir);
+    this.view.setDropMarker(fp && !fp.blocked ? fp : null, this.time);
   }
 
   /** The pointer shows what a click would do: point, an open hand over things to pick up, a target in throw mode. */
