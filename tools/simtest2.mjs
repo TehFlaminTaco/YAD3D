@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { loadSimData } from '../src/sim/load.js';
 import { Sim } from '../src/sim/sim.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
+import { CL } from '../src/shared/closets.js';
+import { recalc } from '../src/sim/inventory.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = loadSimData(root);
@@ -137,7 +139,7 @@ section('hull breach + repair', () => {
   const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([x, y]) => [wc + x, wr + y]).find(([x, y]) => sim.atmos.isCell[y * w.W + x]);
   b.x = 2; b.z = 2;
   sim.breachTile(wc, wr, 'meteor');
-  ok(w.breached.has(win) && w.kind[win] === 0, 'meteor opens the hull');
+  ok(w.breached.has(win) && w.kind[win] === 1 && !w.glass[win] && !w.airBlock[win] && w.ventsToSpace(win), 'meteor smashes an exterior window: it is open to space');
   step(30);
   ok(sim.atmos.pressureAt(nb[0], nb[1]) < 30, 'room decompresses through the breach');
   const sheet = sim.newItem('/obj/item/stack/sheet/metal', { amount: 3 });
@@ -153,6 +155,151 @@ section('hull breach + repair', () => {
   a.x = 4; a.z = 4;
   step(45);
   ok(sim.atmos.pressureAt(nb[0], nb[1]) > 60, 'vents refill the room after patching');
+});
+
+section('broken windows only vent to space', () => {
+  const { sim, A, a, b, step, inbox, evs, hand } = setup();
+  const w = sim.world, W = w.W;
+  // a window between two rooms: floor on two sides, nothing that touches space
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  let win = -1, sides = [];
+  for (let i = 0; i < W * w.H && win < 0; i++) {
+    if (!w.glass[i] || w.kind[i] !== 2) continue;
+    const c = i % W, r = (i - c) / W;
+    const ks = dirs.map(([x, y]) => w.kindAt(c + x, r + y));
+    if (ks.some((k) => k === 0 || k === 3) || ks.filter((k) => k === 1).length !== 2) continue;
+    const s = dirs.map(([x, y]) => [c + x, r + y]).filter(([x, y]) => w.kind[y * W + x] === 1 && w.roof[y * W + x]);
+    if (s.length === 2) { win = i; sides = s; }
+  }
+  ok(win >= 0, 'found a window that does not touch space');
+  const wc = win % W, wr = (win - wc) / W;
+  b.x = 2; b.z = 2;
+  sim.breachTile(wc, wr, 'shot');
+  ok(w.breached.has(win) && w.kind[win] === 1 && !w.glass[win] && !w.airBlock[win] && w.solid[win], 'a shot window opens up but the frame still blocks the way');
+  ok(!w.ventsToSpace(win) && !w.ventTiles().includes(win), 'it is not a hull breach');
+  ok(sim.atmos.isCell[win], 'the gap joins the gas grid');
+  step(40);
+  ok(sides.every(([x, y]) => sim.atmos.pressureAt(x, y) > 60), 'neither room decompresses');
+  ok(!sim.terminals.alerts().html.includes('hull breach'), 'no atmosphere alarm');
+  // weld it shut: no hull breach call-out
+  const sheet = sim.newItem('/obj/item/stack/sheet/metal', { amount: 3 });
+  a.x = sides[0][0] * TILE + 1; a.z = sides[0][1] * TILE + 1; a.yaw = Math.atan2(-(wc - sides[0][0]), -(wr - sides[0][1]));
+  hand(a, sheet);
+  const welder = sim.newItem('/obj/item/weldingtool'); welder.lit = true;
+  a.worn.belt.contents.push(welder); welder.loc = { t: 'box', box: a.worn.belt };
+  inbox.a.length = 0;
+  sim.handle(A, { t: 'click', target: { k: 'breach', c: wc, r: wr } });
+  step(4);
+  ok(!w.breached.has(win) && w.kind[win] === 2 && !sim.atmos.isCell[win], 'it can be welded over');
+  ok(!evs(inbox.a, 'msg').some((m) => /breach sealed/i.test(m.text || '')), 'and nobody announces a hull breach sealed');
+});
+
+section('closets', () => {
+  const { sim, A, B, a, b, step, inbox, evs, hand } = setup();
+  const w = sim.world, cls = sim.closets;
+  const find = (suffix) => cls.list.find((it) => it.path.endsWith(suffix));
+  const click = (c, it, alt) => { sim.handle(c, { t: 'click', target: { k: 'prop', idx: it.idx }, alt }); step(0.1); };
+  // stand on a free tile next to the closet (k picks which), where a click can reach it
+  const freeAround = (it) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dc, dr]) => [it.c + dc, it.r + dr]).filter(([c, r]) => w.kind[r * w.W + c] === 1 && !w.solid[r * w.W + c]);
+  const stand = (m, it, k = 0) => {
+    const free = freeAround(it);
+    const [c, r] = free[Math.min(k, free.length - 1)];
+    m.x = c * TILE + 1; m.z = r * TILE + 1; m.vx = m.vz = 0; m.cool = 0;
+  };
+  const texts = (inb) => inb.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((x) => x.e === 'msg').map((x) => x.text);
+  const grant = (m, acc) => { m.worn.id.access = [...m.worn.id.access, ...acc]; recalc(sim, m); };
+  const welder = (m) => { const t = sim.newItem('/obj/item/weldingtool'); t.lit = true; hand(m, t); return t; };
+  b.x = 2; b.z = 2;
+
+  // a locker holds what the DM says it holds
+  const eng = find('secure_closet/engineering_welding');
+  ok(eng && eng.contents.length === 6 && eng.cs === (CL.LOCKED) && w.solid[eng.r * w.W + eng.c], 'welding locker starts closed and locked with its 3 hoods and 3 welders');
+  ok(eng.cl.sec && eng.cl.a.length === 1, 'and wants one access');
+  const em = cls.list.filter((it) => it.path.endsWith('closet/emcloset'));
+  ok(em.length > 20 && em.some((it) => it.contents.length) && em.some((it) => !it.contents.length), 'emergency closets are stocked at random, some empty');
+  // nothing on a closed closet's tile is left outside
+  ok(![...sim.floor.values()].some((f) => cls.list.some((it) => !(it.cs & CL.OPEN) && it.contents.length < 30 && it.c === f.c && it.r === f.r)), 'items under closed closets were taken in at round start (up to 30)');
+
+  // access: a locker opens for the right ID, with SS13's messages
+  stand(a, eng); stand(b, eng, 1);
+  b.worn.id.access = []; recalc(sim, b);
+  inbox.b.length = 0;
+  click(B, eng);
+  ok((eng.cs & CL.LOCKED) && texts(inbox.b).includes('Access Denied.'), 'a doctor without the access is told Access Denied.');
+  grant(a, eng.cl.a);
+  inbox.a.length = 0; inbox.b.length = 0;
+  click(A, eng);
+  ok(!(eng.cs & CL.LOCKED) && !(eng.cs & CL.OPEN), 'an empty hand on a locked locker with the right ID unlocks it');
+  ok(texts(inbox.a).includes('You unlock the welding supplies locker.') && texts(inbox.b).includes(`${a.name} unlocks the welding supplies locker.`), 'you and onlookers get the lock messages');
+  click(A, eng);
+  ok((eng.cs & CL.OPEN) && !w.solid[eng.r * w.W + eng.c], 'then it opens, and stops blocking the way');
+  const spilled = [...sim.floor.values()].filter((f) => f.c === eng.c && f.r === eng.r);
+  ok(spilled.length === 6 && eng.contents.length === 0, 'its contents lie on its tile');
+  // closing takes in what lies there, including something someone dropped
+  const junk = sim.newItem('/obj/item/crowbar'); place_(junk, eng);
+  click(A, eng);
+  ok(!(eng.cs & CL.OPEN) && eng.contents.length === 7 && w.solid[eng.r * w.W + eng.c] && ![...sim.floor.values()].some((f) => f.c === eng.c && f.r === eng.r), 'closing takes everything on the tile inside and blocks it again');
+  // alt-click locks and unlocks without opening
+  click(A, eng, true);
+  ok((eng.cs & CL.LOCKED) && !(eng.cs & CL.OPEN), 'alt-click locks a closed locker you have the access for');
+  click(A, eng, true);
+  ok(!(eng.cs & CL.LOCKED), 'and unlocks it again');
+  // a late joiner is told
+  ok(sim.worldState(A).closets.some(([i, cs]) => i === eng.idx && cs === 0), 'the welcome lists closets that are not as the map left them');
+
+  // welding shut and open
+  const t = welder(a);
+  click(A, eng); step(4.5);
+  ok(eng.cs & CL.WELDED, 'a lit welder welds a closed locker shut in 4 seconds');
+  a.hands[0] = a.hands[1] = null;
+  click(A, eng);
+  ok(!(eng.cs & CL.OPEN), 'and a welded locker will not open');
+  hand(a, t);
+  click(A, eng); step(4.5);
+  ok(!(eng.cs & CL.WELDED), 'welding it again undoes it');
+  t.lit = false; inbox.a.length = 0;
+  click(A, eng);
+  ok(texts(inbox.a).some((x) => x === 'The welding tool has to be on to complete this task!') && !a.busy, 'an unlit welder is refused with the SS13 message');
+  t.lit = true;
+
+  // being shut in: moving does nothing against a lock, and breaking out takes two minutes
+  const mob = b;
+  cls.set(eng, eng.cs | CL.LOCKED); cls.putInside(eng, mob);
+  ok(mob.inside === eng, 'a person can be shut inside');
+  mob.input = { f: 1 }; inbox.b.length = 0;
+  cls.relaymove(mob); step(0.1);
+  ok(texts(inbox.b).includes("The welding supplies locker's door won't budge!"), 'pushing on a locked door says it will not budge');
+  inbox.b.length = 0;
+  sim.handle(B, { t: 'key', k: 'resist' }); step(0.1);
+  ok(mob.busy && texts(inbox.b).some((x) => x.includes('this will take about 2 minutes')), 'resisting starts a two minute breakout');
+  step(100);
+  ok(mob.inside === eng, 'still inside after a hundred seconds');
+  step(25);
+  ok(!mob.inside && (eng.cs & CL.OPEN) && (eng.cs & CL.BROKEN) && !(eng.cs & CL.LOCKED), 'after two minutes the lock gives and the locker is broken open');
+  stand(a, eng);
+  hand(a, t);
+  click(A, eng); // open: with a lit welder this cuts it apart
+  step(4.5);
+  ok(eng.gone && !w.solid[eng.r * w.W + eng.c] && [...sim.floor.values()].some((f) => f.item.path.includes('sheet/metal') && f.c === eng.c && f.r === eng.r), 'cutting an open locker apart removes it and leaves 2 metal');
+
+  // personal lockers belong to whoever swipes first
+  const pl = cls.list.find((it) => it.cl.pl && freeAround(it).length);
+  stand(a, pl); stand(b, pl, 1);
+  ok(pl.cs & CL.LOCKED, 'personal locker starts locked');
+  hand(a, a.worn.id); a.worn.id = null;
+  click(A, pl);
+  ok(!(pl.cs & CL.LOCKED) && pl.owner === a.name, 'the first ID swiped claims it and unlocks it');
+  hand(b, b.worn.id); b.worn.id = null; inbox.b.length = 0;
+  click(B, pl);
+  ok(texts(inbox.b).includes('Access Denied.'), "someone else's ID is refused");
+
+  // crates stay in the way when open
+  const crate = cls.list.find((it) => it.cl.hz && it.cs === 0);
+  stand(a, crate); a.hands[0] = a.hands[1] = null;
+  click(A, crate);
+  ok((crate.cs & CL.OPEN) && w.solid[crate.r * w.W + crate.c], 'an open crate still blocks the tile');
+
+  function place_(item, it) { item.loc = null; sim.floor.set(item.id, { item, x: it.x + 0.3, y: 0.01, z: it.z, c: it.c, r: it.r }); item.loc = { t: 'floor' }; }
 });
 
 section('chat', () => {

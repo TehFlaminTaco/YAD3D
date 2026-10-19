@@ -150,7 +150,7 @@ export class Terminals {
   alerts() {
     const sim = this.sim;
     const L = [];
-    for (const i of sim.world.breached) L.push(`<span class="b">Atmosphere alarm</span>  hull breach, ${esc(sim.world.areaAt(i % sim.world.W, Math.floor(i / sim.world.W))?.n || 'unknown')}`);
+    for (const i of sim.world.ventTiles()) L.push(`<span class="b">Atmosphere alarm</span>  hull breach, ${esc(sim.world.areaAt(i % sim.world.W, Math.floor(i / sim.world.W))?.n || 'unknown')}`);
     if (sim.power.state !== 'normal') L.push(`<span class="w">Power alarm</span>  main grid ${sim.power.state === 'out' ? 'offline' : 'on emergency cells'}`);
     for (const f of sim.firedoors.list) if (f.closed) L.push(`<span class="w">Fire alarm</span>  firelock sealed, ${esc(sim.world.areaAt(f.c, f.r)?.n || '')}`);
     return { title: 'Station Alerts', live: true, html: `<span class="h">ACTIVE ALARMS</span>\n\n${L.length ? L.slice(0, 24).join('\n') : '<span class="c">All systems nominal.</span>'}`, buttons: [] };
@@ -226,7 +226,7 @@ export class Terminals {
 
   status() {
     const sim = this.sim, d = sim.director;
-    return { title: 'Status Display', live: true, html: `<span class="h">STATION STATUS</span>\n\nShuttle   ${d.evacState === 'idle' ? 'no active order' : d.evacState === 'called' ? 'ETA ' + Math.ceil(d.evacTimer) + ' s' : d.evacState === 'docked' ? 'docked ' + Math.ceil(d.evacTimer) + ' s' : 'departed'}\nGrid      ${sim.power.state}\nBreaches  ${sim.world.breached.size}\nAlert     ${d.level}`, buttons: [] };
+    return { title: 'Status Display', live: true, html: `<span class="h">STATION STATUS</span>\n\nShuttle   ${d.evacState === 'idle' ? 'no active order' : d.evacState === 'called' ? 'ETA ' + Math.ceil(d.evacTimer) + ' s' : d.evacState === 'docked' ? 'docked ' + Math.ceil(d.evacTimer) + ' s' : 'departed'}\nGrid      ${sim.power.state}\nBreaches  ${sim.world.ventTiles().length}\nAlert     ${d.level}`, buttons: [] };
   }
 
   atmosMap() {

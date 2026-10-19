@@ -2,6 +2,7 @@ import { TILE, KIND } from '../shared/config.js';
 import { World } from '../shared/world.js';
 import { DoorCore } from '../shared/door.js';
 import { buildPropData } from '../shared/propdata.js';
+import { setClosetState } from '../shared/closets.js';
 
 /**
  * The client's copy of the world: the same tile grid, doors and prop tables the server has (built from the
@@ -46,6 +47,7 @@ export class Replica {
     w.areaLights.forEach((v, i) => { this.power.areaLights[i] = v; });
     for (const ev of w.tiles) this.setTile(ev);
     for (const [c, r, d] of w.panes) this.killPane(c, r, d);
+    for (const [i, cs, g] of w.closets || []) this.setCloset(i, cs, !!g);
     if (w.evac) this.applyEvac(true);
     w.doors.forEach((st, i) => { if (st !== 'closed') this.doors[i]?.setState(st); });
     w.fdoors.forEach((c, i) => { if (c && this.fdoors[i]) this.setFdoor(this.fdoors[i], true); });
@@ -57,7 +59,12 @@ export class Replica {
     const w = this.world, i = ev.i;
     w.kind[i] = ev.kind; w.wallVar[i] = ev.wall; w.glass[i] = ev.glass; w.solid[i] = ev.solid; w.airBlock[i] = ev.air;
     w.floorCell[i] = ev.floor; w.roof[i] = ev.roof; w.areaIdx[i] = ev.area;
-    if (ev.kind === KIND.SPACE) w.breached.add(i); else w.breached.delete(i);
+    if (ev.brk) w.breached.add(i); else w.breached.delete(i);
+  }
+
+  setCloset(i, cs, gone) {
+    const it = this.props.interact[i];
+    if (it?.kind === 'closet') setClosetState(this.world, it, cs, gone);
   }
 
   killPane(c, r, d) {
@@ -114,6 +121,7 @@ export class Replica {
       case 'door': this.doors[ev.i]?.setState(ev.st); break;
       case 'fdoor': { const f = this.fdoors[ev.i]; if (f) this.setFdoor(f, !!ev.c); break; }
       case 'tile': this.setTile(ev); break;
+      case 'cl': this.setCloset(ev.i, ev.cs, !!ev.g); break;
       case 'pane': this.killPane(ev.c, ev.r, ev.d); break;
       case 'item+': this.items.set(ev.id, { id: ev.id, s: ev.s, n: ev.n, x: ev.x, y: ev.y, z: ev.z }); break;
       case 'item-': this.lastRemoved = this.items.get(ev.id) || null; this.items.delete(ev.id); break;

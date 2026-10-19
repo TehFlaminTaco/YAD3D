@@ -100,7 +100,7 @@ export class DragDrop {
     const g = this.game, inv = g.self.inv;
     const held = inv.hands[inv.active];
     const send = (m) => g.send({ t: 'inv', ...m });
-    if (p.kind === 'world') { g.clickWorld(p.target, g.rayAt(e.clientX, e.clientY).d); return; }
+    if (p.kind === 'world') { g.clickWorld(p.target, g.rayAt(e.clientX, e.clientY).d, e.altKey); return; }
     const el = p.el;
     const it = p.id ? g.invIndex.get(p.id)?.it : null;
     const toggle = (id) => send({ op: inv.open.includes(id) ? 'close' : 'open', item: id });

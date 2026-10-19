@@ -83,14 +83,24 @@ export class ChatSys {
   }
 
   /** What a mob can see someone do (combat messages etc.). */
-  visible(origin, text, kind = 'notice', range = 14) {
+  visible(origin, text, kind = 'notice', range = 14, except = null) {
     const sim = this.sim;
     for (const c of sim.clients.values()) {
       const lm = c.mob;
       if (c.state === 'ghost') { c.outbox.push({ e: 'msg', k: kind, text }); continue; }
-      if (!lm || lm.dead) continue;
+      if (!lm || lm.dead || lm === except) continue;
       if ((lm.x - origin.x) ** 2 + (lm.z - origin.z) ** 2 > range * range) continue;
       if (lm !== origin && !sim.world.los(origin.x, origin.z, lm.x, lm.z)) continue;
+      c.outbox.push({ e: 'msg', k: kind, text });
+    }
+  }
+
+  /** What you hear without seeing it ("You hear welding."): everyone in earshot except `except`, line of sight or not. */
+  heard(origin, text, kind = 'notice', range = 10, except = null) {
+    for (const c of this.sim.clients.values()) {
+      const lm = c.mob;
+      if (!lm || lm.dead || lm === except || c.state === 'ghost') continue;
+      if ((lm.x - origin.x) ** 2 + (lm.z - origin.z) ** 2 > range * range) continue;
       c.outbox.push({ e: 'msg', k: kind, text });
     }
   }

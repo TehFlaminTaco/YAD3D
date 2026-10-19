@@ -6,5 +6,5 @@ import { makeRects } from '../shared/leveldata.js';
 export function loadSimData(root) {
   const rd = (p) => JSON.parse(fs.readFileSync(path.join(root, p), 'utf8'));
   const level = rd('assets/level.json');
-  return { level, rects: makeRects(rd('assets/sprites.json')), jobsJson: rd('data/jobs.json'), contents: rd('data/contents.json') };
+  return { level, rects: makeRects(rd('assets/sprites.json')), jobsJson: rd('data/jobs.json'), contents: rd('data/contents.json'), closets: rd('data/closets.json') };
 }

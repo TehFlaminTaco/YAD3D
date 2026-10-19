@@ -28,6 +28,7 @@ class Acc {
 }
 
 const UV_FULL = [[0, 0], [1, 0], [1, 1], [0, 1]];
+const GRILLE_INSET = 0.08;                  // metres behind the glass face, so the two never fight for the same pixels
 
 /** Vertical quad on tile (c, r), `off` metres from the tile centre along normal direction d. */
 function face(acc, c, r, d, off, layer, mul, y0 = 0, y1 = WALL_H, inset = 0) {
@@ -98,17 +99,10 @@ export class LevelMesh {
       for (let c = c0; c < c1; c++) {
         const i = r * W + c;
         const k = world.kind[i];
-        const x0 = c * TILE, z0 = r * TILE, x1 = x0 + TILE, z1 = z0 + TILE;
         if (k === KIND.FLOOR || k === KIND.LATTICE) {
-          const cell = world.floorCell[i];
-          if (cell !== 0xffff) {
-            ao.quad([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]], UV_FULL, cell,
-              [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], 1);
-          }
-          if (k === KIND.FLOOR && world.roof[i]) {
-            ao.quad([[x0, WALL_H, z0], [x1, WALL_H, z0], [x1, WALL_H, z1], [x0, WALL_H, z1]], UV_FULL, lvl.ceiling,
-              [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], 0.72);
-          }
+          this.floorQuad(ao, c, r, world.floorCell[i]);
+          if (k === KIND.FLOOR && world.roof[i]) this.ceilingQuad(ao, c, r, lvl.ceiling);
+          if (world.breached.has(i)) this.grillePanels(ao, c, r, world.variants[world.wallVar[i]]);   // the window is gone, the grille is not
           const tb = this.tableAt.get(i);
           if (tb) this.tableBox(ao, this.tableAt, tb, c, r);
         } else if (k === KIND.WALL) {
@@ -140,6 +134,30 @@ export class LevelMesh {
       }
     }
     for (const k of keys) this.buildChunk(k % 1000, Math.floor(k / 1000));
+  }
+
+  floorQuad(acc, c, r, cell) {
+    if (cell === 0xffff) return;
+    const x0 = c * TILE, z0 = r * TILE, x1 = x0 + TILE, z1 = z0 + TILE;
+    acc.quad([[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]], UV_FULL, cell,
+      [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], 1);
+  }
+
+  ceilingQuad(acc, c, r, layer) {
+    const x0 = c * TILE, z0 = r * TILE, x1 = x0 + TILE, z1 = z0 + TILE;
+    acc.quad([[x0, WALL_H, z0], [x1, WALL_H, z0], [x1, WALL_H, z1], [x0, WALL_H, z1]], UV_FULL, layer,
+      [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], 0.72);
+  }
+
+  /** A window's grille: a see-through panel just inside each side the glass would face (or did, once it is smashed). */
+  grillePanels(acc, c, r, variant) {
+    if (variant?.gr === undefined) return;
+    const { world } = this;
+    for (const d of [1, 2, 4, 8]) {
+      const [dc, dr] = DV[d];
+      if (!world.inb(c + dc, r + dr) || world.kind[(r + dr) * world.W + c + dc] === KIND.WALL) continue;
+      face(acc, c, r, d, TILE / 2 - GRILLE_INSET, variant.gr, 0.9);
+    }
   }
 
   tableBox(acc, tableAt, tb, c, r) {
@@ -176,8 +194,8 @@ export class LevelMesh {
       const nc = c + dc, nr = r + dr;
       if (!world.inb(nc, nr)) continue;
       const nk = world.kind[nr * world.W + nc];
-      if (nk === KIND.SPACE) continue;
       if (glass) { if (nk !== KIND.WALL) open.push(d); }
+      else if (nk === KIND.SPACE) continue;
       else if (nk !== KIND.WALL || world.glass[nr * world.W + nc]) open.push(d);
     }
     const conn = (cc, rr) => (glass ? world.kind[rr * world.W + cc] === KIND.WALL && world.inb(cc, rr)
@@ -189,11 +207,11 @@ export class LevelMesh {
       return variant.cells[L | R];
     };
     if (glass) {
-      const ns = open.includes(1) && open.includes(2) && !open.includes(4) && !open.includes(8);
-      const ew = open.includes(4) && open.includes(8) && !open.includes(1) && !open.includes(2);
-      if (ns) face(ag, c, r, 2, 0, cellFor(2), 0.9);
-      else if (ew) face(ag, c, r, 4, 0, cellFor(4), 0.9);
-      else for (const d of open) face(ag, c, r, d, TILE / 2, cellFor(d), 0.9);
+      // a glass block is a full tile: the real floor (and ceiling) shows through it, not space
+      this.floorQuad(ao, c, r, world.floorCell[i]);
+      if (world.roof[i]) this.ceilingQuad(ao, c, r, this.assets.level.terrain.ceiling);
+      for (const d of open) face(ag, c, r, d, TILE / 2, cellFor(d), 0.9);
+      this.grillePanels(ao, c, r, variant);
     } else {
       for (const d of open) face(ao, c, r, d, TILE / 2, cellFor(d), d === 1 || d === 2 ? 0.92 : 0.8);
     }

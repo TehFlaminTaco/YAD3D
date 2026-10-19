@@ -22,9 +22,9 @@ async function fetchJSON(url) {
  */
 export async function loadAssets(progress = () => {}, { withSim = false } = {}) {
   progress('level data');
-  const [level, sprJson, jobsJson, contents] = await Promise.all([
+  const [level, sprJson, jobsJson, contents, closets] = await Promise.all([
     fetchJSON('assets/level.json'), fetchJSON('assets/sprites.json'),
-    withSim ? fetchJSON('data/jobs.json') : null, withSim ? fetchJSON('data/contents.json') : null,
+    withSim ? fetchJSON('data/jobs.json') : null, withSim ? fetchJSON('data/contents.json') : null, withSim ? fetchJSON('data/closets.json') : null,
   ]);
   const decoded = decodeLevel(level);
   progress('textures');
@@ -65,5 +65,5 @@ export async function loadAssets(progress = () => {}, { withSim = false } = {}) 
   spriteTex.needsUpdate = true;
 
   progress('done');
-  return { ...decoded, terrainTex, spriteTex, spriteImg, rects: makeRects(sprJson), atlas: { w: sprJson.w, h: sprJson.h }, jobsJson, contents };
+  return { ...decoded, terrainTex, spriteTex, spriteImg, rects: makeRects(sprJson), atlas: { w: sprJson.w, h: sprJson.h }, jobsJson, contents, closets };
 }

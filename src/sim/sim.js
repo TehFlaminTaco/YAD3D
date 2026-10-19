@@ -17,6 +17,7 @@ import { Round } from './round.js';
 import { Director } from './director.js';
 import { Terminals } from './terminals.js';
 import { Actions } from './actions.js';
+import { Closets } from './closets.js';
 import { AI } from './ai.js';
 import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, rootMob } from './inventory.js';
 
@@ -92,6 +93,7 @@ export class Sim {
       const item = this.newItem(it.path || '/obj/item', { name: it.name, sprite: it.sprite });
       place(this, item, it.x, it.z, it.y);
     }
+    this.closets = new Closets(this, data.closets);       // after the floor items: closed closets swallow what lies on them
   }
 
   // ------------------------------------------------------------------ ids / items
@@ -151,7 +153,7 @@ export class Sim {
       areaOn: [...this.power.areaOn], areaLights: [...this.power.areaLights],
       doors: this.doors.map((d) => d.state), fdoors: this.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       items: [...this.floor.values()].map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z]),
-      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied,
+      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(),
       jobs: this.jobs.list.map((j) => ({ id: j.id, title: j.title, color: j.color, supervisors: j.supervisors, slots: this.jobs.slots(j), total: j.id === 'assistant' ? 99 : j.total })),
     };
   }
@@ -198,6 +200,7 @@ export class Sim {
         c.budget -= d;
         m.yaw = inp.yaw; m.pitch = clamp(inp.pitch || 0, -1.5, 1.5);
         m.input = inp;
+        if (m.inside) { m.vx = m.vz = 0; if (inp.f || inp.b || inp.l || inp.r) this.closets.relaymove(m); continue; }
         if (m.dead || m.stunned > 0 || m.body.crit) { m.vx = m.vz = 0; continue; }
         const run = inp.run && !(m.body.health < 30);
         const wind = this.atmos.windAt(m.x, m.z);
@@ -309,32 +312,36 @@ export class Sim {
   // ------------------------------------------------------------------ hull & world changes
   tileEvent(i, extra = {}) {
     const w = this.world;
-    return { e: 'tile', i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], ...extra };
+    return { e: 'tile', i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], brk: w.breached.has(i) ? 1 : 0, ...extra };
   }
 
+  /** A window shatters. Only one that touches space is a hull breach (loud, everything flickers). */
   breachTile(c, r, cause) {
     const w = this.world;
     const i = r * w.W + c;
     w.setBreach(c, r);
-    this.atmos.onBreach(c, r);
+    this.atmos.tileChanged(c, r);
     const ev = this.tileEvent(i);
     this.tileLog.push(ev); this.emit(ev);
     const x = c * TILE + 1, z = r * TILE + 1;
     this.sound('glass_break', x, z, 1);
     if (cause === 'meteor') { this.sound('meteor', x, z, 1); this.sound('explosion', x, z, 0.8); this.sound('wind', x, z, 0.9); }
-    this.shake(x, z, 0.6, 40);
-    this.flicker(0.9);
+    if (w.ventsToSpace(i)) {
+      this.shake(x, z, 0.6, 40);
+      this.flicker(0.9);
+    } else this.shake(x, z, 0.25, 12);
   }
 
   patchBreach(c, r) {
     const w = this.world;
     const i = r * w.W + c;
+    const venting = w.ventsToSpace(i);
     w.setPatched(c, r);
-    this.atmos.rescanSinks(c, r);
+    this.atmos.tileChanged(c, r);
     const ev = this.tileEvent(i);
     this.tileLog.push(ev); this.emit(ev);
     this.sound('welder', c * TILE + 1, r * TILE + 1, 0.8);
-    this.director.onPatched();
+    this.director.onPatched(venting);
   }
 
   /** Damage a window (tile) or a thin pane; shatters when hit points run out. `hit` is a world.hit record. */
@@ -464,7 +471,7 @@ export class Sim {
       const list = [];
       const seen = new Set();
       for (const m of mobsArr) {
-        if (m.evacuated) continue;
+        if (m.evacuated || (m.inside && m !== c.mob)) continue;       // nobody sees someone shut in a locker
         const dx = m.x - px, dz = m.z - pz;
         if (dx * dx + dz * dz > INTEREST * INTEREST && m !== c.mob) continue;
         seen.add(m.id);
@@ -498,7 +505,7 @@ export class Sim {
     return {
       inv: m.humanoid ? serializeInv(m) : null,
       hp: [Math.round(b.health), b.max, Math.round(b.brute), Math.round(b.burn), Math.round(b.tox), Math.round(b.oxy)],
-      crit: b.crit, dead: b.dead, stunned: m.stunned > 0,
+      crit: b.crit, dead: b.dead, stunned: m.stunned > 0, inside: m.inside ? m.inside.name : null,
       job: m.job, name: m.name, access: [...m.access],
       suit: spaceSafe(m), slow: moveSlow(m),
     };

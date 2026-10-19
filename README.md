@@ -22,7 +22,10 @@ It plays like a round of SS13: lobby, job slots, a crew of other people, things 
   people say also floats over their heads for a few seconds. The dead talk to the dead.
 * **Systems.** Atmospherics with real partial pressures and decompression, APC power with emergency cells and a blackout, fire
   alarms and firelocks, access-controlled airlocks (crowbars work on dead ones), meteors that blow holes in the hull, space carp,
-  welding breaches shut, escape pods and the emergency shuttle, console programs (APC, air alarm, crew monitor, power monitor,
+  closets, lockers and crates that really open, close, lock (ID access, Alt+click), weld shut, hold what the DM says they
+  hold, and shut people in (they break out in two minutes),
+  smashed windows (they open up to whatever is behind them: only a window that touches space vents the room, and the grille
+  stays standing), welding breaches shut, escape pods and the emergency shuttle, console programs (APC, air alarm, crew monitor, power monitor,
   comms, ...).
 
 ## Playing
@@ -112,7 +115,8 @@ The same list is in the game under `F1`.
 | `Tab` | Your PDA: time, location, air, map |
 | `V` | Internals (mask and air tank) |
 | `F` | Flashlight |
-| `B` | Stop what you are doing |
+| `B` | Stop what you are doing; shut in a locker, push the door (breaks out of a locked or welded one in two minutes) |
+| `Alt`+click | Lock or unlock a closed locker you have the access for, without opening it |
 | `T` `Y` `M` `O` | Say (`;` common radio, `:h` department, `:e :m :s :n :u :v :c` other channels) / whisper / emote / OOC |
 | `F1`, `F2` | This list, mute |
 | `Esc` | Close the top window (in look mode: free the mouse) |
@@ -173,8 +177,9 @@ writes `assets/ui.png`, `assets/ui.json` and `assets/overlays/` from the HUD ico
 ### Tests
 
 ```sh
-npm run test:sim      # 51 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, chat,
+npm run test:sim      # 86 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, chat,
                       #   consoles, drag and drop, death and ghosts)
+npm run test:level    # level mesh geometry (no browser): window tiles are full glass blocks with their real floor under them
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, body panel, bags,

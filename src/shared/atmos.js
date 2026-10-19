@@ -7,8 +7,8 @@ const TICK = 0.22;
 
 /**
  * Gas simulation on the tile grid: o2/n2/tox partial pressures (kPa) diffuse between open neighbouring
- * tiles; space tiles are sinks. Closed doors / walls / glass panes block flow; breaches and open external
- * airlocks vent the station. Vents (powered) slowly top rooms up toward a breathable mixture.
+ * tiles; space tiles are sinks. Closed doors / walls / glass panes block flow; a smashed window lets air through
+ * and vents the station only if it touches space, and so do open external airlocks. Vents (powered) slowly top rooms up toward a breathable mixture.
  */
 export class Atmos {
   constructor(world, power) {
@@ -48,7 +48,7 @@ export class Atmos {
         if (fillNew && fillNew.has(i)) { this.o2[i] = STD_O2; this.n2[i] = STD_N2; this.tox[i] = 0; }
         if (c + 1 < W && this.isCell[i + 1]) pairs.push(i, i + 1, E);
         if (r + 1 < H && this.isCell[i + W]) pairs.push(i, i + W, S);
-        if (indoor && (c & 3) === 1 && (r & 3) === 1) vents.push(i);
+        if (indoor && (c & 3) === 1 && (r & 3) === 1 && !world.breached.has(i)) vents.push(i);
       }
     }
     this.pairs = Int32Array.from(pairs);
@@ -64,8 +64,9 @@ export class Atmos {
     for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nc = c + dc, nr = r + dr;
       if (!world.inb(nc, nr)) continue;
-      const k = world.kind[nr * world.W + nc];
-      if (k === KIND.SPACE || k === KIND.LATTICE) { this.sinkCells.add(i); return; }
+      const j = nr * world.W + nc;
+      const k = world.kind[j];
+      if (k === KIND.SPACE || k === KIND.LATTICE || (world.breached.has(j) && world.ventsToSpace(j))) { this.sinkCells.add(i); return; }
     }
   }
 
@@ -77,24 +78,11 @@ export class Atmos {
   toxAt(c, r) { return this.tox[r * this.world.W + c]; }
   pressureWorld(x, z) { return this.pressureAt(Math.floor(x / TILE), Math.floor(z / TILE)); }
 
-  /** Tile opened to space: register sinks on its neighbours. */
-  onBreach(c, r) {
-    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const nc = c + dc, nr = r + dr;
-      if (this.world.inb(nc, nr) && this.isCell[nr * this.world.W + nc]) this.sinkCells.add(nr * this.world.W + nc);
-    }
-  }
-
-  /** Re-derive sinks after a patch. */
-  rescanSinks(c, r) {
-    const { world } = this;
-    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
-      const nc = c + dc, nr = r + dr;
-      if (!world.inb(nc, nr)) continue;
-      const i = nr * world.W + nc;
-      this.sinkCells.delete(i);
-      if (this.isCell[i]) this.scanSinks(nc, nr);
-    }
+  /** A window was smashed or a breach welded shut: tile (c, r) joins or leaves the gas grid. */
+  tileChanged(c, r) {
+    const i = r * this.world.W + c;
+    this.o2[i] = this.n2[i] = this.tox[i] = 0;
+    this.buildTopology(false);
   }
 
   /** Pressure-driven push (m/s) felt at a world position. */

@@ -28,7 +28,7 @@ export class World {
     this.hit = null;                         // what the last raycast stopped at
 
     this.hp = new Map();                     // destructible tile -> hit points
-    this.breached = new Set();               // tiles opened to space during play
+    this.breached = new Set();               // windows smashed during play (open frames; see ventsToSpace)
     this.patchVariant = Math.max(0, this.variants.findIndex((v) => !v.glass && /reinforced/.test(v.name)));
     if (this.patchVariant < 0) this.patchVariant = 0;
 
@@ -50,15 +50,33 @@ export class World {
     }
   }
 
-  /** Open a hull tile to space (window shattered / wall blown out). */
+  /**
+   * A window shatters. The tile turns into open floor (the floor that was under the window) with the frame still in
+   * the way, so air passes but people do not. It only vents to space if it touches space (`ventsToSpace`).
+   */
   setBreach(c, r) {
     const i = r * this.W + c;
-    this.kind[i] = KIND.SPACE;
+    this.kind[i] = KIND.FLOOR;
     this.glass[i] = 0;
     this.solid[i] = 1;
     this.airBlock[i] = 0;
     this.hp.delete(i);
     this.breached.add(i);
+  }
+
+  /** True if tile `i` touches space (or lattice over space) directly: air leaves through it. */
+  ventsToSpace(i) {
+    const c = i % this.W, r = (i - c) / this.W;
+    for (const d of [N, S, E, W]) {
+      const k = this.kindAt(c + DV[d][0], r + DV[d][1]);
+      if (k === KIND.SPACE || k === KIND.LATTICE) return true;
+    }
+    return false;
+  }
+
+  /** Broken windows that let air out into space (the hull breaches). */
+  ventTiles() {
+    return [...this.breached].filter((i) => this.ventsToSpace(i));
   }
 
   /** Weld a breach shut with a reinforced plate. */

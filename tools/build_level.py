@@ -29,6 +29,7 @@ import dmm  # noqa: E402
 import spritelib as sl  # noqa: E402
 from dmcode import DmCode  # noqa: E402
 from build_mobs import build_mobs  # noqa: E402
+import closets  # noqa: E402
 
 ROOT = os.path.normpath(os.path.join(HERE, '..'))
 TREE = os.environ.get('YAD_TREE', os.path.join(ROOT, '_src', 'tg2020'))
@@ -43,6 +44,17 @@ N, S, E, W = 1, 2, 4, 8
 OPP = {N: S, S: N, E: W, W: E}
 DVEC = {N: (0, 1), S: (0, -1), E: (1, 0), W: (-1, 0)}      # in DMM coordinates (y up)
 BAD_ICON_DIRS = ('goon/',)                                    # CC BY-NC-SA, not usable
+GRILLE = ('icons/obj/structures.dmi', 'grille', S, None, None)   # a weave; stands in a window tile as a see-through panel
+
+_POP = []
+
+
+def populate():
+    """The closets' PopulateContents(), read once from the DM source."""
+    if not _POP:
+        _POP.append(closets.Populate(TREE))
+    return _POP[0]
+
 
 # --------------------------------------------------------------------------- registries
 
@@ -125,7 +137,7 @@ class Sprites:
             px, py = pos[i]
             atlas.paste(im, (px, py))
             r_ = g_ = b_ = n_ = 0
-            for (pr, pg, pb, pa) in im.get_flattened_data():
+            for (pr, pg, pb, pa) in (im.get_flattened_data() if hasattr(im, 'get_flattened_data') else im.getdata()):
                 if pa > 128:
                     r_ += pr
                     g_ += pg
@@ -328,7 +340,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
     floor_c = [0xFFFF] * (Wd * Ht)
     wall_v = [0xFFFF] * (Wd * Ht)
     roof = bytearray(Wd * Ht)
-    wall_variants = shared['wall_variants']     # {name, glass, cells[4]}  index = left|right<<1
+    wall_variants = shared['wall_variants']     # {name, glass, cells[4], gr?}  index = left|right<<1
     wall_variant_idx = shared['wall_variant_idx']
 
     def idx(x, y):  # DMM (x, y-from-bottom) -> row-major with row 0 at the top
@@ -363,9 +375,29 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
         floor_cache[key] = cells.add(sl.compose(layers, (32, 32)))
         return floor_cache[key]
 
-    def block_variant(icon, glass, name):
-        """Wall-like block type: 4 face cells indexed by (left connected) | (right connected) << 1."""
-        key = (icon, glass)
+    def window_of(objs):
+        """(tag, has_grille) for a full-tile window on this tile, else None. A window spawner always brings a grille."""
+        for p, v in objs:
+            if p.startswith('/obj/effect/spawner/structure/window') or '/fulltile' in p:
+                tag = 'pwindow' if 'plasma' in p else ('rwindow' if 'reinforced' in p else 'window')
+                return tag, p.startswith('/obj/effect/spawner/') or any(q == '/obj/structure/grille' for q, _ in objs)
+        return None
+
+    def grille_cell():
+        """The grille sprite as a see-through panel: the dark field between the bars is a gap, not paint."""
+        img = sl.compose([GRILLE], (32, 32))
+        px = img.load()
+        for yy in range(img.height):
+            for xx in range(img.width):
+                r_, g_, b_, a_ = px[xx, yy]
+                if max(r_, g_, b_) < 48:
+                    px[xx, yy] = (0, 0, 0, 0)
+        return cells.add(img)
+
+    def block_variant(icon, glass, name, grille=False):
+        """Wall-like block type: 4 face cells indexed by (left connected) | (right connected) << 1.
+        `gr` (windows with a grille) is the cell of the grille panel that stands just inside each glass face."""
+        key = (icon, glass, grille)
         if key in wall_variant_idx:
             return wall_variant_idx[key]
         face = []
@@ -373,9 +405,54 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
             left, right = bool(lr & 1), bool(lr & 2)
             adj = {'N': False, 'S': False, 'E': right, 'W': left, 'NE': False, 'NW': False, 'SE': False, 'SW': False}
             face.append(cells.add(smooth_image(icon, adj)))
-        wall_variants.append({'name': name, 'glass': glass, 'cells': face})
+        variant = {'name': name, 'glass': glass, 'cells': face}
+        if grille:
+            variant['gr'] = grille_cell()
+        wall_variants.append(variant)
         wall_variant_idx[key] = len(wall_variants) - 1
         return wall_variant_idx[key]
+
+    def closet_prop(p, r, base):
+        icon, st = r.get('icon'), r.get('icon_state')
+        is_crate = p.startswith('/obj/structure/closet/crate')
+        if not (isinstance(st, str) and icon_ok(icon, st)) or (not is_crate and icon != 'icons/obj/closet.dmi'):
+            return None
+        base_state = resolve(p).get('icon_state') if is_crate else st
+        if not (isinstance(base_state, str) and icon_ok(icon, base_state)):
+            return None
+        fr = closets.frames(spr, sl, icon, st, base_state, r, is_crate)
+        if fr[0] < 0 or fr[4] < 0:
+            return None
+        raw = dm.lookup(p)
+        names = re.findall(r'ACCESS_[A-Z_]+', str(raw.get('req_access', '')))
+        one = re.findall(r'ACCESS_[A-Z_]+', str(raw.get('req_one_access', '')))
+        num = lambda ns: sorted({dm.value(dm.defines[n]) for n in ns if n in dm.defines and isinstance(dm.value(dm.defines[n]), int)})
+        acc = access_of(r)
+        d = dict(base, k='closet', fr=fr, p=p.split('/', 2)[2], bb=1)
+        secure = r.get('secure') is True
+        if secure:
+            d['sec'] = 1
+            if r.get('locked') in (True, 1):
+                d['lk'] = 1
+        if 'ACCESS_ALL_PERSONAL_LOCKERS' in names:
+            d['pl'] = 1                                   # personal locker: the first ID swiped owns it
+        a, o = sorted(set(num(names)) | set(acc['a'])), sorted(set(num(one)) | set(acc['o']))
+        if a:
+            d['a'] = a
+        if o:
+            d['o'] = o
+        if is_crate:
+            d['hz'] = 1
+        if r.get('dense_when_open') is True:
+            d['do'] = 1
+        if r.get('can_weld_shut') is False or is_crate:
+            d['nw'] = 1
+        if (is_crate and st == base_state + 'open') or r.get('opened') is True:
+            d['op'] = 1
+        bt = r.get('breakout_time')
+        if isinstance(bt, int) and bt != 1200:
+            d['bt'] = bt // 10
+        return d
 
     # ---- pass 1: tiles --------------------------------------------------------------------
     tile_atoms = {}
@@ -420,13 +497,10 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
     WALL_FALLBACK = 'icons/turf/walls/wall.dmi'
     win_tiles = {}
     for (x, y), (tp, tv, objs, atoms) in tile_atoms.items():
-        i = idx(x, y)
-        for p, v in objs:
-            if p.startswith('/obj/effect/spawner/structure/window') or '/fulltile' in p:
-                tag = 'pwindow' if 'plasma' in p else ('rwindow' if 'reinforced' in p else 'window')
-                win_tiles[(x, y)] = tag
-                kind[i] = 2
-                break
+        wi = window_of(objs)
+        if wi:
+            win_tiles[(x, y)] = wi
+            kind[idx(x, y)] = 2
 
     # lattice cells (smoothing against other lattice tiles)
     for (x, y), (tp, tv, objs, atoms) in tile_atoms.items():
@@ -446,9 +520,9 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
     for (x, y), (tp, tv, objs, atoms) in tile_atoms.items():
         i = idx(x, y)
         if (x, y) in win_tiles:
-            tag = win_tiles[(x, y)]
+            tag, grille = win_tiles[(x, y)]
             icon = WIN_ICON[tag] if icon_ok(WIN_ICON[tag]) else WIN_ICON['rwindow']
-            wall_v[i] = block_variant(icon, True, tag)
+            wall_v[i] = block_variant(icon, True, tag, grille)
             if floor_c[i] == 0xFFFF:
                 floor_c[i] = cells.add(sl.compose([('icons/turf/floors.dmi', 'plating', S, None, None)], (32, 32)))
         elif kind[i] == 2:
@@ -622,6 +696,15 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                     missing[p] += 1
                 continue
 
+            # --- closets, lockers and crates: open/closed/locked/welded sprites, access, and (in data/closets.json) contents
+            if p.startswith('/obj/structure/closet'):
+                cp = closet_prop(p, r, base)
+                if cp:
+                    props.append(cp)
+                    shared.setdefault('closet_types', set()).add(p)
+                    stats['closet'] += 1
+                    continue
+
             # --- standing structures / machinery (computers get keyboard + screen overlays)
             if p.startswith(('/obj/structure', '/obj/machinery')):
                 icon, st = r.get('icon'), r.get('icon_state')
@@ -671,6 +754,17 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                     want += [c[0] for c in v]
                 elif isinstance(v, str):
                     want.append(v)
+    pop = populate()
+
+    def flat_rows(rows):
+        for row in rows:
+            if isinstance(row, dict):
+                for _, sub in row['pick']:
+                    yield from flat_rows(sub)
+            else:
+                yield row
+    for ct in sorted(shared.get('closet_types', ())):
+        want += [row[0] for row in flat_rows(pop.rows(ct))]
     cpath = os.path.join(ROOT, 'data', 'contents.json')
     if os.path.exists(cpath):
         for k, v in json.load(open(cpath)).items():
@@ -716,7 +810,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
     for pr in props:
         pth = pr.get('p')
         if pth and pth not in descs:
-            full = pth if pth.startswith('/') else '/' + pth
+            full = pth if pth.startswith('/') else '/obj/' + pth      # prop paths are stored without the leading /obj/
             r = resolve(full)
             dsc = r.get('desc')
             descs[pth] = [clean_name(r.get('name', '')), dsc if isinstance(dsc, str) else '']
@@ -885,6 +979,21 @@ def build(mapname):
         'areas': areas, 'walls': wall_variants, 'props': base['props'], 'spawns': base['spawns'], 'pool': base['pool'],
         'itemdefs': base['itemdefs'], 'mobs': base['mobs'], 'descs': descs, 'evac': overlay,
     }
+    # what each closet type holds (sim only): rows [item, count, chance %, stack amount] or {'pick': [[weight, rows]]}
+    defs, pop = base['itemdefs'], populate()
+
+    def prune(rows):
+        out = []
+        for row in rows:
+            if isinstance(row, dict):
+                out.append({'pick': [[w, prune(sub)] for w, sub in row['pick']]})
+            elif row[0] in defs:
+                out.append(row)
+        return out
+    closet_data = {ct: prune(pop.rows(ct)) for ct in sorted(shared.get('closet_types', ()))}
+    with open(os.path.join(ROOT, 'data', 'closets.json'), 'w') as f:
+        json.dump({'_comment': 'Built by tools/build_level.py from the DM PopulateContents() of each closet type on the map.', **closet_data}, f, separators=(',', ':'))
+    print('  closets: %d types, %d with contents' % (len(closet_data), sum(1 for v in closet_data.values() if v)))
     with open(os.path.join(OUT, 'level.json'), 'w') as f:
         json.dump(level, f, separators=(',', ':'))
     print('  wrote', os.path.getsize(os.path.join(OUT, 'level.json')) // 1024, 'KB level,',

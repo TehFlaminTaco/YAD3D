@@ -1,6 +1,7 @@
 """Compose SS13 mob sprites (crew by job, carp, pets) from the real layered DMI art."""
 import glob
 import os
+import zlib
 
 from PIL import Image
 
@@ -146,7 +147,7 @@ def build_mobs(spr):
 
     for job in OUTFITS:
         for v in range(3):
-            imgs = compose_human(job, v + (hash(job) % 3))
+            imgs = compose_human(job, v + (zlib.crc32(job.encode()) % 3))
             reg('%s_%d' % (job, v), [[im] for im in imgs], lying(imgs[0]))
 
     # space carp (3 walk frames per direction)

@@ -3,6 +3,7 @@ import { TILE, WALL_H, PX, KIND } from '../shared/config.js';
 import { ITEM_SCALE } from '../shared/propdata.js';
 import { lightMode } from '../shared/power.js';
 import { rng } from '../shared/util.js';
+import { closetSprite } from '../shared/closets.js';
 import { LevelMesh } from '../render/level.js';
 import { LightField } from '../render/lighting.js';
 import { SpriteBatch } from '../render/sprites.js';
@@ -33,6 +34,7 @@ export class WorldView {
     this.levelMesh = new LevelMesh(world, assets, { tables: props.tables, panes: props.panes });
     scene.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh);
     this.addStatics(props.statics);
+    for (const it of props.closets) this.setClosetView(it);     // the welcome may have told us some are open
 
     this.doorViews = [];
     for (const d of rep.doors) this.addDoorView(d);
@@ -74,6 +76,14 @@ export class WorldView {
       s.id = this.stat.add({ x: s.x, y: s.y, z: s.z, mode: s.mode, w: s.w, h: s.h, ox: s.ox, oy: s.oy, yaw: s.yaw, rect: rc, emit: s.emit });
       if (s.lit) this.lit.push({ batch: this.stat, id: s.id, sx: s.lit[0], sz: s.lit[1] });
     }
+  }
+
+  /** Show a closet as its state says: closed, locked, welded or open (or gone). */
+  setClosetView(it) {
+    const rc = this.rects[closetSprite(it)];
+    if (!it.st || !rc) return;
+    this.stat.setRect(it.st.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, 0);
+    this.stat.setAlpha(it.st.id, it.gone ? 0 : 1);
   }
 
   // ------------------------------------------------------------------ doors

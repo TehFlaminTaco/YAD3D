@@ -26,7 +26,7 @@ export class Input {
     canvas.addEventListener('mousedown', (e) => {
       if (!this.locked) return;
       this.buttons.add(e.button);
-      this.clicks.push(e.button);
+      this.clicks.push(e.altKey ? 10 + e.button : e.button);       // 10+ is Alt-click
       e.preventDefault();
     });
     addEventListener('mouseup', (e) => this.buttons.delete(e.button));

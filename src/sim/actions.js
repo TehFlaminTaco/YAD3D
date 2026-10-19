@@ -58,7 +58,7 @@ export class Actions {
       case 'intent': m.intent = INTENTS[clamp(msg.v | 0, 0, 3)]; m.dirty = true; break;
       case 'internals': this.toggleInternals(m); break;
       case 'light': this.toggleLight(m); break;
-      case 'resist': if (m.busy) this.cancelBusy(m, 'stop'); break;
+      case 'resist': if (m.inside) sim.closets.resist(m, m.inside); else if (m.busy) this.cancelBusy(m, 'stop'); break;
       default: break;
     }
     c.selfJson = '';
@@ -142,7 +142,7 @@ export class Actions {
 
   click(c, msg) {
     const sim = this.sim, m = c.mob;
-    if (!m || m.dead || m.body.crit || m.stunned > 0 || !m.humanoid) return;
+    if (!m || m.dead || m.body.crit || m.stunned > 0 || !m.humanoid || m.inside) return;
     if (msg.yaw !== undefined) { m.yaw = msg.yaw; m.pitch = clamp(msg.pitch || 0, -1.5, 1.5); }
     if (m.busy) { this.cancelBusy(m, 'interrupt'); return; }
     if (m.cool > 0) return;
@@ -157,7 +157,7 @@ export class Actions {
       case 'item': return this.clickItem(m, t.rec, held);
       case 'door': return this.clickDoor(m, t.idx, held);
       case 'fdoor': sim.firedoors.manualOpen(t.f, m); return;
-      case 'prop': return this.clickProp(c, m, t.it, held);
+      case 'prop': return this.clickProp(c, m, t.it, held, !!msg.alt);
       case 'mob': return this.clickMob(m, t.o, held);
       case 'breach': return this.clickBreach(m, t, held);
       default: return;
@@ -220,9 +220,10 @@ export class Actions {
     }, 'welder');
   }
 
-  clickProp(c, m, it, held) {
+  clickProp(c, m, it, held, alt = false) {
     const sim = this.sim;
     const area = sim.world.areaIdx[it.r * sim.world.W + it.c];
+    if (it.kind === 'closet') return sim.closets.click(c, m, it, held, alt);
     if (it.kind === 'container') return this.openContainer(m, it);
     if (it.kind === 'wm') {
       switch (it.sub) {
@@ -501,15 +502,30 @@ export class Actions {
   }
 
   // ------------------------------------------------------------------ timed actions
-  startTimed(m, label, dur, valid, done, sfx) {
+  /**
+   * A timed action (SS13 do_after): `valid()` is checked every tick, `done()` runs when `dur` seconds are up.
+   * opts.start / opts.stop replace the "You start ..." / "You stop ..." messages (null: say nothing; stop may be a function).
+   */
+  startTimed(m, label, dur, valid, done, sfx, opts = {}) {
     if (m.busy) return;
-    m.busy = { label, dur, t: 0, valid, done, sfx, snd: 0, prog: 0 };
-    this.sim.tell(m, 'notice', `You start ${label}...`);
+    m.busy = { label, dur, t: 0, valid, done, sfx, snd: 0, prog: 0, opts };
+    if (opts.start !== null) this.sim.tell(m, 'notice', opts.start ?? `You start ${label}...`);
+  }
+
+  /** SS13 tool_use_check for a welding tool: it has to be lit, and have `amount` fuel. */
+  welderReady(m, tool, amount = 0) {
+    if (!tool.lit || tool.fuel <= 0) { this.sim.tell(m, 'warning', `The ${tool.name} has to be on to complete this task!`); return false; }
+    if (tool.fuel < amount) { this.sim.tell(m, 'warning', 'You need more welding fuel to complete this task!'); return false; }
+    return true;
   }
 
   cancelBusy(m, why) {
     if (!m.busy) return;
-    if (why !== 'done') this.sim.tell(m, 'warning', `You stop ${m.busy.label}.`);
+    if (why !== 'done') {
+      const o = m.busy.opts || {};
+      const msg = o.stop === undefined ? `You stop ${m.busy.label}.` : (typeof o.stop === 'function' ? o.stop() : o.stop);
+      if (msg) this.sim.tell(m, 'warning', msg);
+    }
     m.busy = null;
     if (m.client) m.client.outbox.push({ e: 'prog', f: -1 });
   }
@@ -654,7 +670,7 @@ export class Actions {
     } else if (t.k === 'prop') {
       const it = sim.props.interact[t.idx];
       if (it) lines.push(...this.propText(it));
-    } else if (t.k === 'breach') lines.push('A hole in the hull. The air is rushing out into space.');
+    } else if (t.k === 'breach') lines.push(sim.world.ventsToSpace(t.r * sim.world.W + t.c) ? 'A hole in the hull. The air is rushing out into space.' : 'The window has been smashed out.');
     if (m && lines.length) sim.tellClient(c, 'info', lines.join(' '));
   }
 
@@ -693,6 +709,8 @@ export class Actions {
 
   propText(it) {
     const d = this.sim.level.descs[it.path] || this.sim.level.descs[(it.path || '').replace(/^\//, '')];
-    return [`This is ${a(it.name || 'thing')}.`, d?.[1] || ''];
+    const out = [`This is ${a(it.name || 'thing')}.`, d?.[1] || ''];
+    if (it.kind === 'closet') out.push(...this.sim.closets.examineLines(it));
+    return out.filter(Boolean);
   }
 }

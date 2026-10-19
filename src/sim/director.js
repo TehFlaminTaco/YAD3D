@@ -97,13 +97,13 @@ export class Director {
     if (this.strikes < STRIKE_TIMES.length && !this.pending && t > STRIKE_TIMES[this.strikes] - 18) this.scheduleStrike();
     if (this.pending && t >= this.pending.at) this.doStrike();
 
-    if (sim.world.breached.size > 0) {
+    const holes = sim.world.ventTiles();
+    if (holes.length > 0) {
       this.carpTimer -= dt;
       const alive = [...sim.mobs.values()].filter((m) => m.kind === 'carp' && !m.dead).length;
       if (this.carpTimer <= 0 && alive < 5) {
         this.carpTimer = 38 + this.rand() * 20;
-        const tiles = [...sim.world.breached];
-        const i = tiles[Math.floor(this.rand() * tiles.length)];
+        const i = holes[Math.floor(this.rand() * holes.length)];
         const w = sim.world;
         const c = i % w.W, r = Math.floor(i / w.W);
         let sx = c * TILE + 1, sz = r * TILE + 1;
@@ -186,8 +186,9 @@ export class Director {
     if (m.kind === 'carp') this.stats.carpKilled++;
   }
 
-  onPatched() {
+  onPatched(venting = true) {
     this.stats.patched++;
+    if (!venting) return;
     this.autoRadio('engineering', 'Hull breach sealed.');
     this.news.push('Atmospherics: a breach was patched.');
   }
@@ -201,7 +202,7 @@ export class Director {
   canCallShuttle() {
     const sim = this.sim;
     if (this.evacState !== 'idle') return { ok: false, why: 'An emergency shuttle has already been called.' };
-    if (sim.world.breached.size > 0 || sim.power.state !== 'normal' || this.t > 240) return { ok: true };
+    if (sim.world.ventTiles().length > 0 || sim.power.state !== 'normal' || this.t > 240) return { ok: true };
     return { ok: false, why: 'Central Command will not authorize an evacuation at this time.' };
   }
 

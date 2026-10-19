@@ -126,7 +126,7 @@ export class PDA {
         cx.fillRect(ox + (c - x0) * S, oy + (r - y0) * S, S, S);
       }
     }
-    for (const i of w.breached) { if (!all && !this.seen[i]) continue; cx.fillStyle = '#ff3a2a'; cx.fillRect(ox + ((i % w.W) - x0) * S - 1, oy + (Math.floor(i / w.W) - y0) * S - 1, S + 2, S + 2); }
+    for (const i of w.breached) { if (!all && !this.seen[i]) continue; cx.fillStyle = w.ventsToSpace(i) ? '#ff3a2a' : '#e8a030'; cx.fillRect(ox + ((i % w.W) - x0) * S - 1, oy + (Math.floor(i / w.W) - y0) * S - 1, S + 2, S + 2); }
     const px = ox + (g.pred.x / 2 - x0) * S, pz = oy + (g.pred.z / 2 - y0) * S;
     cx.save(); cx.translate(px, pz); cx.rotate(-g.yaw);
     cx.fillStyle = (performance.now() / 400) % 2 < 1 ? '#ffffff' : '#bfffd8';

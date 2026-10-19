@@ -12,9 +12,10 @@ browser. It works end to end and is pushed.
 * **Branch** `claude/yad3d-game` on `TehFlaminTaco/YAD3D`, open as **[PR #1](https://github.com/TehFlaminTaco/YAD3D/pull/1)**
   into `main` (which holds only an "Initial commit"). Pushing to the branch updates the PR. The user said not to worry about
   the repo's original Unlicense: the project is now **AGPL-3.0** (`LICENSE`), art and sound CC BY-SA 3.0.
-* **Tests, all green at the last commit:** `node tools/simtest2.mjs` 51/51, `node tools/uitest.mjs` 191/191 (about 4 min),
-  `node tools/nettest.mjs` 29/29. (The browser and multiplayer suites were last run just before the final two commits; the
-  later changes were small and covered by the sim suite, but re-run everything before you say "all green".)
+* **Tests:** `node tools/simtest2.mjs` 86/86 and `node tools/leveltest.mjs` 13/13 pass now. `node tools/uitest.mjs` (191/191,
+  about 4 min) and `node tools/nettest.mjs` (29/29) were last run before the window work, and **could not be run in the
+  Windows session that did it** (Playwright path below): re-run both before you say "all green". The window change touches
+  tile events (`brk`) and rendering, so the multiplayer suite is the one most worth running.
 * **Two ways to run it:** `npm start` (Node server with WebSocket multiplayer, `:8080`) or `python3 tools/serve.py 8123`
   (static files; the browser hosts a round itself with the *same* simulation code). The client probes `/server.json` to decide.
 
@@ -43,9 +44,14 @@ The user is casual and direct ("Get that shit goin'"). Their actual feedback so 
   motion tracker, location/pressure/clock readouts, hotbar) is gone. Health is shown by SS13's own full-screen overlays and
   a body panel you open on purpose; time/air/location/map live on the PDA. Don't add persistent readouts without asking.
 * **"The hands should DEFINITELY have dorky springy animation."** They do (spring physics, squash/stretch). Keep it dorky.
-* **"It says to pick an occupation, but I can't see how?"** Cause found and fixed (below) but **never confirmed with the
-  user**. If they come back with it again, ask for window size and browser zoom, then reproduce at exactly that size.
+* **"It says to pick an occupation, but I can't see how?"** Cause found and fixed (section 5), and the user has
+  since confirmed the fix. If it ever comes back, ask for window size and browser zoom, then reproduce at exactly that size.
 * They asked for SS13 assets to be used freely, and for **BoxStation, not Meta**.
+* The lobby fix, pointer lock and sound were all checked in a real browser and are **confirmed good**. Touch support is
+  explicitly a non-consideration.
+* **Windows.** "Straight windows … appear as just thin lines between walls", and "many otherwise solid windows show space
+  underneath, when they should show the correct tile (and grille?)". Fixed in `src/render/level.js` (section 5); the grille
+  is **not** done (section 8).
 
 ## 3. Getting set up
 
@@ -66,6 +72,11 @@ Environment-specific things that will bite you:
 * **`_src/` (SS13 source trees) is git-ignored and absent from a fresh clone.** It is only needed to *rebuild* assets
   (`npm run build`): `_src/tg2020` is a git worktree of tgstation at `2d6c10c1` (2020-07-06), `_src/tgstation` a newer
   clone used only for the fonts. The generated `assets/` and `data/` are committed, so you don't need them to run or test.
+  On the Windows machine `_src/tg2020` is a plain extract made with
+  `git -C ../tgstation archive 2d6c10c1 _maps code icons | tar -x -C _src/tg2020` (80 MB, enough for `build_level.py`; the
+  user's own tgstation clone is at `C:\Users\Willi\Documents\GitHub\tgstation` and has that commit). `build_level.py` now
+  rebuilds **byte-identically** run to run (it used `hash(job)` for NPC sprite variants, which changes every run, and
+  needed a Pillow without `get_flattened_data`); the committed `sprites.png` therefore changed once when this was fixed.
   `YAD_TREE` overrides the tree the Python tools read. **Don't `cd` into `_src/tg2020`**: it is a worktree and the harness
   then reports your working directory as changed.
 * Use the **scratchpad directory** from the system prompt for screenshots/scratch scripts, not `/tmp`.
@@ -84,11 +95,23 @@ Full description is in `README.md` ("How it is put together"). What you need to 
   Never reorder those lists.
 * **Protocol** (client→server): `hello, input, click, key, inv, say, term, examine, lobby` (+ `ping`; `dbg` only with
   `--debug`). (server→client): `welcome` (world state), `snap` (10 Hz mob positions, `ack`, `you`, `env`), `ev` batches
-  (`door, fdoor, tile, pane, item+, item-, toss, mob+, mob-, self, msg, snd, beam, power, area, flicker, prog, term, round,
+  (`door, fdoor, tile, cl, pane, item+, item-, toss, mob+, mob-, self, msg, snd, beam, power, area, flicker, prog, term, round,
   alert, report, ghost, evac, shake, hurt, bubble`). Events have scopes (all / one client / near a point / ghosts). **A
   `snap` is sent before the same step's `ev` batch**, so the client must tolerate a snapshot that mentions a mob it hasn't
   heard of yet, and `self` being null for a tick after spawning.
-* **Items** live in exactly one place (`item.loc`: floor | hand | slot | box). Everything that moves an item goes through
+* **Closets, lockers and crates** are `kind: 'closet'` records in `props.interact`/`props.closets` (built by `buildPropData`
+  from `k:'closet'` props). Server logic is `src/sim/closets.js` (a port of SS13's `closets.dm`), shared state helpers are
+  `src/shared/closets.js`: one number `cs` (open 1, welded 2, locked 4, broken 8), `setClosetState` also flips the tile's
+  `solid` (open closets don't block; open *crates* do). The server sends `{e:'cl', i, cs, g}`; the welcome lists closets that
+  differ from the map (`closets: [[idx, cs, gone]]`). Sprites are five frames per closet (closed, closed+locked, welded,
+  welded+locked, open) from `tools/closets.py`, swapped by `WorldView.setClosetView`. Contents come from the DM
+  `PopulateContents()` (`data/closets.json`, rows `[item, count, chance %, stack amount]` or `{pick: [[weight, rows]]}`);
+  closing takes in what lies on the tile (30 items, 3 people), opening puts it back on the floor. People inside have
+  `mob.inside`, are hidden from others' snapshots, can't act, and the client shows a dark vent-slit overlay
+  (`ScreenFX`, `self.inside`). Locked or welded: B (resist) starts a 120 s breakout. `Alt+click` (look mode and hands mode)
+  sends `alt:1`; on a closed secure locker it toggles the lock. Deliberate divergence from SS13: clicking a closed closet
+  with a non-tool item in hand opens it (SS13 wants an empty hand).
+* **Items** live in exactly one place (`item.loc`: floor | hand | slot | box | closet). Everything that moves an item goes through
   `src/sim/inventory.js` (`detach`/`attach`/`place`). Client mirrors only see serialized items
   (`{id,n,s,w,st,tg,amt,lit,c,cap}`; `tg` = space-separated type tags like `pda bag helmet`; `cap` = `{n}` slot count or
   `{w,used}` weight).
@@ -132,6 +155,23 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
   and green CRT glass (`.crt`); SS13 = its slot icons / intent buttons / health doll (`assets/ui.png`), runechat. Fonts:
   Pixellari (interface), Grand9K Pixel (runechat/labels), VCR OSD Mono (CRT screens). CSS variables `--s` (UI pixel scale),
   `--p` (slot scale), `--h` (hand scale), `--cell` are set from JS in `Game.resize()`.
+* **Windows (`src/render/level.js`, `wallBlock`):** a fulltile window is a *glass block*: the tile's real floor (and
+  ceiling) is drawn under it, and every non-wall side, space included, gets a glass face at the tile edge, so it is as
+  thick as the walls beside it. It used to be a single zero-thickness pane in the tile's centre with no floor at all
+  (space showed through). `tools/leveltest.mjs` guards this. Directional (non-fulltile) panes are separate and unchanged.
+  **The grille** is a property of the window's wall variant (`gr` = a see-through terrain cell, made in `build_level.py` from the
+  real `grille` sprite with its dark field cut out; `window_of` decides who has one). `LevelMesh.grillePanels` stands a
+  panel just inside every side the glass faces (`GRILLE_INSET`), so it renders the way the window does, one layer under it,
+  and it is still drawn once the tile is smashed. Every BoxStation window comes from a window spawner, which always
+  spawns a grille. The 457 *stand-alone* grilles in the map (on lattice outside, etc.) are still skipped.
+* **Smashed windows** (`World.setBreach`, `Sim.breachTile`): the tile becomes `KIND.FLOOR` (its own floor, glass gone, grille
+  left), `solid` (the grille still blocks walking), not `airBlock`. It used to become a vacuum tile whatever was behind it, so
+  shooting an *interior* window vented both rooms. Now `World.ventsToSpace(i)` (touches space or lattice) decides what is
+  a hull breach: alarms, carp, the engineering radio call-out, the round report, the PDA colour (red vs amber), the
+  hover name ("hull breach" vs "broken window") and the screen shake/flicker all use it (`World.ventTiles()`).
+  `world.breached` is now "every smashed window"; the tile event carries `brk` so clients keep the same set. Atmos
+  rebuilds its topology (`Atmos.tileChanged`); a cell beside a venting broken window counts as a sink, which keeps
+  decompression about as hard as when the hole was a space tile. Welding a plate still turns it into a wall.
 * **Lobby narrow-window fix:** below 960 px page width the lobby used to squeeze the job board to nothing (94 px wide at
   720 px, 14 px at 640 px) because a strip was reserved for chat. `css/screens.css` now has a `@media (max-width: 960px)`
   block: full-width board, Ready/Start/Observe in a row above it, crew list hidden, chat reduced to one bar.
@@ -140,9 +180,11 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 
 | What | Command | Notes |
 | --- | --- | --- |
-| Sim logic (no browser) | `node tools/simtest2.mjs` | 51 assertions, seconds. Add a `section()` for any new server rule. |
+| Sim logic (no browser) | `node tools/simtest2.mjs` | 86 assertions, seconds. Add a `section()` for any new server rule. |
 | Long soak | `node tools/simtest.mjs 12 --player` | a 12-minute simulated shift, ~4 s |
 | Browser UI (local round) | `node tools/uitest.mjs` | needs :8123 static server; ~4 min; `BASE=`, `SHOTS=` env; drives the real mouse/keyboard |
+| Closets (in simtest2) | `node tools/simtest2.mjs` | the `closets` section: DM contents, locks, welding, breakout, personal lockers |
+| Level mesh geometry | `node tools/leveltest.mjs` | no browser or WebGL; 13 assertions: glass, floor, grille, smashed windows |
 | Multiplayer | `node tools/nettest.mjs` | spawns `server/index.js` on :8191 with `--debug`, three browsers |
 | Screenshots | `node tools/shot.mjs "<query>" <prefix> --w 1280 --h 720 --steps '[…]'` | per step runs: `eval`, then `key`/`down`/`up`/`click`, then `wait`, then `snap` |
 
@@ -178,12 +220,9 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 
 ## 8. Open items, roughly in priority order
 
-1. **Confirm the lobby fix with the user** (section 2). Also worth an in-person check of the lobby at 1366×657 and at 150–200%
-   browser zoom.
-2. **Nothing in a real browser has been verified for pointer lock or sound.** Headless runs fake the lock (`?nolock`) and have
-   no audio. Specifically unverified: Esc-to-free-mouse landing in hands mode; re-locking from a key press after a window
-   closes (`requestPointerLock` needs a user gesture; the code falls back to Space/click); `audio.ensure()` on first click.
-   If you have any way to test this in headed Chrome, do.
+1. **Re-run `uitest` and `nettest`** (see section 1) and look at a window in a real two-player session: the window work
+   was only checked by `simtest2`, `leveltest` and the in-app browser (single player, local round).
+2. *(Done: lobby fix, pointer lock and sound were checked in a real browser by the user; grille under windows; closets.)*
 3. **The review of the new UI was only half done.** The drag-and-drop *server* code got a manual review (2 bugs fixed). Not
    yet reviewed: (a) the mode/state machine in `game.js` (`applyMode/enterHands/enterLook/panelsChanged/closeTop/setPhase`)
    for ways to get stuck with a free or captured mouse, keys firing while typing in the lobby name field or chat, ghost/lobby
@@ -191,12 +230,26 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
    `lookRay` allocate vectors every frame; runechat does an LOS test per speaking mob per frame; the visor canvas is redrawn
    on resize). The earlier plan was three independent reviewers plus a skeptic pass per finding.
 4. **Known gaps** (also in the README): windoors are drawn but don't block movement; NPC crew keep their roundstart sprite
-   when clothes change; no antagonists/chemistry/botany/cooking/construction (scope decision, not an oversight); look mode
-   doesn't work on touch devices.
+   when clothes change; no antagonists/chemistry/botany/cooking/construction (scope decision, not an oversight). Look mode
+   doesn't work on touch devices; the user said that is a non-consideration.
 5. **Small things noticed:** a throw within the 0.5 s cooldown silently does nothing after the drag ghost vanishes (no
    feedback); `tools/preview_ui.html` is a leftover dev page for eyeballing procedural art (works with the static server);
    the lobby's "pick one, then Ready" hint disappears during a running round by design.
-6. **Ideas the user hasn't asked for** (do not start these unprompted): typed station announcements from the comms console
+6. **Roadmap the user agreed (2026-10-19), in this order.** Research for it came from eight Haiku drone reports over the 2020 TG
+   source (see the memory note about checking their numbers). (1) Foundations + closets/lockers/crates: **done**, except
+   stuffing someone into a closet (needs grabs) and body bags. Still to build for the foundations: a generic tool dispatch
+   (`startTimed` now takes `{start, stop}` messages and `welderReady` mirrors SS13's tool check), stacks (merge, split, craft
+   menu), mutable tiles/structures beyond closets. (2) **Dynamic character sprites**: compose a human at runtime in the
+   browser from the layered DMIs (what `tools/build_mobs.py` does at build time: greyscale body parts tinted by skin, uniform,
+   shoes, gloves, suit, eyes, `human_face.dmi` hair, mask, head; 176 hair styles, 36 facial hair, 31 underwear, 55
+   undershirts, 33 socks), so worn clothes show on everyone; then a setup screen with a live preview, **mirrors on the map**
+   (10 on BoxStation; change hair there) and **your body visible when looking down**. The user does *not* want a third-person
+   toggle. Save characters in `localStorage`. (3) People interactions: strip menu (4 s per item, 2 s to dress someone),
+   handcuffs (3 s on, 60 s to break out), grab states, pulling, resist, buckling, body bags, examine text. (4) Item
+   interactions: welder, extinguisher, lights, medical (bruise pack heals 40, 4 s on yourself / 2 s on someone), food and
+   hunger, vending machines (79 on the map). (5) Construction: girders/walls (2 metal, 4 s), windows, floor tiles, tables,
+   airlock assemblies, the stack craft menu.
+7. **Ideas the user hasn't asked for** (do not start these unprompted): typed station announcements from the comms console
    (it currently has no text input, so the canned announcement button was removed), more consoles, headset/radio sounds.
 
 ## 9. Map of the code

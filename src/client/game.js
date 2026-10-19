@@ -135,6 +135,7 @@ export class Game {
     this.view = new WorldView(this.scene, this.assets, rep, this.opts);
     this.me = w.you;
     rep.on('fdoor', (ev) => this.view.setFdoor(rep.fdoors[ev.i]));
+    rep.on('cl', (ev) => this.view.setClosetView(rep.props.interact[ev.i]));
     rep.on('tile', (ev) => this.view.tilesChanged([[ev.i % rep.world.W, Math.floor(ev.i / rep.world.W)]]));
     rep.on('pane', (ev) => this.view.tilesChanged([[ev.c, ev.r]]));
     rep.on('evac', (ev) => this.view.onEvac(ev));
@@ -284,7 +285,7 @@ export class Game {
 
   frozen() {
     const s = this.self;
-    return this.phase === 'playing' && !!s && (s.dead || s.crit || s.stunned);
+    return this.phase === 'playing' && !!s && (s.dead || s.crit || s.stunned || s.inside);
   }
 
   stepPred(inp, dt) {
@@ -416,7 +417,7 @@ export class Game {
       consider({ k: 'fdoor', idx: fd.idx }, fd.x, 0.2, fd.z, 1.05, { y1: 2.2, name: 'firelock', through: true });
     }
     for (const it of rep.props.interact) {
-      if (!near(it.x, it.z)) continue;
+      if (it.gone || !near(it.x, it.z)) continue;
       if (it.kind === 'wm') consider({ k: 'prop', idx: it.idx }, it.x, it.y0, it.z, 0.7, { y1: it.y1, name: it.name, through: true, prop: it });
       else consider({ k: 'prop', idx: it.idx }, it.x, it.y0 + 0.1, it.z, 0.9, { y1: Math.max(it.y0 + 1.0, it.y1), name: it.name, prop: it });
     }
@@ -426,7 +427,7 @@ export class Game {
     }
     if (!best) {
       const br = this.breachAlong(o, f);
-      if (br) best = { k: 'breach', c: br.c, r: br.r, name: 'hull breach', d: 2 };
+      if (br) best = { k: 'breach', c: br.c, r: br.r, name: rep.world.ventsToSpace(br.r * rep.world.W + br.c) ? 'hull breach' : 'broken window', d: 2 };
     }
     return best;
   }
@@ -483,9 +484,9 @@ export class Game {
   }
 
   /** SS13 click: use what is in your active hand on `t` (or swing / shoot along `dir` at nothing). */
-  clickWorld(t, dir) {
+  clickWorld(t, dir, alt = false) {
     const yaw = Math.atan2(-dir.x, -dir.z), pitch = Math.asin(clamp(dir.y, -1, 1));
-    this.send({ t: 'click', target: this.ref(t), yaw: +yaw.toFixed(4), pitch: +pitch.toFixed(4) });
+    this.send({ t: 'click', target: this.ref(t), yaw: +yaw.toFixed(4), pitch: +pitch.toFixed(4), ...(alt ? { alt: 1 } : {}) });
     const inv = this.self?.inv;
     if (!inv) return;
     const held = inv.hands[inv.active];
@@ -542,8 +543,8 @@ export class Game {
     if (this.mode !== 'look' || this.panelOpen) { this.holdT = 0; return; }
     const dir = this.lookRay().d;
     for (const b of clicks) {
-      if (b === 0) this.clickWorld(this.target, dir);
-      else if (b === 2) this.examineTarget(this.target);
+      if (b === 0 || b === 10) this.clickWorld(this.target, dir, b === 10);
+      else if (b === 2 || b === 12) this.examineTarget(this.target);
     }
     // holding the button keeps swinging
     if (input.buttons.has(0) && !clicks.length && this.self?.inv?.intent === 'harm') {

@@ -165,7 +165,7 @@ export class Round {
     lines.push(`Round length: ${Math.floor(this.time / 60)} minutes ${Math.floor(this.time % 60)} seconds.`);
     lines.push('');
     lines.push('Station status');
-    lines.push(`  Hull breaches: ${sim.world.breached.size} open, ${d.stats.patched} repaired`);
+    lines.push(`  Hull breaches: ${sim.world.ventTiles().length} open, ${d.stats.patched} repaired`);
     lines.push(`  Power: ${sim.power.state === 'normal' ? 'main grid online' : sim.power.state === 'battery' ? 'emergency cells only' : 'offline'}`);
     lines.push(`  Space carp killed: ${d.stats.carpKilled}`);
     lines.push('');

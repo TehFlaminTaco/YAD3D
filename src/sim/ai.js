@@ -69,7 +69,7 @@ export class AI {
     this.budget = 3;
     for (const m of sim.mobs.values()) {
       m.speedNow = m.client ? m.speedNow : 0;
-      if (m.client || m.dead || m.ssd || m.evacuated) continue;
+      if (m.client || m.dead || m.ssd || m.evacuated || m.inside) continue;
       m.fear = Math.max(0, m.fear - dt);
       if (m.stunned > 0 || m.body.crit) continue;
       if (m.kind === 'carp') this.thinkCarp(m, dt); else this.thinkCivil(m, dt);
@@ -81,7 +81,7 @@ export class AI {
     const sim = this.sim;
     let tgt = null, bd = 18;
     for (const o of sim.mobs.values()) {
-      if (o === m || o.dead || o.kind !== 'human' || o.evacuated) continue;
+      if (o === m || o.dead || o.kind !== 'human' || o.evacuated || o.inside) continue;
       const d = Math.hypot(o.x - m.x, o.z - m.z);
       if (d < bd && (d < 4 || sim.world.los(m.x, m.z, o.x, o.z))) { bd = d; tgt = o; }
     }

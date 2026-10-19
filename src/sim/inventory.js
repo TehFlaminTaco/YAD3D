@@ -3,7 +3,7 @@ import { describeState, storageReason, fitsSlot, EQUIP_ORDER } from '../shared/i
 
 /**
  * SS13 inventory rules, server side. An item lives in exactly one place (item.loc):
- *   {t:'floor'} | {t:'hand', mob, i} | {t:'slot', mob, slot} | {t:'box', box}
+ *   {t:'floor'} | {t:'hand', mob, i} | {t:'slot', mob, slot} | {t:'box', box} | {t:'closet', cl}
  * Worn slots: uniform suit shoes gloves glasses ears mask head neck belt id back lpocket rpocket suit_store.
  */
 
@@ -27,6 +27,7 @@ export function detach(sim, item) {
   if (l.t === 'hand') l.mob.hands[l.i] = null;
   else if (l.t === 'slot') l.mob.worn[l.slot] = null;
   else if (l.t === 'box') l.box.contents.splice(l.box.contents.indexOf(item), 1);
+  else if (l.t === 'closet') l.cl.contents.splice(l.cl.contents.indexOf(item), 1);
   else if (l.t === 'floor') { sim.floor.delete(item.id); sim.emit({ e: 'item-', id: item.id }); }
   item.loc = null;
   const m = l.mob || (l.t === 'box' ? rootMob(l.box) : null);
@@ -37,6 +38,7 @@ export function attach(sim, item, loc) {
   if (loc.t === 'hand') loc.mob.hands[loc.i] = item;
   else if (loc.t === 'slot') loc.mob.worn[loc.slot] = item;
   else if (loc.t === 'box') loc.box.contents.push(item);
+  else if (loc.t === 'closet') loc.cl.contents.push(item);
   item.loc = loc;
   const m = loc.mob || (loc.t === 'box' ? rootMob(loc.box) : null);
   if (m) recalc(sim, m);

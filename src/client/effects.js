@@ -42,6 +42,15 @@ export class ScreenFX {
     if (!kind) { cv.style.display = 'none'; return; }
     cv.style.display = 'block';
     const W = cv.width, H = cv.height;
+    if (kind === 'locker') {                              // shut in a locker: darkness and a few vent slits to look through
+      c.fillStyle = 'rgba(5,7,9,0.95)';
+      c.fillRect(0, 0, W, H);
+      c.globalCompositeOperation = 'destination-out';
+      const sw = W * 0.36, sh = Math.max(3, H / 120), gap = sh * 2.6;
+      for (let k = 0; k < 7; k++) c.fillRect((W - sw) / 2, H * 0.2 + k * gap, sw, sh);
+      c.globalCompositeOperation = 'source-over';
+      return;
+    }
     c.fillStyle = kind === 'helmet' ? 'rgba(6,8,10,0.94)' : 'rgba(4,6,8,0.55)';
     c.fillRect(0, 0, W, H);
     c.globalCompositeOperation = 'destination-out';
@@ -85,7 +94,7 @@ export class ScreenFX {
     this.setOp('vac', this.el.vac, vac ? (s.suit ? 0.15 : 0.6) : 0);
     const inv = s.inv;
     const head = inv?.worn.head, mask = inv?.worn.mask;
-    this.drawVisor(head?.tg?.includes('helmet') ? 'helmet' : mask?.tg?.includes('mask') && inv.internals ? 'mask' : '');
+    this.drawVisor(s.inside ? 'locker' : head?.tg?.includes('helmet') ? 'helmet' : mask?.tg?.includes('mask') && inv.internals ? 'mask' : '');
     const sat = Math.max(0.15, Math.min(1, frac * 1.25));
     this.setFilter(s.crit ? `saturate(0.2) blur(${(1.5).toFixed(1)}px)` : sat < 0.99 ? `saturate(${sat.toFixed(2)})` : '');
   }

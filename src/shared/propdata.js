@@ -1,5 +1,6 @@
 import { TILE, WALL_H, PX, DIR_YAW, DV, OPP } from './config.js';
 import { hash2, hexToRgb, rng } from './util.js';
+import { CL, closetSprite, setClosetState } from './closets.js';
 
 const WM_Y = {
   apc: 1.45, airalarm: 1.7, firealarm: 1.55, light_switch: 1.3, intercom: 1.65, extinguisher_cabinet: 1.3,
@@ -17,10 +18,10 @@ export const ITEM_SCALE = 0.5;               // SS13 item icons are drawn big fo
 export function buildPropData(world, rects, props, level, prev = null) {
   const W = world.W;
   const out = prev || {
-    tables: [], panes: [], lights: [], items: [], interact: [], doors: [], fdoors: [], statics: [],
+    tables: [], panes: [], lights: [], items: [], interact: [], doors: [], fdoors: [], statics: [], closets: [],
     paneIdx: new Map(), pool: level.pool.filter((q) => q.s >= 0), lootRng: rng(1337),
   };
-  out.added = { tables: [], panes: [], lights: [], doors: [], statics: [], items: [], interact: [], fdoors: [] };
+  out.added = { tables: [], panes: [], lights: [], doors: [], statics: [], items: [], interact: [], fdoors: [], closets: [] };
   const center = (c, r) => [c * TILE + TILE / 2, r * TILE + TILE / 2];
 
   const addItem = (spriteId, name, c, r, extra = {}) => {
@@ -87,6 +88,21 @@ export function buildPropData(world, rects, props, level, prev = null) {
         if (p.den) world.solid[i] = 1;
         const it = { idx: out.interact.length, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st };
         out.interact.push(it); out.added.interact.push(it);
+        break;
+      }
+      case 'closet': {
+        const cs = (p.op ? CL.OPEN : 0) | (p.lk ? CL.LOCKED : 0);
+        const cl = { fr: p.fr, sec: !!p.sec, pl: !!p.pl, a: p.a || [], o: p.o || [], hz: !!p.hz, dopen: !!p.do, nw: !!p.nw, bt: p.bt ?? 120 };
+        const it = { idx: out.interact.length, kind: 'closet', name: p.n || 'closet', path: p.p, c, r, x: cx, z: cz, y0: 0, rad: 0.9, cl, cs, cs0: cs, gone: false };
+        const sp = closetSprite(it);
+        const rc = rects[sp];
+        if (!rc) break;
+        const w = rc.w * PX, h = rc.h * PX;
+        it.y1 = Math.max(1.0, h);
+        it.st = sprite({ tag: 'closet', rect: sp, mode: 0, x: cx, y: 0, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: 0, lit: [cx, cz] });
+        setClosetState(world, it, cs);
+        out.interact.push(it); out.added.interact.push(it);
+        out.closets.push(it); out.added.closets.push(it);
         break;
       }
       case 'wm': {
