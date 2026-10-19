@@ -235,6 +235,7 @@ export class Actions {
         case 'status_display': case 'ai_status_display': sim.terminals.open(c, 'status', { area }); return;
         case 'firealarm': sim.sound('alarm', it.x, it.z, 0.6); sim.firedoors.fireAlarm(45); sim.chat.visible(m, `${m.name} pulls the fire alarm.`, 'notice', 10); return;
         case 'button': sim.sound('terminal_key', it.x, it.z, 0.6); return;
+        case 'mirror': if (m.look) c.outbox.push({ e: 'mirror', look: m.look }); return;
         default: return this.examineProp(m, it);
       }
     }
@@ -499,6 +500,16 @@ export class Actions {
     consume(sim, cell);
     sim.sound('pickup', m.x, m.z, 0.6);
     sim.tell(m, 'notice', `The ${gun.name} is fully charged.`);
+  }
+
+  /** The mirror's hairdresser: from a mirror you can change your hair, facial hair and their colours (mirror.dm), nothing else. */
+  mirror(c, msg) {
+    const sim = this.sim, m = c.mob;
+    if (!m || m.dead || !m.look || m.inside) return;
+    if (!sim.props.interact.some((it) => it.kind === 'wm' && it.sub === 'mirror' && Math.hypot(it.x - m.x, it.z - m.z) < 3.4)) return;
+    const l = sim.looks.sanitize({ ...m.look, ...msg.look });
+    m.look = { ...m.look, h: l.h, hc: l.hc, f: l.f, fc: l.fc };
+    m.apDirty = true;
   }
 
   // ------------------------------------------------------------------ timed actions

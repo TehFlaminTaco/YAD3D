@@ -19,6 +19,8 @@ import { DragDrop } from './dnd.js';
 import { TermUI } from './terminalui.js';
 import { Lobby } from './lobby.js';
 import { Screens } from './screens.js';
+import { CharEditor } from './charedit.js';
+import { BodyView } from './bodyview.js';
 
 const SEND_EVERY = 0.045;             // seconds between input batches
 const INTERP_DELAY = 0.13;            // remote mobs are drawn this far in the past
@@ -82,6 +84,7 @@ export class Game {
 
     this.fx = new ScreenFX(this);
     this.hud = new Hud(this);
+    this.bodyview = new BodyView(this);       // before the hands: they are drawn over it
     this.hands = new Hands(this);
     this.bags = new Bags(this);
     this.body = new BodyPanel(this);
@@ -90,6 +93,7 @@ export class Game {
     this.term = new TermUI(this);
     this.lobby = new Lobby(this);
     this.screens = new Screens(this);
+    this.charedit = new CharEditor(this);
     this.dnd = new DragDrop(this);
     this.hands.show(false);
 
@@ -128,6 +132,18 @@ export class Game {
     document.documentElement.style.setProperty('--h', this.ui.H.toFixed(2));
   }
 
+  /** Your skin tone changed what your hands look like. */
+  ownLookChanged() {
+    const mine = this.myAppearance(), hex = mine && this.assets.chars.skin.find((k) => k.n === mine.l.sk)?.hex;
+    if (hex) { this.hands.setSkin(hex); this.hands.render(); }
+  }
+
+  /** What you are wearing, as the server last told us (for the mirror's mannequin). */
+  myAppearance() {
+    const m = this.rep?.you ? this.rep.mobs.get(this.rep.you.id) : null;
+    return m?.ap || null;
+  }
+
   /** Called once the server's welcome arrives: build the replica and everything that draws it. */
   onWelcome(w) {
     document.getElementById('boot')?.remove();
@@ -141,8 +157,10 @@ export class Game {
     rep.on('evac', (ev) => this.view.onEvac(ev));
     rep.on('item+', (ev) => this.view.addItem(rep.items.get(ev.id)));
     rep.on('item-', (ev) => { this.noteVanished(rep.lastRemoved); this.view.removeItem(ev.id); });
-    rep.on('mob+', (ev) => this.view.addMob(rep.mobs.get(ev.id)));
+    rep.on('mob+', (ev) => { this.view.addMob(rep.mobs.get(ev.id)); if (ev.id === rep.you?.id) this.ownLookChanged(); });
     rep.on('mob-', (ev) => this.view.removeMob(ev.id));
+    rep.on('look', (ev) => { this.view.refreshMob(ev.id); if (ev.id === rep.you?.id) this.ownLookChanged(); });
+    rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('power', () => this.view.rebuildLights());
     rep.on('area', () => this.view.rebuildLights());
     rep.on('flicker', (ev) => this.view.flickerLights(ev.s, this.time));
@@ -178,7 +196,8 @@ export class Game {
       for (const k in s.inv.worn) walk(s.inv.worn[k], { t: 'slot', slot: k });
     }
     const before = this.bags.openIds.length;
-    this.hands.setOwner(s.name);
+    const mine = this.myAppearance(), hex = mine && this.assets.chars.skin.find((k) => k.n === mine.l.sk)?.hex;
+    if (hex) this.hands.setSkin(hex); else this.hands.setOwner(s.name);
     this.hands.render();
     this.bags.render();
     this.body.render();
@@ -259,7 +278,7 @@ export class Game {
     else this.input.lock();
   }
 
-  get panelOpen() { return this.body.open || this.pda.open || this.term.open || this.screens.reportOpen || this.screens.helpOpen; }
+  get panelOpen() { return this.body.open || this.pda.open || this.term.open || this.screens.reportOpen || this.screens.helpOpen || this.charedit.open; }
 
   /** A panel closed: if it was the reason we freed the pointer, capture it again. */
   panelsChanged() {
@@ -268,6 +287,7 @@ export class Game {
 
   /** Escape: close the top-most thing that is open. */
   closeTop() {
+    if (this.charedit.open) return this.charedit.close();
     if (this.term.open) return this.term.close();
     if (this.screens.helpOpen) return this.screens.toggleHelp();
     if (this.pda.open) return this.pda.close();
@@ -599,6 +619,7 @@ export class Game {
     if (this.phase === 'playing') {
       this.view.lightField.sample(this.pred.x, this.pred.z, this.tmpC);
       const lum = (this.tmpC[0] + this.tmpC[1] + this.tmpC[2]) / 3;
+      this.bodyview.update(dt, { pitch: this.pitch, moving: this.moving, show: this.mode === 'look' && !this.panelOpen });
       this.hands.update(dt, { moving: this.moving, light: Math.max(lum * 1.4, torch ? 0.95 : 0), crouch: this.self?.crit ? 1 : 0 });
     }
     this.hud.update(dt);

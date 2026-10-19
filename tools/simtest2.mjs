@@ -6,6 +6,7 @@ import { Sim } from '../src/sim/sim.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
 import { CL } from '../src/shared/closets.js';
 import { recalc } from '../src/sim/inventory.js';
+import { HIDE } from '../src/shared/looks.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = loadSimData(root);
@@ -216,7 +217,7 @@ section('closets', () => {
   ok(eng && eng.contents.length === 6 && eng.cs === (CL.LOCKED) && w.solid[eng.r * w.W + eng.c], 'welding locker starts closed and locked with its 3 hoods and 3 welders');
   ok(eng.cl.sec && eng.cl.a.length === 1, 'and wants one access');
   const em = cls.list.filter((it) => it.path.endsWith('closet/emcloset'));
-  ok(em.length > 20 && em.some((it) => it.contents.length) && em.some((it) => !it.contents.length), 'emergency closets are stocked at random, some empty');
+  ok(em.length > 20 && em.some((it) => it.contents.length) && new Set(em.map((it) => it.contents.length)).size > 2, 'emergency closets are stocked at random (different contents each)');
   // nothing on a closed closet's tile is left outside
   ok(![...sim.floor.values()].some((f) => cls.list.some((it) => !(it.cs & CL.OPEN) && it.contents.length < 30 && it.c === f.c && it.r === f.r)), 'items under closed closets were taken in at round start (up to 30)');
 
@@ -300,6 +301,58 @@ section('closets', () => {
   ok((crate.cs & CL.OPEN) && w.solid[crate.r * w.W + crate.c], 'an open crate still blocks the tile');
 
   function place_(item, it) { item.loc = null; sim.floor.set(item.id, { item, x: it.x + 0.3, y: 0.01, z: it.z, c: it.c, r: it.r }); item.loc = { t: 'floor' }; }
+});
+
+section('looks', () => {
+  // a player designs a character before the round: the server checks it, then spawns them looking like that
+  const sim = new Sim(DATA, { bots: 0 });
+  const mine = [];
+  const A = sim.addClient('Alice', (m) => mine.push(m));
+  const bobIn = [];
+  const B = sim.addClient('Bob', (m) => bobIn.push(m));
+  const hair = DATA.chars.hair.find((h) => h.c >= 0).n, skin = DATA.chars.skin[3].n;
+  sim.handle(A, { t: 'hello', look: { g: 'f', sk: skin, h: hair, hc: '#FF0000', f: 'no such beard', e: 'blue', u: 'Nude' } });
+  ok(A.look.g === 'f' && A.look.sk === skin && A.look.h === hair && A.look.hc === '#ff0000', 'hello carries a look, colours are normalised');
+  ok(A.look.f === DATA.chars.facial[0].n && /^#[0-9a-f]{6}$/.test(A.look.e), 'unknown names and bad colours fall back to something drawable');
+  const step = (sec) => { for (let k = 0; k < sec / SIM_DT; k++) sim.step(SIM_DT); };
+  sim.handle(A, { t: 'lobby', op: 'job', id: 'station_engineer' }); sim.handle(B, { t: 'lobby', op: 'job', id: 'medical_doctor' });
+  sim.handle(A, { t: 'lobby', op: 'ready', v: true }); sim.handle(B, { t: 'lobby', op: 'ready', v: true }); sim.handle(A, { t: 'lobby', op: 'start' });
+  const a = A.mob, b = B.mob;
+  b.x = a.x + 3; b.z = a.z;                    // within sight of each other
+  step(0.2);
+  ok(a.look.h === hair && a.look.g === 'f', 'the spawned character is the one they designed');
+  ok(b.look && b.look.g && DATA.chars.hair.some((h) => h.n === b.look.h), 'someone who designed nothing gets a random look');
+  const ap = sim.appearanceOf(a);
+  ok(typeof ap.o.uniform === 'number' && typeof ap.o.shoes === 'number' && ap.o.head !== undefined, 'an engineer is wearing a jumpsuit, boots and a hard hat as far as anyone can see');
+  const evsOf = (inb, e) => inb.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((x) => x.e === e);
+  const intro = evsOf(bobIn, 'mob+').find((x) => x.id === a.id);
+  ok(intro && intro.ap.l.h === hair && intro.ap.o.uniform === ap.o.uniform && intro.set === undefined, 'others are introduced to someone with their appearance, not a sprite set');
+  const welcome = mine.find((m) => m.t === 'welcome');
+  ok(welcome.jobs.every((j) => j.ap && j.ap.o) && welcome.jobs.find((j) => j.id === 'captain').ap.o.head !== undefined, 'the welcome gives every job a mannequin outfit for the lobby');
+  // changing clothes is seen
+  bobIn.length = 0;
+  sim.actions.inventory(A, { op: 'unequip', slot: 'head' });
+  step(0.3);
+  const seen = evsOf(bobIn, 'look').find((x) => x.id === a.id);
+  ok(seen && seen.ap.o.head === undefined && seen.ap.o.uniform === ap.o.uniform, 'taking your hat off sends everyone the new look');
+  // some things hide hair: a hardsuit helmet
+  const helmet = sim.newItem('/obj/item/clothing/head/helmet/space/emergency');
+  a.worn.head = null;
+  helmet.loc = { t: 'slot', mob: a, slot: 'head' }; a.worn.head = helmet; recalc(sim, a);
+  ok((sim.appearanceOf(a).h & HIDE.HAIR) && sim.appearanceOf(a).o.head !== undefined, 'a space helmet hides hair (SS13 flags_inv)');
+  // the mirror: hair and facial hair only, and only at a mirror
+  const mirror = sim.props.interact.find((it) => it.kind === 'wm' && it.sub === 'mirror');
+  const other = DATA.chars.hair.filter((h) => h.c >= 0 && h.n !== hair)[0].n;
+  a.x = 2; a.z = 2;
+  sim.handle(A, { t: 'mirror', look: { h: other } });
+  ok(a.look.h === hair, 'far from a mirror nothing changes');
+  const free = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dc, dr]) => [mirror.c + dc, mirror.r + dr]).find(([c, r]) => sim.world.kind[r * sim.world.W + c] === 1 && !sim.world.solid[r * sim.world.W + c]);
+  a.x = free[0] * TILE + 1; a.z = free[1] * TILE + 1; a.cool = 0;
+  mine.length = 0;
+  sim.handle(A, { t: 'click', target: { k: 'prop', idx: mirror.idx } }); step(0.1);
+  ok(evsOf(mine, 'mirror').length === 1 && evsOf(mine, 'mirror')[0].look.h === hair, 'clicking a mirror opens the hairdresser with your current look');
+  sim.handle(A, { t: 'mirror', look: { h: other, hc: '#00ff00', g: 'm', sk: DATA.chars.skin[0].n } });
+  ok(a.look.h === other && a.look.hc === '#00ff00' && a.look.g === 'f' && a.look.sk === skin, 'at a mirror you change hair and its colour, nothing else');
 });
 
 section('chat', () => {

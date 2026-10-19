@@ -11,7 +11,10 @@ export class Mob {
     this.kind = o.kind;                      // 'human' | 'carp' | 'pet'
     this.name = o.name;
     this.job = o.job || null;                // job id for humans
-    this.set = o.set;                        // sprite set key
+    this.set = o.set;                        // sprite set key (carp, pets); people are composed from `look` instead
+    this.look = o.look || null;              // a human's chosen appearance (see shared/looks.js)
+    this.ap = null;                          // cached appearance: look + what they wear
+    this.apDirty = true;
     this.x = o.x; this.z = o.z;
     this.yaw = o.yaw ?? Math.random() * Math.PI * 2;
     this.pitch = 0;

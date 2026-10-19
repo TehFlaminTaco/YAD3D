@@ -18,6 +18,7 @@ import { Director } from './director.js';
 import { Terminals } from './terminals.js';
 import { Actions } from './actions.js';
 import { Closets } from './closets.js';
+import { Looks, WORN_SLOTS } from '../shared/looks.js';
 import { AI } from './ai.js';
 import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, rootMob } from './inventory.js';
 
@@ -34,6 +35,7 @@ export class SimClient {
     this.mob = null;
     this.ghost = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0, pitch: 0 };
     this.job = 'assistant';
+    this.look = null;              // the character they designed (sanitised), or null for a random one
     this.ready = false;
     this.outbox = [];
     this.known = new Set();        // mob ids this client has been told about
@@ -63,6 +65,7 @@ export class Sim {
     const decoded = decodeLevel(data.level);
     this.world = new World(decoded);
     this.db = new ItemDB(data.level.itemdefs, data.contents || {});
+    this.looks = new Looks(data.chars);
     this.jobs = new Jobs(data.jobsJson);
     this.props = buildPropData(this.world, this.rects, data.level.props, data.level);
     this.doors = this.props.doors.map((p) => new DoorCore(this.world, p, p.fr.length - 2));
@@ -154,7 +157,7 @@ export class Sim {
       doors: this.doors.map((d) => d.state), fdoors: this.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       items: [...this.floor.values()].map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z]),
       tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(),
-      jobs: this.jobs.list.map((j) => ({ id: j.id, title: j.title, color: j.color, supervisors: j.supervisors, slots: this.jobs.slots(j), total: j.id === 'assistant' ? 99 : j.total })),
+      jobs: this.jobs.list.map((j) => ({ id: j.id, title: j.title, color: j.color, supervisors: j.supervisors, slots: this.jobs.slots(j), total: j.id === 'assistant' ? 99 : j.total, ap: this.outfitPreview(j) })),
     };
   }
 
@@ -431,9 +434,8 @@ export class Sim {
     const late = this.level.spawns.filter((s) => s.job === 'latejoin');
     let p = o.late && late.length ? late[Math.floor(this.rand() * late.length)] : pts.length ? pts[Math.floor(this.rand() * pts.length)] : late[0] || this.level.spawns[0];
     const name = client ? client.name : this.ai.randomName();
-    const variant = Math.floor(this.rand() * 3);
-    const set = this.level.mobs[job.id + '_' + variant] ? job.id + '_' + variant : this.level.mobs['assistant_0'] ? 'assistant_0' : Object.keys(this.level.mobs)[0];
-    const m = this.newMob({ kind: 'human', name, job: job.id, set, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, speed: 1.7 + this.rand() * 0.5, hp: 100 });
+    const look = (client && client.look) || this.looks.random(this.rand);
+    const m = this.newMob({ kind: 'human', name, job: job.id, look, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, speed: 1.7 + this.rand() * 0.5, hp: 100 });
     this.outfit(m, job);
     if (client) { client.mob = m; m.client = client; client.state = 'playing'; }
     return m;
@@ -464,7 +466,34 @@ export class Sim {
   }
 
   // ------------------------------------------------------------------ snapshots
+  /** What someone looks like right now: their look plus what they are wearing (cached until it changes). */
+  appearanceOf(m) {
+    if (m.apDirty || !m.ap) {
+      const by = {};
+      for (const slot of WORN_SLOTS) if (m.worn[slot]) by[slot] = m.worn[slot].path;
+      m.ap = this.looks.appearance(m.look, by);
+      m.apDirty = false;
+    }
+    return m.ap;
+  }
+
+  /** The clothes someone starts a job in, for the lobby's mannequin. */
+  outfitPreview(job) {
+    return this.looks.outfit(job.outfit || {});
+  }
+
+  /** Tell everyone about anybody who has changed clothes or hair since the last snapshot. */
+  sendLookChanges() {
+    for (const m of this.mobs.values()) {
+      if (!m.look || !m.apDirty) continue;
+      const before = m.ap ? JSON.stringify(m.ap) : '';
+      const ap = this.appearanceOf(m);
+      if (before && JSON.stringify(ap) !== before) this.emit({ e: 'look', id: m.id, ap });
+    }
+  }
+
   sendSnapshots() {
+    this.sendLookChanges();
     const mobsArr = [...this.mobs.values()];
     for (const c of this.clients.values()) {
       const px = c.x, pz = c.z;
@@ -475,7 +504,7 @@ export class Sim {
         const dx = m.x - px, dz = m.z - pz;
         if (dx * dx + dz * dz > INTEREST * INTEREST && m !== c.mob) continue;
         seen.add(m.id);
-        if (!c.known.has(m.id)) { c.known.add(m.id); c.outbox.push({ e: 'mob+', id: m.id, n: m.name, job: m.job, set: m.set, kind: m.kind }); }
+        if (!c.known.has(m.id)) { c.known.add(m.id); c.outbox.push({ e: 'mob+', id: m.id, n: m.name, job: m.job, set: m.set, kind: m.kind, ap: m.look ? this.appearanceOf(m) : undefined }); }
         const flags = (m.dead ? 1 : 0) | (m.body.crit ? 2 : 0) | (m.speedNow > 3.8 ? 8 : 0) | (m.stunned > 0 ? 16 : 0);
         list.push([m.id, +m.x.toFixed(2), +m.z.toFixed(2), +m.yaw.toFixed(2), flags, +(m.speedNow || 0).toFixed(1)]);
       }
@@ -514,7 +543,11 @@ export class Sim {
   // ------------------------------------------------------------------ message handling
   handle(c, msg) {
     switch (msg.t) {
-      case 'hello': if (msg.name) { c.name = String(msg.name).replace(/[^\w .'-]/g, '').trim().slice(0, 24) || c.name; this.round.broadcast(); } break;
+      case 'hello':
+        if (msg.name) { c.name = String(msg.name).replace(/[^\w .'-]/g, '').trim().slice(0, 24) || c.name; this.round.broadcast(); }
+        if (msg.look) c.look = this.looks.sanitize(msg.look);
+        break;
+      case 'mirror': this.actions.mirror(c, msg); break;
       case 'input':
         for (const inp of msg.list || [msg]) { if (c.inputs.length < 60) c.inputs.push(inp); }
         break;

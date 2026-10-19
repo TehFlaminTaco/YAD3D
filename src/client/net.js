@@ -21,13 +21,14 @@ export class LocalConnection {
     this.ping = Math.round(this.lag * 2000);
   }
 
-  async start(name) {
+  async start(name, look) {
     const { Sim } = await import('../sim/sim.js');
     const a = this.assets;
-    this.sim = new Sim({ level: a.level, rects: a.rects, jobsJson: a.jobsJson, contents: a.contents, closets: a.closets }, {
+    this.sim = new Sim({ level: a.level, rects: a.rects, jobsJson: a.jobsJson, contents: a.contents, closets: a.closets, chars: a.chars }, {
       bots: this.opts.bots ?? 14, autostart: this.opts.autostart ?? 0, god: !!this.opts.god,
     });
     this.client = this.sim.addClient(name, (m) => this.deliver(m));
+    this.sim.handle(this.client, { t: 'hello', look });
   }
 
   deliver(m) {
@@ -63,11 +64,11 @@ export class WsConnection {
     this.lag = opts.lag || 0;           // ms of artificial delay each way, for testing prediction
   }
 
-  start(name) {
+  start(name, look) {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(this.url);
       this.ws = ws;
-      ws.onopen = () => { ws.send(JSON.stringify({ t: 'hello', name })); resolve(); };
+      ws.onopen = () => { ws.send(JSON.stringify({ t: 'hello', name, look })); resolve(); };
       ws.onerror = () => reject(new Error('could not reach ' + this.url));
       ws.onclose = () => { this.closed = true; };
       ws.onmessage = (e) => {

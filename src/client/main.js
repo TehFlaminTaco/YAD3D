@@ -3,6 +3,7 @@ import { LocalConnection, WsConnection } from './net.js';
 import { Game } from './game.js';
 import { UiArt } from './art.js';
 import { store } from './lobby.js';
+import { Looks } from '../shared/looks.js';
 
 const q = new URLSearchParams(location.search);
 const status = (t) => { const e = document.getElementById('boot-status'); if (e) e.textContent = t; };
@@ -27,7 +28,13 @@ async function main() {
   const [assets, art] = await Promise.all([loadAssets(status, { withSim: !srv }), UiArt.load(), document.fonts?.load ? Promise.all(['16px Pixellari', '16px Grand9K', '16px VCR'].map((f) => document.fonts.load(f).catch(() => null))) : null]);
   const name = q.get('name') || store.get('name') || randomName();
   store.set('name', name);
-  const opts = { nolock: q.has('nolock'), fullbright: q.has('fullbright'), norender: q.has('norender'), name, serverName: srv?.name || '' };
+  // the character you designed last time (or a random one the first time); the server checks it before using it
+  const looks = assets.looks = new Looks(assets.chars);
+  let saved = null;
+  try { saved = JSON.parse(store.get('look')); } catch { /* none yet */ }
+  const look = saved ? looks.sanitize(saved) : looks.random(Math.random);
+  store.set('look', JSON.stringify(look));
+  const opts = { look, nolock: q.has('nolock'), fullbright: q.has('fullbright'), norender: q.has('norender'), name, serverName: srv?.name || '' };
   let conn;
   if (srv) {
     const url = srv.ws || `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
@@ -41,7 +48,7 @@ async function main() {
   const game = new Game(document.getElementById('view'), assets, conn, opts, art);
   window.yad = game;
   status(srv ? 'joining ' + (srv.name || 'server') : 'starting the round');
-  await conn.start(name);
+  await conn.start(name, look);
   game.start();
   // handy for testing and for people who just want to play: ?job=station_engineer&auto skips the lobby
   if (q.has('auto')) {

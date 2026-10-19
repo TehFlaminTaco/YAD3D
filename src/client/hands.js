@@ -37,6 +37,12 @@ export class Hands {
     this.skin = SKINS[h % SKINS.length];
   }
 
+  /** Your hands are the colour of your character's skin. */
+  setSkin(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    this.skin = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
   show(v) { this.root.style.display = v ? 'block' : 'none'; }
 
   /** Remember where a floor item was on screen, so if it turns up in a hand it can fly there. */

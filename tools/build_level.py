@@ -30,6 +30,7 @@ import spritelib as sl  # noqa: E402
 from dmcode import DmCode  # noqa: E402
 from build_mobs import build_mobs  # noqa: E402
 import closets  # noqa: E402
+import build_chars  # noqa: E402
 
 ROOT = os.path.normpath(os.path.join(HERE, '..'))
 TREE = os.environ.get('YAD_TREE', os.path.join(ROOT, '_src', 'tg2020'))
@@ -754,6 +755,8 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                     want += [c[0] for c in v]
                 elif isinstance(v, str):
                     want.append(v)
+    # everything lying around on the map is an item the game should know (so a hardsuit helmet on a shelf can be worn)
+    want += sorted({pr['p'] for pr in props if pr['k'] == 'item' and pr.get('p')})
     pop = populate()
 
     def flat_rows(rows):
@@ -993,6 +996,7 @@ def build(mapname):
     closet_data = {ct: prune(pop.rows(ct)) for ct in sorted(shared.get('closet_types', ()))}
     with open(os.path.join(ROOT, 'data', 'closets.json'), 'w') as f:
         json.dump({'_comment': 'Built by tools/build_level.py from the DM PopulateContents() of each closet type on the map.', **closet_data}, f, separators=(',', ':'))
+    build_chars.build(base['itemdefs'], resolve, dm, OUT)
     print('  closets: %d types, %d with contents' % (len(closet_data), sum(1 for v in closet_data.values() if v)))
     with open(os.path.join(OUT, 'level.json'), 'w') as f:
         json.dump(level, f, separators=(',', ':'))

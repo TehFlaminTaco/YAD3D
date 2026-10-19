@@ -59,6 +59,7 @@ export function place(sim, item, x, z, y) {
 /** Derived state: access, internals validity, suit flags. */
 export function recalc(sim, mob) {
   if (!mob.humanoid) return;
+  mob.apDirty = true;
   const acc = new Set();
   const addId = (it) => { if (it && it.def.id && it.access) for (const a of it.access) acc.add(a); };
   addId(mob.worn.id);

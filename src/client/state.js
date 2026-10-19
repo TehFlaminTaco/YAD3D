@@ -127,7 +127,8 @@ export class Replica {
       case 'item-': this.lastRemoved = this.items.get(ev.id) || null; this.items.delete(ev.id); break;
       case 'power': this.power.state = ev.state; this.power.battery = ev.battery; break;
       case 'area': this.power.areaOn[ev.a] = ev.on; this.power.areaLights[ev.a] = ev.lights; break;
-      case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, kind: ev.kind, x: 0, z: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
+      case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, x: 0, z: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
+      case 'look': { const m = this.mobs.get(ev.id); if (m) m.ap = ev.ap; break; }
       case 'mob-': break;                    // the view reads the mob before it is dropped (see Game.onEvent)
       case 'self': this.self = ev; break;
       case 'round': this.round = ev; this.roundAt = performance.now(); break;

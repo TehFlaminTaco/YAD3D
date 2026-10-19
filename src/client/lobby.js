@@ -51,6 +51,7 @@ export class Lobby {
             <div class="lb-screen crt"><div id="players" class="scroll"></div></div>
             <div class="lb-btns">
               <button id="btn-ready" class="lamp">Ready</button>
+              <button id="btn-char">Character</button>
               <button id="btn-start">Start now</button>
               <button id="btn-join" class="lamp lit">Join game</button>
               <button id="btn-observe">Observe</button>
@@ -77,6 +78,7 @@ export class Lobby {
     });
     this.$('btn-ready').onclick = () => game.send({ t: 'lobby', op: 'ready', v: !this.me()?.ready });
     this.$('btn-start').onclick = () => game.send({ t: 'lobby', op: 'start' });
+    this.$('btn-char').onclick = () => this.editCharacter();
     this.$('btn-join').onclick = () => game.send({ t: 'lobby', op: 'latejoin', id: this.selected });
     this.$('btn-observe').onclick = () => game.send({ t: 'lobby', op: 'observe' });
     this.tickAcc = 0;
@@ -84,6 +86,21 @@ export class Lobby {
   }
 
   me() { const r = this.game.rep?.round; return r?.players.find((p) => p.id === this.game.rep.me); }
+
+  /** Open the character screen on your saved look; every change is saved and sent to the server. */
+  editCharacter() {
+    const g = this.game;
+    g.charedit.show({
+      mode: 'lobby', look: g.opts.look,
+      outfit: () => g.rep.jobMap[this.selected]?.ap,
+      onChange: (look) => {
+        g.opts.look = look;
+        store.set('look', JSON.stringify(look));
+        clearTimeout(this.lookTimer);
+        this.lookTimer = setTimeout(() => g.send({ t: 'hello', look }), 200);
+      },
+    });
+  }
 
   rename() {
     const n = this.nameInput.value.trim();

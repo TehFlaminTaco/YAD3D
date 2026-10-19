@@ -213,12 +213,23 @@ export class WorldView {
 
   // ------------------------------------------------------------------ mobs
   addMob(m) {
-    const set = this.assets.level.mobs[m.set];
+    const chars = !!m.ap;                          // people are composed from layers; carp and pets are baked sets
+    const set = chars ? this.assets.charart.acquire(m.ap) : this.assets.level.mobs[m.set];
     if (!set) return;
     const free = this.mobFree.pop();
     const id = free !== undefined ? free : this.dyn.add({ x: 0, y: 0, z: 0, mode: 0, w: 2, h: 2, rect: this.rects[0] });
     this.dyn.setAlpha(id, 1);
-    this.mobViews.set(m.id, { m, id, set, anim: Math.random() * 4 });
+    this.mobViews.set(m.id, { m, id, set, chars, anim: Math.random() * 4 });
+  }
+
+  /** Someone changed clothes or hair: compose them again and give the old picture back. */
+  refreshMob(mid) {
+    const v = this.mobViews.get(mid);
+    if (!v || !v.chars || !v.m.ap) return;
+    const old = v.set, fresh = this.assets.charart.acquire(v.m.ap);   // take the new picture before giving the old one back
+    if (!fresh) return;
+    v.set = fresh;
+    this.assets.charart.release(old);
   }
 
   removeMob(mid) {
@@ -227,6 +238,7 @@ export class WorldView {
     this.dyn.setAlpha(v.id, 0);
     this.mobFree.push(v.id);
     this.mobViews.delete(mid);
+    if (v.chars) this.assets.charart.release(v.set);
     if (this.target && this.target.k === 'mob' && this.target.id === mid) this.target = null;
   }
 
@@ -282,6 +294,7 @@ export class WorldView {
       v.hi = this.target && this.target.k === 'mob' && this.target.id === mid ? 1 : 0;
       this.dyn.setHighlight(v.id, v.hi);
     }
+    this.assets.charart.atlas.flush();
   }
 
   setTarget(t) {

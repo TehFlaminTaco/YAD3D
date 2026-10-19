@@ -270,3 +270,14 @@ css/                          style.css (in-game), screens.css (lobby, consoles,
 tools/                        build_*.py (data pipeline), serve.py, shot.mjs, simtest*.mjs, uitest.mjs, nettest.mjs
 assets/ data/ vendor/         generated art/sound/level data (committed), jobs data, vendored three.js r170
 ```
+
+## 10. Step 2 in progress (uncommitted when this was written): runtime character sprites
+People are no longer baked sprites. `tools/build_chars.py` (run by `build_level.py`) writes `assets/chars.png|json` (layered body,
+hair, facial hair, underwear, undershirt, socks and 434 worn items, with SS13's own hide flags). `src/shared/looks.js` holds the look
+rules; the server sends each human `ap = {l: look, o: {slot: cell}, h: hide flags}` in `mob+` and a `look` event when it changes;
+`src/client/charart.js` composes it in SS13's layer order into a strip under the sprite atlas (`DynAtlas`). Done and tested
+(simtest2 98/98): looks, hello with a look, outfits, hiding, mirror authorisation, the character screen in the lobby
+(`charedit.js`, saved in localStorage), hands in your skin tone, `bodyview.js` (your body when you look down). Written but NOT yet
+looked at in the browser: the body view. NOT done: the mirror *reflection* sprite (plan: a `dyn` sprite in front of each of the 10
+mirror props, showing the top half of your front-facing sprite, only for you and only in front of the mirror; add `sd` to the wm
+interact record in propdata for the normal), `uitest`/`nettest` runs, README feature text, and a data test for chars.json.

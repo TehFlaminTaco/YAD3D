@@ -268,3 +268,23 @@ body.lobbyview #chathint { display: none; }
 }
 @media (max-width: 960px) and (min-width: 600px) { #joblist { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .lb-banner .logo { font-size: calc(var(--sc-logo) * .7); } .lb-title .sub span:last-child { display: none; } }
+
+/* ---------------------------------------------------------------- the character screen */
+.term.ce { width: min(94vw, 880px); height: min(88vh, 720px); }
+.ce-main { flex: 1; min-height: 0; display: grid; grid-template-columns: clamp(170px, 34%, 300px) minmax(0, 1fr); gap: var(--sc-gap); }
+.ce-prev { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .8em; padding: .6em; }
+.ce-prev canvas { width: min(100%, 288px); aspect-ratio: 1; image-rendering: pixelated; background: radial-gradient(ellipse at 50% 90%, #0a2a1a, #03110a 70%); box-shadow: 0 0 0 1px var(--phos-dk); }
+.ce-rot { display: flex; gap: .6em; }
+.ce-clothes { font-size: calc(var(--sc-crt) - 2px); color: var(--phos-mid); text-shadow: none; display: flex; align-items: center; gap: .4em; cursor: pointer; }
+.ce-form { padding: .5em .8em; display: flex; flex-direction: column; gap: .55em; }
+.ce-row { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); align-items: center; gap: .6em; }
+.ce-lab { color: var(--phos-mid); text-shadow: none; font-size: calc(var(--sc-crt) - 2px); text-transform: uppercase; letter-spacing: .06em; }
+.ce-ctl { display: flex; align-items: center; gap: .4em; min-width: 0; }
+.ce-ctl button { padding: .1em .55em; font-size: calc(var(--sc-lab) - 2px); }
+.ce-ctl button.on { background: linear-gradient(#2b6a46, #1f4f35); color: var(--phos-hi); }
+.ce-name { flex: 1; min-width: 0; text-align: center; color: var(--phos-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ce-sw { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ce-sw i { width: 1.3em; height: 1.3em; box-shadow: 0 0 0 var(--sc-px) #000; cursor: pointer; }
+.ce-sw i.on { box-shadow: 0 0 0 2px var(--phos-hi), 0 0 0 4px #000; }
+.ce-sw input[type=color] { width: 2em; height: 1.4em; padding: 0; border: 0; background: none; cursor: pointer; }
+@media (max-width: 700px) { .ce-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); } .ce-prev canvas { width: 120px; } .ce-row { grid-template-columns: 5.5em minmax(0, 1fr); } }
