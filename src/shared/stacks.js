@@ -12,6 +12,7 @@ export const STACKS = [
   ['/obj/item/stack/sheet/plasteel', { max: 50, one: 'plasteel sheet' }],
   ['/obj/item/stack/sheet/metal', { max: 50, one: 'metal sheet' }],
   ['/obj/item/stack/rods', { max: 50, one: 'metal rod' }],
+  ['/obj/item/stack/cable_coil', { max: 30, one: 'cable piece' }],
   ['/obj/item/stack/tile/plasteel', { max: 60, one: 'floor tile' }],
   ['/obj/item/stack/tile/wood', { max: 60, one: 'wood floor tile' }],
   ['/obj/item/stack/tile/carpet/blue', { max: 60, one: 'carpet' }],
@@ -47,6 +48,7 @@ export const RECIPES = {
     { title: 'floor tile', req: 1, res: 4, maxRes: 20, item: '/obj/item/stack/tile/plasteel' },
     { title: 'metal rod', req: 1, res: 2, maxRes: 60, item: '/obj/item/stack/rods' },
     { title: 'wall girders', req: 2, time: 40, build: 'girder', onFloor: true, onePerTurf: true },
+    { title: 'apc frame', req: 2, res: 1, item: '/obj/item/wallframe/apc' },
   ],
 };
 

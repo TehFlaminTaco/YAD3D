@@ -336,6 +336,9 @@ SLOT_FLAGS = {'BACK': 'back', 'MASK': 'mask', 'BELT': 'belt', 'ID': 'id', 'EARS'
 WEIGHT = {'WEIGHT_CLASS_TINY': 1, 'WEIGHT_CLASS_SMALL': 2, 'WEIGHT_CLASS_NORMAL': 3, 'WEIGHT_CLASS_BULKY': 4, 'WEIGHT_CLASS_HUGE': 5, 'WEIGHT_CLASS_GIGANTIC': 6}
 
 # items the game systems refer to by path (so their sprites are always in the atlas)
+# an APC's pictures, in the order the sim numbers them (src/sim/power/machines.js APC_VARIANTS)
+APC_STATES = ['apc0', 'apc1', 'apc2', 'apcmaint', 'apc-b', 'apc1-nocover', 'apc2-nocover', 'apc1-b-nocover', 'apc2-b-nocover', 'apcewires']
+
 GAME_ITEMS = [
     '/obj/item/crowbar', '/obj/item/wrench', '/obj/item/screwdriver', '/obj/item/wirecutters', '/obj/item/weldingtool',
     '/obj/item/flashlight', '/obj/item/storage/toolbox/mechanical', '/obj/item/storage/toolbox/emergency',
@@ -356,6 +359,9 @@ GAME_ITEMS = [
     # light fixtures that break, and what puts them right (lighting.dm)
     '/obj/item/light/tube', '/obj/item/light/bulb', '/obj/item/light/tube/broken', '/obj/item/light/bulb/broken',
     '/obj/item/storage/box/lights/mixed', '/obj/item/storage/box/lights/tubes', '/obj/item/storage/box/lights/bulbs',
+    # an APC taken apart and put together again (apc.dm): the frame it hangs on, the board in it, the cells it holds
+    '/obj/item/wallframe/apc', '/obj/item/electronics/apc', '/obj/item/stock_parts/cell/upgraded', '/obj/item/stock_parts/cell/upgraded/plus',
+    '/obj/item/stock_parts/cell/high/plus', '/obj/item/stock_parts/cell/crap',
     '/obj/item/clothing/under/color/grey', '/obj/item/clothing/shoes/sneakers/black', '/obj/item/storage/backpack',
     # what windows and grilles drop and are rebuilt from (window.dm spawnDebris, grille.dm deconstruct)
     '/obj/item/stack/rods', '/obj/item/stack/sheet/rglass', '/obj/item/stack/sheet/plasmaglass', '/obj/item/stack/sheet/plasmarglass', '/obj/item/shard',
@@ -808,6 +814,9 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                         rec = dict(base, k='wm', d=face, sd=side, s=sp, sub=sub, p=p)
                         if sub == 'apc' and isinstance(v.get('areastring'), str):
                             rec['as'] = v['areastring'].strip('"')        # the area it controls (by its path), when the map says
+                        if sub == 'apc':
+                            # what it looks like with its cover open, its cover gone, its frame broken, its panel open (apc.dm update_icon): the pictures `sv` the sim picks from
+                            rec['sv'] = [spr.add([(icon, vs, face if sl.get_dmi(icon).states[vs].dirs > 1 else S, None, None)]) if icon_ok(icon, vs) else sp for vs in APC_STATES]
                         if how == 'onwall':
                             rec['ow'] = 1
                         if lat:

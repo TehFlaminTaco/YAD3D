@@ -169,7 +169,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const depth = p.ow ? TILE / 2 + 0.03 + 0.012 * k : TILE / 2 - 0.03 - 0.012 * k, lat = (p.lat || 0) * PX;
         const x = cx + sdx * depth + (sdx ? 0 : lat), z = cz + sdz * depth + (sdz ? 0 : lat);
         const st = sprite({ tag: 'wm', rect: p.s, mode: 1, x, y: yb + yc - h / 2, z, w, h, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz, l], emit: p.sub === 'status_display' || p.sub === 'newscaster' ? 0.6 : 0 });
-        const it = { idx: out.interact.length, grid, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, l, x, z, y0: yb + yc - h / 2, y1: yb + yc + h / 2, rad: 0.6, st, sd: p.sd, as: p.as };
+        const it = { idx: out.interact.length, grid, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, l, x, z, y0: yb + yc - h / 2, y1: yb + yc + h / 2, rad: 0.6, st, sd: p.sd, as: p.as, sv: p.sv, base: { x, z, y0: yb + yc - h / 2, S } };
         out.interact.push(it); out.added.interact.push(it);
         break;
       }

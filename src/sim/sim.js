@@ -435,6 +435,7 @@ export class Sim {
       pw: g.powersim.state(),
       lights: g.props.lights.filter((L) => L.status).map((L) => [L.idx, L.status]),                 // the fixtures that are not whole
       gone: g.props.interact.filter((it) => it.gone && it.kind !== 'closet').map((it) => it.idx),    // things that were blown up
+      pv: g.powersim.machines.apc.filter((a) => a.v !== 0).map((a) => [a.rec.idx, a.v]),            // APCs that do not look closed and whole
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
       gravity: g.world.gravityOn, built: [...g.built].map((b) => [b.id, b.k, b.c, b.r, b.st]),

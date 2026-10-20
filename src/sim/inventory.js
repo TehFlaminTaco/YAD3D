@@ -248,6 +248,8 @@ function tagsOf(it) {
   if (d.tank) t.push('tank');
   if (d.light) t.push('light');
   if (d.tool) t.push(d.tool);
+  if (it.path.startsWith('/obj/item/stack/cable_coil')) t.push('coil');
+  if (it.path.startsWith('/obj/item/wallframe')) t.push('frame');
   if (d.heal) t.push('med');
   if (d.consume) t.push('food');
   if (d.spaceHelmet) t.push('helmet');

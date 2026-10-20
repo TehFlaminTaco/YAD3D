@@ -256,6 +256,7 @@ section('cutting and laying cable', () => {
   ok(ps.cables.dirty || !ps.cables.net(t.i), 'the networks are worked out again');
   inbox.length = 0;
   hold('/obj/item/stack/cable_coil', 5);
+  ok(/(^| )coil( |$)/.test(sim.selfState(A).inv.hands[0].tg), 'a coil is tagged for the client, which aims at the floor when you hold one');
   click();
   ok(w.cable[t.i] === 1 && a.hands[0].amount === 4, 'a coil lays it again (one used)');
   inbox.length = 0;
@@ -288,7 +289,7 @@ section('the consoles', () => {
   const open = (type, ctx) => { inbox.length = 0; sim.terminals.open(A, type, { grid: g, ...ctx }); step(0.2); return html(); };
   const apc = ps.apcOf(w.areaIdx[w.idx(a.tile[0], a.tile[1])]) || M.apc[0];
   let e = open('apc', { machine: apc });
-  ok(/Main breaker/.test(e.html) && /External power/.test(e.html) && /Lighting/.test(e.html) && e.buttons.length === 6, 'an APC shows its room, its line, its cell and its three channels');
+  ok(/Main breaker/.test(e.html) && /External power/.test(e.html) && /Lighting/.test(e.html) && e.buttons.length === 7, 'an APC shows its room, its line, its cell, its three channels and its cover lock');
   a.access = new Set([10, 11]);
   const press = (label) => { const k = html().buttons.findIndex((b) => b.l.startsWith(label)); sim.handle(A, { t: 'term', op: 'act', idx: k }); step(0.2); };
   apc.locked = true; a.access = new Set();

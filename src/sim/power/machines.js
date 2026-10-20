@@ -1,7 +1,8 @@
-import { CELLRATE, CHARGELEVEL, SMESRATE, SOLAR_GEN_RATE, CELLS, ENGINE_WATTS } from '../../shared/powerdata.js';
+import { CELLRATE, CHARGELEVEL, SMESRATE, SOLAR_GEN_RATE, CELLS, ENGINE_WATTS, APC_STATES } from '../../shared/powerdata.js';
 import { CH } from '../../shared/power.js';
 import { place } from '../inventory.js';
 import { consume } from '../inventory.js';
+import { apcClick } from './apckit.js';
 
 /** How the DM writes a power (unsorted.dm DisplayPower): W, kW, MW, GW. */
 export function displayPower(w) {
@@ -43,7 +44,15 @@ export class Apc extends Machine {
     this.areaIdx = areaIdx;
     this.name = rec.n || 'APC';
     const max = CELLS[cellType] || CELLS.upgraded;
-    this.cell = { charge: max * 0.9, max };               // start_charge 90 (apc.dm:67)
+    this.cell = { charge: max * 0.9, max, path: `/obj/item/stock_parts/cell/${CELLS[cellType] ? cellType : 'upgraded'}` };               // start_charge 90 (apc.dm:67)
+    this.frame = true;                                    // it hangs on the wall (cut away with a welder, put back with an APC frame)
+    this.opened = 0;                                      // the cover: 0 closed, 1 open, 2 gone (APC_COVER_*)
+    this.coverlocked = true;
+    this.panelOpen = false;                               // the wires exposed (a screwdriver on the closed cover)
+    this.electronics = 2;                                 // the board: 0 missing, 1 installed, 2 secured (APC_ELECTRONICS_*)
+    this.terminal = true;                                 // wired to its terminal: without one it has no line (main 0)
+    this.rev = 0;                                         // counts changes, so a timed job notices the APC was worked on meanwhile
+    this.v = 0;                                           // which picture it shows (index into APC_STATES, -1 for no frame)
     this.operating = true;
     this.chan = [3, 3, 3];                               // equipment, lighting, environment
     this.charging = 0;                                    // 0 not, 1 charging, 2 fully charged
@@ -60,6 +69,78 @@ export class Apc extends Machine {
 
   get area() { return this.areaIdx; }                    // (the room it controls: not always the one its tile is in)
   get percent() { return this.cell ? 100 * this.cell.charge / this.cell.max : 0; }
+  get net() { return this.terminal && this.frame ? this.ps.cables.net(this.tile) : null; }
+  get maint() { return this.electronics !== 2; }         // machine_stat & MAINT: no board, or not screwed down
+
+  /** Which of its pictures it shows (apc.dm update_icon). */
+  variant() {
+    if (!this.frame) return -1;
+    const cell = !!this.cell;
+    let s;
+    if (this.opened === 1) s = this.broken || this.maint ? 'apcmaint' : cell ? 'apc2' : 'apc1';
+    else if (this.opened === 2) s = `${cell ? 'apc2' : 'apc1'}${this.broken ? '-b' : ''}-nocover`;
+    else if (this.broken) s = 'apc-b';
+    else if (this.panelOpen) s = 'apcewires';
+    else s = 'apc0';
+    return APC_STATES.indexOf(s);
+  }
+
+  /** Something about it changed: tell everyone if its picture did. */
+  touch() {
+    this.rev++;
+    const v = this.variant();
+    if (v === this.v) return;
+    this.v = v;
+    this.ps.grid.emit({ e: 'pv', i: this.rec.idx, v });
+  }
+
+  /** apc.dm set_broken: the breaker falls open, the frame is wrecked, and its room goes dark. */
+  setBroken() {
+    if (this.broken || !this.frame) return false;
+    this.operating = false;
+    this.broken = true;
+    this.publish(true);
+    this.ps.sim.sound('sparks', { grid: this.ps.grid, x: this.rec.x, z: this.rec.z, l: this.rec.l | 0 }, 0.8);
+    this.touch();
+    return true;
+  }
+
+  /** apc.dm Destroy: the frame is cut from the wall; its cell goes with it and its room is left with no power from it. */
+  takeOffWall() {
+    this.frame = false; this.operating = false; this.cell = null; this.charging = 0; this.opened = 1;
+    this.publish(true);
+    this.touch();
+  }
+
+  /** A new APC on its wall (apc.dm New with building): cover open, no board, no cell, no wiring, the breaker off. */
+  putOnWall() {
+    this.frame = true; this.opened = 1; this.coverlocked = true; this.panelOpen = false; this.electronics = 0; this.terminal = false;
+    this.cell = null; this.broken = false; this.shorted = false; this.operating = false; this.locked = true; this.failureTimer = 0;
+    this.charging = 0; this.chargecount = 0; this.longtermpower = 10; this.chan = [3, 3, 3];
+    this.publish(true);
+    this.touch();
+  }
+
+  /** What the cell is as an item (it keeps its charge). */
+  cellItem() {
+    const it = this.ps.sim.newItem(this.cell.path);
+    it.charge = this.cell.charge;
+    return it;
+  }
+
+  /** apc.dm examine(). */
+  examine() {
+    if (!this.frame) return [];
+    if (this.broken) return [];
+    const out = [];
+    if (this.opened) {
+      if (this.electronics && this.terminal) out.push(`The cover is ${this.opened === 2 ? 'removed' : 'open'} and the power cell is ${this.cell ? 'installed' : 'missing'}.`);
+      else out.push(`It's ${this.terminal ? '' : 'not '}wired up.`, `The electronics are${this.electronics ? '' : "n't"} installed.`);
+    } else if (this.maint) out.push("The cover is closed. Something is wrong with it. It doesn't work.");
+    else out.push('The cover is closed.');
+    out.push(`Alt-Click the APC to ${this.locked ? 'unlock' : 'lock'} the interface.`);
+    return out;
+  }
 
   /** apc.dm autoset: val 0 off, 1 off (auto), 2 on, 3 on (auto); on 0 off, 1 on, 2 auto-off. */
   static autoset(val, on) {
@@ -77,7 +158,9 @@ export class Apc extends Machine {
 
   process() {
     const ps = this.ps;
+    if (!this.frame) return;
     if (this.broken) { this.publish(); return; }
+    if (this.maint) return;                              // (apc.dm process: in maintenance it does nothing, and its room stays as it was)
     if (this.failureTimer > 0) { this.failureTimer--; this.publish(true); return; }
     this.lastused = ps.areaUse(this.areaIdx);
     const used = this.lastused[0] + this.lastused[1] + this.lastused[2];
@@ -132,24 +215,15 @@ export class Apc extends Machine {
 
   /** apc.dm update(): tell the room. */
   publish(force = false) {
-    const on = this.operating && !this.shorted && !this.failureTimer && !this.broken ? 1 : 0;
+    const on = this.operating && !this.shorted && !this.failureTimer && !this.broken && this.frame ? 1 : 0;
     this.ps.setArea(this.areaIdx, on, this.chan[0], this.chan[1], this.chan[2], this.main, force);
   }
 
   /** The grid fails for `sec` power ticks (apc.dm energy_fail). */
   energyFail(ticks) { this.failureTimer = Math.max(this.failureTimer, Math.round(ticks)); this.publish(true); }
 
-  click(c, m, held) {
-    const sim = this.ps.sim;
-    if (held?.def.id) {                                           // an ID: with engine access it locks or unlocks the interface (apc.dm togglelock)
-      if (!sim.terminals.engineAccess(m)) { sim.tell(m, 'warning', 'Access denied.'); return true; }
-      this.locked = !this.locked;
-      sim.tell(m, 'notice', this.locked ? 'You lock the APC interface.' : 'You unlock the APC interface.');
-      return true;
-    }
-    sim.terminals.open(c, 'apc', { machine: this, area: this.areaIdx, grid: this.ps.grid });
-    return true;
-  }
+  /** A click: the cover, the board, the cell and the wires (src/sim/power/apckit.js), or its console. */
+  click(c, m, held, alt) { return apcClick(this, c, m, held, alt); }
 }
 
 /**

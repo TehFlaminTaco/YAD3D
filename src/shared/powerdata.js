@@ -18,6 +18,24 @@ export const CELLS = {
   'high/plus': 15000,                        // highcap/fifteen_k                                         apc.dm:124, cell.dm:256-257
 };
 
+/** What every power cell holds (cell.dm maxcharge), by what follows /obj/item/stock_parts/cell in its path; the plain cell is 1000. */
+export const CELL_ITEMS = {
+  '': 1000, crap: 500, upgraded: 2500, 'upgraded/plus': 5000, secborg: 600, mini_egun: 600, hos_gun: 1200, pulse: 40000, 'pulse/carbine': 5000, 'pulse/pistol': 2000,
+  high: 10000, 'high/plus': 15000, super: 20000, hyper: 30000, bluespace: 40000, infinite: 30000, potato: 300, emproof: 500,
+};
+const CELL_PATH = '/obj/item/stock_parts/cell';
+const CELL_KEYS = Object.keys(CELL_ITEMS).filter(Boolean).sort((a, b) => b.length - a.length);
+
+/** How much a power cell item holds when full. */
+export function cellMax(path) {
+  const rest = (path || '').startsWith(CELL_PATH) ? path.slice(CELL_PATH.length).replace(/^\//, '') : '';
+  const k = CELL_KEYS.find((key) => rest === key || rest.startsWith(`${key}/`));
+  return CELL_ITEMS[k ?? ''];
+}
+
+/** An APC's pictures, in the order the level data lists them (tools/build_level.py APC_STATES): its `sv`. */
+export const APC_STATES = ['apc0', 'apc1', 'apc2', 'apcmaint', 'apc-b', 'apc1-nocover', 'apc2-nocover', 'apc1-b-nocover', 'apc2-b-nocover', 'apcewires'];
+
 /** What a lamp draws when it is on: 20 W per unit of its brightness, a tube is 8 and a bulb 4 (lighting.dm:392, 214, 257). */
 export const LIGHT_WATTS = { tube: 160, bulb: 80, floor: 80 };
 

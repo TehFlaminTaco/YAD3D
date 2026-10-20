@@ -205,6 +205,7 @@ export class Game {
     rep.on('dbg', (ev) => this.debugMenu.reply(ev));
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('area', (ev) => gv(ev)?.rebuildLights());
+    rep.on('pv', (ev) => { const v = gv(ev); if (v) v.setPropVariant(v.grid.props.interact[ev.i]); });
     rep.on('pg', (ev) => { const v = gv(ev); if (v) v.setPropGone(v.grid.props.interact[ev.i]); });
     rep.on('light', (ev) => { const v = gv(ev); if (v) v.setLightStatus(v.grid.props.lights[ev.i]); });
     rep.on('cable', (ev) => { const v = gv(ev); if (v) { const w = v.grid.world, wh = w.W * w.H, rem = ev.i % wh; v.tilesChanged([[rem % w.W, Math.floor(rem / w.W), Math.floor(ev.i / wh)]]); } });
@@ -614,14 +615,14 @@ export class Game {
   holdingTool() {
     const inv = this.self?.inv;
     const tg = inv?.hands?.[inv.active]?.tg;
-    return !!tg && /(?:^| )(?:welder|screwdriver|crowbar|wrench|wirecutters)(?: |$)/.test(tg);
+    return !!tg && /(?:^| )(?:welder|screwdriver|crowbar|wrench|wirecutters|frame)(?: |$)/.test(tg);
   }
 
-  /** Is what you hold something to build or take up floors with: a crowbar, wrench or wirecutters, rods, a tile? */
+  /** Is what you hold something to build or take up floors with: a crowbar, wrench or wirecutters, rods, a tile, a coil of cable (or a multitool to read it)? */
   holdingBuilder() {
     const inv = this.self?.inv;
     const tg = inv?.hands?.[inv.active]?.tg;
-    return !!tg && /(?:^| )(?:crowbar|wrench|wirecutters|sheet|tile)(?: |$)/.test(tg);
+    return !!tg && /(?:^| )(?:crowbar|wrench|wirecutters|sheet|tile|coil|multitool)(?: |$)/.test(tg);
   }
 
   /** The tile of floor (or lattice, or open space) the ray meets within reach, with a clear line to it. Only while you hold something that works on it. */

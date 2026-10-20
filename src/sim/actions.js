@@ -7,6 +7,7 @@ import {
   attach, detach, place, pickup, dropFromHand, swapHands, quickEquip, equipTo, storeIn, takeToHand, moveItem, carried,
   recalc, internalsSource, allItems, consume, mergeStack, stackNote,
 } from './inventory.js';
+import { mountApcFrame } from './power/apckit.js';
 
 const REACH = 3.2;
 
@@ -207,7 +208,7 @@ export class Actions {
       case 'breach': return this.clickBreachTile(m, t, held);
       case 'window': case 'pane': if (sim.windows.click(m, t, held)) return; return this.clickAir(m, held);
       case 'floor': if (sim.floors.click(m, t, held)) return; return this.clickAir(m, held);
-      case 'wall': if (sim.walls.clickWall(m, t, held)) return; return this.clickAir(m, held);
+      case 'wall': if (mountApcFrame(t.grid, m, t, held) || sim.walls.clickWall(m, t, held)) return; return this.clickAir(m, held);
       case 'built': if (sim.walls.clickGirder(m, t, held)) return; return this.clickAir(m, held);
       case 'light': if (sim.lights.click(m, t, held)) return; return this.clickAir(m, held);
       default: return;
@@ -846,6 +847,7 @@ export class Actions {
     const out = [`This is ${a(it.name || 'thing')}.`, d?.[1] || ''];
     if (it.kind === 'closet') out.push(...this.sim.closets.examineLines(it));
     out.push(...this.sim.tanks.examine(it));
+    if (it.mach?.examine) out.push(...it.mach.examine());
     return out.filter(Boolean);
   }
 }

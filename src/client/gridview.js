@@ -93,6 +93,7 @@ export class GridView {
     this.addStatics(props.statics);
     for (const it of props.closets) this.setClosetView(it);     // the welcome may have told us some are open
     for (const it of props.interact) if (it.gone && it.kind !== 'closet') this.setPropGone(it);
+    for (const it of props.interact) if (it.pv) this.setPropVariant(it);
 
     this.doorViews = [];
     for (const d of grid.doors) this.addDoorView(d);
@@ -451,6 +452,25 @@ export class GridView {
       }
     }
     B.flush();
+  }
+
+  /**
+   * A wall mount that has other pictures (an APC with its cover open, its frame wrecked, or gone from the wall): show the one `it.pv` names. They are cut from different frames, so each
+   * is put where the first would put it (the map's own trimmed rectangle moves with the picture).
+   */
+  setPropVariant(it) {
+    if (!it?.st || it.st.id === undefined || !it.sv) return;
+    const v = it.pv ?? 0;
+    if (v < 0) { it.gone = true; this.stat.setAlpha(it.st.id, 0); return; }
+    it.gone = false;
+    const rc = this.rects[it.sv[v]], rc0 = this.rects[it.sv[0]], b = it.base;
+    if (!rc || !rc0 || !b) return;
+    this.stat.setAlpha(it.st.id, 1);
+    const S = b.S, wpx = rc.w * PX * S, hpx = rc.h * PX * S;
+    const dx = ((rc.ox + rc.w / 2) - (rc0.ox + rc0.w / 2)) * PX * S;                                          // the picture's middle, against the first one's
+    const dy = ((rc.fh - rc.oy - rc.h) - (rc0.fh - rc0.oy - rc0.h)) * PX * S;                                 // and its bottom edge above its frame's
+    this.stat.setRect(it.st.id, rc, wpx, hpx, dx, 0);
+    this.stat.setPos(it.st.id, b.x, b.y0 + dy, b.z);
   }
 
   /** Something was blown up: it is not there any more. */

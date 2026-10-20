@@ -128,10 +128,11 @@ export class Terminals {
       ...[0, 1, 2].map((k) => ({ label: `${CHANNELS[k]}: next`, disabled: !canUse, fn: () => { a.chan[k] = next(k); a.publish(true); g.powersim.flush(); } })),
       { label: a.chargemode ? 'Charging: auto' : 'Charging: off', disabled: !canUse, fn: () => { a.chargemode = !a.chargemode; } },
       { label: a.locked ? 'Unlock interface' : 'Lock interface', disabled: !this.engineAccess(m), fn: () => { a.locked = !a.locked; this.setMsg(c, a.locked ? 'You lock the APC interface.' : 'You unlock the APC interface.'); } },
+      { label: a.coverlocked ? 'Cover lock: engaged' : 'Cover lock: disengaged', disabled: !canUse, fn: () => { a.coverlocked = !a.coverlocked; } },       // (apc.dm ui_act cover)
     ];
     return {
       title: 'Area Power Controller', live: true,
-      html: `<span class="h">${esc(a.name || area.n)}</span>   <span class="d">${a.locked ? 'locked' : 'unlocked'}</span>\n\nMain breaker     ${a.operating ? '<span class="c">On</span>' : '<span class="b">Off</span>'}\nExternal power   ${main}\nPower cell       ${cell}\nTotal load       ${displayPower(a.lastused[0] + a.lastused[1] + a.lastused[2])}\n\n${chan}${a.failureTimer ? '\n\n<span class="b">Power failure: ' + a.failureTimer * 2 + ' s</span>' : ''}${canUse ? '' : '\n\n<span class="w">The interface is locked.</span>'}`,
+      html: `<span class="h">${esc(a.name || area.n)}</span>   <span class="d">${a.locked ? 'locked' : 'unlocked'}</span>\n\nMain breaker     ${a.operating ? '<span class="c">On</span>' : '<span class="b">Off</span>'}\nExternal power   ${main}\nPower cell       ${cell}\nTotal load       ${displayPower(a.lastused[0] + a.lastused[1] + a.lastused[2])}\nCover lock       ${a.coverlocked ? 'Engaged' : '<span class="w">Disengaged</span>'}\n\n${chan}${a.failureTimer ? '\n\n<span class="b">Power failure: ' + a.failureTimer * 2 + ' s</span>' : ''}${canUse ? '' : '\n\n<span class="w">The interface is locked.</span>'}`,
       buttons,
     };
   }
@@ -217,7 +218,7 @@ export class Terminals {
     const w = g.world;
     const L = [];
     for (const i of w.ventTiles()) L.push(`<span class="b">Atmosphere alarm</span>  hull breach, ${esc(w.areaAt(i % w.W, Math.floor(i / w.W))?.n || 'unknown')}`);
-    for (const a of g.powersim.machines.apc) if (a.alarm) L.push(`<span class="w">Power alarm</span>  ${esc(w.areas[a.areaIdx]?.n || a.name)}${a.cell ? ', ' + a.percent.toFixed(0) + '% charge' : ', no cell'}`);
+    for (const a of g.powersim.machines.apc) if (a.frame && a.alarm) L.push(`<span class="w">Power alarm</span>  ${esc(w.areas[a.areaIdx]?.n || a.name)}${a.cell ? ', ' + a.percent.toFixed(0) + '% charge' : ', no cell'}`);
     for (const f of g.firedoors.list) if (f.closed) L.push(`<span class="w">Fire alarm</span>  firelock sealed, ${esc(w.areaAt(f.c, f.r)?.n || '')}`);
     return { title: 'Station Alerts', live: true, html: `<span class="h">ACTIVE ALARMS</span>\n\n${L.length ? L.slice(0, 24).join('\n') : '<span class="c">All systems nominal.</span>'}`, buttons: [] };
   }

@@ -169,8 +169,13 @@ export class PowerSim {
         n++;
       }
     }
-    if (n) this.sim.sound('sparks', { grid: this.grid, x: c * 2 + 1, z: r * 2 + 1 }, 0.9);
-    return n;
+    let wrecked = 0;
+    for (const a of this.machines.apc) {                                          // (an APC in a wall the blast reaches is wrecked: set_broken)
+      const d = Math.hypot(a.c - c, a.r - r);
+      if (d <= radius - 1 && (a.rec.l | 0) === l && this.sim.rand() < 0.6 - d * 0.15 && a.setBroken()) wrecked++;
+    }
+    if (n && !wrecked) this.sim.sound('sparks', { grid: this.grid, x: c * 2 + 1, z: r * 2 + 1 }, 0.9);
+    return n;                                                                     // (the cables it cut)
   }
 
   // ------------------------------------------------------------------ what the rest of the game asks
