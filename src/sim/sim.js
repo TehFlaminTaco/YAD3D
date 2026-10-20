@@ -25,6 +25,7 @@ import { Floors } from './floors.js';
 import { GIRDER } from '../shared/walls.js';
 import { Debug } from './debug.js';
 import { Looks, WORN_SLOTS } from '../shared/looks.js';
+import { Sun } from './power/powersim.js';
 import { AI } from './ai.js';
 import { attach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv } from './inventory.js';
 
@@ -78,6 +79,7 @@ export class Sim {
     this.time = 0;
     this.tick = 0;
     this.rand = rng(Date.now() & 0xffff);
+    this.sun = new Sun(this.rand);          // where the sun is (the solar panels turn to it)
     this.db = new ItemDB(data.level.itemdefs, data.contents || {});
     this.looks = new Looks(data.chars);
     this.jobs = new Jobs(data.jobsJson);
@@ -426,8 +428,7 @@ export class Sim {
     return {
       g: g.id, bp: g.bp, kind: g.kind, name: g.name, tf: tfClone(g.tf), docked: g.docked,
       ...(this.madeBlueprints.has(g.bp) ? { def: this.level.grids[g.bp] } : {}),                     // (a blueprint made while the game runs is sent whole: the clients' level data does not have it)
-      power: { state: g.power.state, battery: g.power.battery },
-      areaOn: [...g.power.areaOn], areaLights: [...g.power.areaLights],
+      pw: g.powersim.state(),
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
       gravity: g.world.gravityOn, built: [...g.built].map((b) => [b.id, b.k, b.c, b.r, b.st]),
@@ -465,7 +466,8 @@ export class Sim {
     this.updateDoors(dt);
     for (const g of this.grids.values()) g.firedoors.update(dt);
     this.windows.update();
-    for (const g of this.grids.values()) { g.atmos.update(dt); g.power.update(dt); }
+    this.sun.update(dt);
+    for (const g of this.grids.values()) { g.atmos.update(dt); g.powersim.update(dt); }
     this.shuttles.update(dt);
     this.physics.step(dt);
     this.ai.update(dt);
@@ -744,17 +746,8 @@ export class Sim {
 
   flicker(g, sec) { g.emit({ e: 'flicker', s: sec }); }
 
-  onPowerState(g, s, prev) {
-    g.emit({ e: 'power', state: s, battery: g.power.battery });
-    g.emit({ e: 'snd', n: s === 'normal' ? 'ping' : 'zzzt', v: 0.8 });
-    this.flicker(g, 1.5);
-  }
-
-  setAreaPower(g, a, on, lights) {
-    if (on !== undefined) g.power.areaOn[a] = on ? 1 : 0;
-    if (lights !== undefined) g.power.areaLights[a] = lights ? 1 : 0;
-    g.emit({ e: 'area', a, on: g.power.areaOn[a], lights: g.power.areaLights[a] });
-  }
+  /** The wall switch of a room's lights. */
+  setLightSwitch(g, a, on) { g.powersim.setSwitch(a, on); }
 
   // ------------------------------------------------------------------ spawning
   newMob(o) {

@@ -248,7 +248,7 @@ export class DebugMenu {
   tab_world() {
     const grp = (title, ...buttons) => { this.section(title); this.row(...buttons); };
     grp('Alert level', ...['green', 'blue', 'red'].map((l) => this.button(l[0].toUpperCase() + l.slice(1), () => this.send('alert', { level: l }))));
-    grp('Power', this.button('Normal', () => this.send('power', { state: 'normal' })), this.button('Battery', () => this.send('power', { state: 'battery' })), this.button('Out', () => this.send('power', { state: 'out' })));
+    grp('Power', this.button('Fill cells and SMES', () => this.send('power', { what: 'fill' })), this.button('Drain them', () => this.send('power', { what: 'drain' })), this.button('Engine on / off', () => this.send('power', { what: 'engine' })), this.button('Every APC fails', () => this.send('power', { what: 'fail' }), 'A grid check: every APC is out for half a minute'));
     grp('Gravity', this.button('On', () => this.send('gravity', { on: true })), this.button('Off', () => this.send('gravity', { on: false })), this.button('Take me out into space', () => this.send('space')));
     grp('Trouble', this.button('Meteor strike', () => this.send('strike')), this.button('3 carp where I look', () => this.send('carp', { n: 3, ...this.place() })));
     grp('Shuttle', this.button('Call', () => this.send('shuttle', { what: 'call' })), this.button('Dock now', () => this.send('shuttle', { what: 'dock' })), this.button('Depart', () => this.send('shuttle', { what: 'depart' })), this.button('Skip to the next leg', () => this.send('shuttle', { what: 'jump' }), 'Out, the jump to bluespace, the jump to Central Command, docked there (the round ends two minutes after)'));

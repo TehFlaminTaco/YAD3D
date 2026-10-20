@@ -437,7 +437,7 @@ export class GridView {
       }
     }
     for (const L of props.lights) {
-      const m = lightMode(L, power.state, power.areaOn, power.areaLights, world.areas);
+      const m = lightMode(L, power, world.areas);
       L.on = m.on;
       if (L.st && L.st.id !== undefined) this.stat.setEmit(L.st.id, m.on && this.lightScale > 0.5 ? 1 : 0);
       if (!m.on) continue;

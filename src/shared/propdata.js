@@ -44,10 +44,10 @@ export const ITEM_SCALE = 0.5;               // SS13 item icons are drawn big fo
 export function buildPropData(world, rects, props, level, prev = null) {
   const grid = world.grid;                  // stamped on the records the sim looks things up by (doors, firelocks, props): they know where they stand
   const out = prev || {
-    tables: [], panes: [], lights: [], items: [], interact: [], doors: [], fdoors: [], statics: [], closets: [], girders: [],
+    tables: [], panes: [], lights: [], items: [], interact: [], doors: [], fdoors: [], statics: [], closets: [], girders: [], machines: [],
     paneIdx: new Map(), pool: level.pool.filter((q) => q.s >= 0), lootRng: rng(1337), wmSpots: new Map(),
   };
-  out.added = { tables: [], panes: [], lights: [], doors: [], statics: [], items: [], interact: [], fdoors: [], closets: [], girders: [] };
+  out.added = { tables: [], panes: [], lights: [], doors: [], statics: [], items: [], interact: [], fdoors: [], closets: [], girders: [], machines: [] };
   const center = (c, r) => [c * TILE + TILE / 2, r * TILE + TILE / 2];
 
   const addItem = (spriteId, name, c, r, extra = {}) => {
@@ -96,6 +96,13 @@ export function buildPropData(world, rects, props, level, prev = null) {
     switch (p.k) {
       case 'door': { const d = { ...p, i, l, grid }; out.doors.push(d); out.added.doors.push(d); break; }
       case 'fdoor': { const f = { x: c, y: r, l, s: p.s, n: p.n, grid }; out.fdoors.push(f); out.added.fdoors.push(f); break; }
+      case 'mach': {                                                       // a power machine that is not a prop of its own (a terminal, a solar panel): the sim makes its machine from this
+        const m = { ...p, c, r, l, i, grid };
+        out.machines.push(m); out.added.machines.push(m);
+        const rc = p.s !== undefined ? rects[p.s] : null;
+        if (rc && p.flat) sprite({ tag: 'mach', rect: p.s, mode: 3, x: cx, y: yb + 0.03, z: cz, w: rc.w * PX, h: rc.h * PX, ox: 0, oy: 0, lit: [cx, cz, l] });
+        break;
+      }
       case 'wdoor': {
         const rc = rects[p.s];
         if (!rc) break;
@@ -127,7 +134,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const st = sprite({ tag: 'sprite', rect: p.s, mode: p.bb ? 0 : 1, x: cx, y, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz, l], ...(p.fr ? { views: p.fr, face: p.d } : {}) });
         // what is bolted down fills its tile; what is loose is a box of its own size that can be dragged about
         const loose = !!p.den && !p.anc;
-        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, l, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0 };
+        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, l, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0, sc: p.sc, sk: p.sk };
         if (loose) world.boxAdd(it); else if (p.den) world.solid[i] = 1;
         out.interact.push(it); out.added.interact.push(it);
         break;
@@ -162,7 +169,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const depth = p.ow ? TILE / 2 + 0.03 + 0.012 * k : TILE / 2 - 0.03 - 0.012 * k, lat = (p.lat || 0) * PX;
         const x = cx + sdx * depth + (sdx ? 0 : lat), z = cz + sdz * depth + (sdz ? 0 : lat);
         const st = sprite({ tag: 'wm', rect: p.s, mode: 1, x, y: yb + yc - h / 2, z, w, h, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz, l], emit: p.sub === 'status_display' || p.sub === 'newscaster' ? 0.6 : 0 });
-        const it = { idx: out.interact.length, grid, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, l, x, z, y0: yb + yc - h / 2, y1: yb + yc + h / 2, rad: 0.6, st, sd: p.sd };
+        const it = { idx: out.interact.length, grid, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, l, x, z, y0: yb + yc - h / 2, y1: yb + yc + h / 2, rad: 0.6, st, sd: p.sd, as: p.as };
         out.interact.push(it); out.added.interact.push(it);
         break;
       }

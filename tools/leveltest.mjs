@@ -86,7 +86,7 @@ console.log('smashed window');
     const { floors, glass, solid } = scan();
     ok(sides.every((s) => !glass.has(edge(c, r, s))), `${name}: the glass is gone`);
     ok(sides.every((s) => solid.get(edge(c, r, s, INSET)) === gr), `${name}: the grille is left standing`);
-    ok(floors.get(i) === world.floorCell[i], `${name}: the floor shows`);
+    ok(floors.get(i) === mesh.floorCellFor(i, c, r, 0), `${name}: the floor shows (with a cable on it, if there is one)`);
   }
 }
 

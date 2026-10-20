@@ -45,7 +45,7 @@ for (let k = 0; k < ticks; k++) {
 }
 const crew = [...sim.mobs.values()].filter((m) => m.kind === 'human');
 console.log(`ran ${sim.round.time.toFixed(0)}s round time in ${Date.now() - t0}ms total; worst tick ${worst.toFixed(1)}ms, slow ticks ${slow}`);
-console.log('state', sim.round.state, 'power', sim.power.state, 'breaches', sim.world.breached.size, 'evac', sim.director.evacState, 'carp alive', [...sim.mobs.values()].filter((m) => m.kind === 'carp' && !m.dead).length);
+console.log('state', sim.round.state, 'power', sim.station.powersim.status(), 'breaches', sim.world.breached.size, 'evac', sim.director.evacState, 'carp alive', [...sim.mobs.values()].filter((m) => m.kind === 'carp' && !m.dead).length);
 console.log('crew alive', crew.filter((m) => !m.dead).length, '/', crew.length, 'evacuated', crew.filter((m) => m.evacuated).length);
 console.log('events to client', events);
 console.log('last messages:', msgs.slice(-8).map((m) => `[${m.k}] ${m.name ? m.name + ': ' : ''}${m.text}`));

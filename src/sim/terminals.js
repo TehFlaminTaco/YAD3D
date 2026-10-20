@@ -1,5 +1,6 @@
 import { KIND } from '../shared/config.js';
 import { esc } from '../shared/util.js';
+import { displayPower, displayEnergy, CHANNELS } from './power/machines.js';
 
 const NOTICES = [
   { t: 'NANOTRASEN STANDARD OPERATING PROCEDURE: HULL BREACH', b: 'In the event of a hull breach:\n\n  1. Do not panic.\n  2. Get to the nearest airtight door and close it behind you.\n  3. Put on a breath mask and connect an air tank.\n  4. Inform Engineering. A sheet of metal and a welding tool will patch most holes.\n\nNanotrasen accepts no liability for losses due to decompression.' },
@@ -75,13 +76,16 @@ export class Terminals {
     const area = w.areas[t.ctx.area ?? w.areaIdx[w.idx(m.tile[0], m.tile[1])]];
     const bar = (frac, n = 24) => '█'.repeat(Math.round(frac * n)) + '░'.repeat(n - Math.round(frac * n));
     switch (t.type) {
-      case 'apc': return this.apc(g, area, bar);
+      case 'apc': return this.apc(c, t, g, area, bar);
+      case 'smes': return this.smes(c, t, bar);
+      case 'solar': return this.solar(c, t);
+      case 'pacman': return this.pacman(c, t);
       case 'airalarm': return this.airalarm(c, g, area, bar);
       case 'crew': return this.crew();
       case 'atmos': return this.atmosMap(g);
       case 'alerts': return this.alerts(g);
       case 'comms': return this.comms(c);
-      case 'power': return this.powerMon(c, g, bar);
+      case 'power': return this.powerMon(c, t, g, bar);
       case 'shuttle': return this.shuttle();
       case 'pod': return this.pod(c);
       case 'records': return this.records();
@@ -105,16 +109,77 @@ export class Terminals {
     };
   }
 
-  apc(g, area, bar) {
-    const sim = this.sim, P = g.power;
-    const i = g.world.areas.indexOf(area);
-    const on = P.areaOn[i], lights = P.areaLights[i];
+  /** Can this person work the controls (apc.dm: the interface is locked until an ID with engine access unlocks it)? */
+  engineAccess(m) { return [10, 11, 56].some((n) => m.access.has(n)); }
+
+  apc(c, t, g, area, bar) {
+    const sim = this.sim, i = g.world.areas.indexOf(area);
+    const a = t.ctx.machine || g.powersim.apcOf(i);
+    if (!a) return { title: 'Area Power Controller', html: `<span class="h">${esc(area.n)}</span>\n\n<span class="b">This area has no power controller.</span>`, buttons: [] };
+    const m = c.mob, canUse = !a.locked || this.engineAccess(m);
+    const mode = ['Off', 'Off (auto)', 'On', 'On (auto)'];
+    const lab = (v) => (v >= 2 ? '<span class="c">' : '<span class="w">') + mode[v] + '</span>';
+    const main = a.main === 2 ? '<span class="c">Good</span>' : a.main === 1 ? '<span class="w">Low</span>' : '<span class="b">None</span>';
+    const cell = a.cell ? `${a.percent.toFixed(0)}%  ${bar(a.percent / 100, 20)}  ${a.charging === 2 ? '<span class="c">Fully charged</span>' : a.charging === 1 ? '<span class="c">Charging</span>' : '<span class="w">Not charging</span>'}` : '<span class="b">No cell</span>';
+    const chan = [0, 1, 2].map((k) => `${CHANNELS[k].padEnd(12)} ${lab(a.chan[k])}   <span class="d">${displayPower(a.lastused[k])}</span>`).join('\n');
+    const next = (k) => { const v = a.chan[k]; return v === 2 ? a.setsubsystem(1) : v === 0 ? a.setsubsystem(3) : a.setsubsystem(2); };
+    const buttons = [
+      { label: a.operating ? 'Breaker off' : 'Breaker on', disabled: !canUse, fn: () => { a.operating = !a.operating; a.publish(true); g.powersim.flush(); } },
+      ...[0, 1, 2].map((k) => ({ label: `${CHANNELS[k]}: next`, disabled: !canUse, fn: () => { a.chan[k] = next(k); a.publish(true); g.powersim.flush(); } })),
+      { label: a.chargemode ? 'Charging: auto' : 'Charging: off', disabled: !canUse, fn: () => { a.chargemode = !a.chargemode; } },
+      { label: a.locked ? 'Unlock interface' : 'Lock interface', disabled: !this.engineAccess(m), fn: () => { a.locked = !a.locked; this.setMsg(c, a.locked ? 'You lock the APC interface.' : 'You unlock the APC interface.'); } },
+    ];
     return {
       title: 'Area Power Controller', live: true,
-      html: `<span class="h">${esc(area.n)}</span>\n\nMain grid        ${P.state === 'normal' ? '<span class="c">Nominal</span>' : P.state === 'battery' ? '<span class="w">Emergency cells</span>' : '<span class="b">Offline</span>'}\nArea breaker     ${on ? '<span class="c">On</span>' : '<span class="b">Off</span>'}\nLighting         ${lights ? '<span class="c">On</span>' : '<span class="b">Off</span>'}\nEmergency cells  ${bar(P.battery)} ${Math.round(P.battery * 100)}%`,
+      html: `<span class="h">${esc(a.name || area.n)}</span>   <span class="d">${a.locked ? 'locked' : 'unlocked'}</span>\n\nMain breaker     ${a.operating ? '<span class="c">On</span>' : '<span class="b">Off</span>'}\nExternal power   ${main}\nPower cell       ${cell}\nTotal load       ${displayPower(a.lastused[0] + a.lastused[1] + a.lastused[2])}\n\n${chan}${a.failureTimer ? '\n\n<span class="b">Power failure: ' + a.failureTimer * 2 + ' s</span>' : ''}${canUse ? '' : '\n\n<span class="w">The interface is locked.</span>'}`,
+      buttons,
+    };
+  }
+
+  smes(c, t, bar) {
+    const s = t.ctx.machine, g = t.grid;
+    const m = c.mob, canUse = this.engineAccess(m);
+    const step = (k, d) => () => { s[k] = Math.max(0, Math.min(s[k + 'Max'], s[k] + d)); };
+    return {
+      title: s.name || 'Power Storage Unit', live: true,
+      html: `<span class="h">${esc(s.name || 'power storage unit')}</span>${s.broken ? '   <span class="b">no power terminal</span>' : ''}\n\nStored energy    ${s.percent.toFixed(1)}%  ${bar(s.percent / 100, 20)}\n                 <span class="d">${displayEnergy(s.charge)} of ${displayEnergy(s.capacity)}</span>\n\nInput            ${s.inputAttempt ? '<span class="c">Auto</span>' : '<span class="b">Off</span>'}   ${s.inputting ? '<span class="c">charging</span>' : '<span class="w">not charging</span>'}\nInput level      ${displayPower(s.inputLevel)}  <span class="d">(max ${displayPower(s.inputLevelMax)})</span>\n\nOutput           ${s.outputAttempt ? '<span class="c">Online</span>' : '<span class="b">Offline</span>'}   ${s.outputting ? '<span class="c">' + displayPower(s.outputUsed) + '</span>' : '<span class="w">not outputting</span>'}\nOutput level     ${displayPower(s.outputLevel)}  <span class="d">(max ${displayPower(s.outputLevelMax)})</span>`,
       buttons: [
-        { label: on ? 'Breaker off' : 'Breaker on', fn: () => sim.setAreaPower(g, i, !on, undefined) },
-        { label: lights ? 'Lights off' : 'Lights on', fn: () => sim.setAreaPower(g, i, undefined, !lights) },
+        { label: s.inputAttempt ? 'Input: off' : 'Input: auto', disabled: !canUse, fn: () => { s.inputAttempt = !s.inputAttempt; } },
+        { label: 'Input -10 kW', disabled: !canUse, fn: step('inputLevel', -10000) },
+        { label: 'Input +10 kW', disabled: !canUse, fn: step('inputLevel', 10000) },
+        { label: s.outputAttempt ? 'Output: offline' : 'Output: online', disabled: !canUse, fn: () => { s.outputAttempt = !s.outputAttempt; } },
+        { label: 'Output -10 kW', disabled: !canUse, fn: step('outputLevel', -10000) },
+        { label: 'Output +10 kW', disabled: !canUse, fn: step('outputLevel', 10000) },
+      ],
+    };
+  }
+
+  solar(c, t) {
+    const s = t.ctx.machine, sim = this.sim;
+    const modes = ['Off', 'Timed', 'Auto'];
+    return {
+      title: s.name || 'Solar Panel Control', live: true,
+      html: `<span class="h">${esc(s.name || 'solar panel control')}</span>\n\nGenerated power  ${displayPower(s.lastGen)}\nStar azimuth     ${sim.sun.azimuth.toFixed(1)} deg\nPanels           ${s.panels.length} connected, tracker ${s.tracker ? '<span class="c">yes</span>' : '<span class="w">none</span>'}\n\nTracking         ${modes[s.track]}\nPanel azimuth    ${s.azimuth.toFixed(1)} deg\nTracking rate    ${s.rate} deg/h`,
+      buttons: [
+        { label: `Tracking: ${modes[(s.track + 1) % 3]}`, fn: () => { s.track = (s.track + 1) % 3; if (s.track === 2 && !s.tracker) this.setMsg(c, 'No tracker is connected.'); } },
+        { label: 'Azimuth +15', disabled: s.track !== 0, fn: () => { s.azimuth = (s.azimuth + 15) % 360; } },
+        { label: 'Azimuth -15', disabled: s.track !== 0, fn: () => { s.azimuth = (s.azimuth + 345) % 360; } },
+        { label: 'Rate +10', disabled: s.track !== 1, fn: () => { s.rate = Math.min(360, s.rate + 10); } },
+        { label: 'Rate -10', disabled: s.track !== 1, fn: () => { s.rate = Math.max(-360, s.rate - 10); } },
+      ],
+    };
+  }
+
+  pacman(c, t) {
+    const s = t.ctx.machine;
+    return {
+      title: 'Portable Generator', live: true,
+      html: `<span class="h">${esc(s.name)}</span>\n\nStatus           ${s.active ? '<span class="c">On</span>' : '<span class="w">Off</span>'}\nPlasma           ${s.sheets} sheets, ${Math.round(s.sheetLeft * 1000) / 10}% of the next\nOutput           ${displayPower(s.powerGen * s.powerOutput)}  <span class="d">(level ${s.powerOutput}, power ${displayPower(s.powerGen)} a level)</span>\nConnected        ${s.net ? '<span class="c">yes</span>' : '<span class="b">no</span>'}   ${s.net ? displayPower(s.net.avail) + ' on the line' : ''}`,
+      buttons: [
+        { label: s.active ? 'Stop' : 'Start', disabled: !s.active && !s.hasFuel(), fn: () => { if (!s.toggle()) this.setMsg(c, 'It has no fuel.'); } },
+        { label: 'Output lower', fn: () => { if (s.powerOutput > 1) s.powerOutput--; } },
+        { label: 'Output higher', fn: () => { if (s.powerOutput < 4) s.powerOutput++; } },
+        { label: 'Eject fuel', disabled: s.active || s.sheets < 1, fn: () => { s.eject(c.mob); } },
       ],
     };
   }
@@ -152,40 +217,37 @@ export class Terminals {
     const w = g.world;
     const L = [];
     for (const i of w.ventTiles()) L.push(`<span class="b">Atmosphere alarm</span>  hull breach, ${esc(w.areaAt(i % w.W, Math.floor(i / w.W))?.n || 'unknown')}`);
-    if (g.power.state !== 'normal') L.push(`<span class="w">Power alarm</span>  main grid ${g.power.state === 'out' ? 'offline' : 'on emergency cells'}`);
+    for (const a of g.powersim.machines.apc) if (a.alarm) L.push(`<span class="w">Power alarm</span>  ${esc(w.areas[a.areaIdx]?.n || a.name)}${a.cell ? ', ' + a.percent.toFixed(0) + '% charge' : ', no cell'}`);
     for (const f of g.firedoors.list) if (f.closed) L.push(`<span class="w">Fire alarm</span>  firelock sealed, ${esc(w.areaAt(f.c, f.r)?.n || '')}`);
     return { title: 'Station Alerts', live: true, html: `<span class="h">ACTIVE ALARMS</span>\n\n${L.length ? L.slice(0, 24).join('\n') : '<span class="c">All systems nominal.</span>'}`, buttons: [] };
   }
 
-  powerMon(c, g, bar) {
-    const sim = this.sim, P = g.power;
-    const t = c.term;
-    const labels = ['Purge coolant loop', 'Reset containment field', 'Engage emitters'];
-    const step = P.restartStep;
-    const locked = sim.time < P.lockoutUntil;
-    const s = P.state;
-    const lines = labels.map((l, k) => `  ${step > k ? '<span class="c">[done]</span>' : step === k ? '<span class="w">[next]</span>' : '[    ]'}  ${k + 1}. ${l}`).join('\n');
-    const html = `<span class="h">POWER MONITORING</span>\n\nMain grid     ${s === 'normal' ? '<span class="c">Online</span>' : s === 'battery' ? '<span class="w">Degraded, emergency cells only</span>' : '<span class="b">Offline</span>'}\nCell reserve  ${bar(P.battery)} ${Math.round(P.battery * 100)}%\n${s === 'battery' ? `Estimate      ~${Math.round(P.battery / P.drain)} s until blackout\n` : ''}\n<span class="h">ENGINE CONTROL</span>${s === 'normal' ? '  <span class="d">(engine running)</span>' : ''}\n${s === 'normal' ? '' : lines + '\n' + (locked ? '\n<span class="b">SCRAM: console locked out for ' + Math.ceil(P.lockoutUntil - sim.time) + ' s</span>' : '')}`;
-    const mk = (k) => ({
-      label: labels[k], disabled: s === 'normal' || locked || !!t.pending,
-      fn: () => {
-        if (step === k) {
-          this.setMsg(c, `${labels[k]}...`);
-          sim.soundTo(c, 'terminal_ok', 0.7);
-          t.pending = { at: sim.time + 2.4, fn: () => {
-            P.restartStep = k + 1;
-            if (P.restartStep >= 3) { P.restartStep = 0; P.battery = 1; P.setState('normal'); sim.director.onPowerRestored(); sim.director.setLevel('blue'); this.setMsg(c, 'Engine online. Grid restored.'); }
-            else this.setMsg(c, `${labels[k]} complete.`);
-          } };
-        } else {
-          this.setMsg(c, 'Sequence fault. Engine scram.');
-          sim.soundTo(c, 'terminal_no', 0.8);
-          P.restartStep = 0;
-          P.lockoutUntil = sim.time + 8;
-        }
-      },
+  /** The power monitoring console (powermonitor.dm): supply, demand, and every APC on the network. */
+  powerMon(c, t, g, bar) {
+    const ps = g.powersim, m = c.mob;
+    // the network it is on: the one under it, else the one with the most APCs
+    const w = g.world, here = ps.cables.net(w.idx(Math.floor(t.x / 2), Math.floor(t.z / 2)));
+    const count = new Map();
+    for (const a of ps.machines.apc) { const n = a.net; if (n) count.set(n, (count.get(n) || 0) + 1); }
+    const net = here || [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (!net) return { title: 'Power Monitor', html: '<span class="h">POWER MONITORING</span>\n\n<span class="b">No connection to a power network.</span>', buttons: [] };
+    const apcs = ps.machines.apc.filter((a) => a.net === net).sort((x, y) => (w.areas[x.areaIdx]?.n || '').localeCompare(w.areas[y.areaIdx]?.n || ''));
+    const PER = 12, pages = Math.max(1, Math.ceil(apcs.length / PER));
+    const page = ((t.page % pages) + pages) % pages;
+    const hist = net.history.slice(-24);
+    const top = Math.max(1, ...hist.map((h) => Math.max(h[0], h[1])), net.viewavail, net.viewload);
+    const spark = (k) => hist.map((h) => '▁▂▃▄▅▆▇█'[Math.min(7, Math.floor(h[k] / top * 7.99))]).join('');
+    const ch = (v) => ['off', 'off*', 'on', 'on*'][v];
+    const rows = apcs.slice(page * PER, page * PER + PER).map((a) => {
+      const area = w.areas[a.areaIdx];
+      const ok = a.chan.every((v) => v >= 2) && a.operating;
+      return `<div class="row"><span>${esc(area?.n || a.name)}</span><span>${a.cell ? a.percent.toFixed(0).padStart(3) + '%' + (a.charging === 1 ? '+' : a.charging === 2 ? '=' : '-') : ' --'} ${displayPower(a.lastused[0] + a.lastused[1] + a.lastused[2]).padStart(8)}  <span class="${ok ? 'c' : 'w'}">${ch(a.chan[0])} ${ch(a.chan[1])} ${ch(a.chan[2])}</span></span></div>`;
     });
-    return { title: 'Power Monitor', live: true, html, buttons: [mk(0), mk(1), mk(2)] };
+    return {
+      title: 'Power Monitor', live: true, pages,
+      html: `<span class="h">POWER MONITORING</span>   <span class="d">[${page + 1}/${pages}]</span>\n\nSupply   ${displayPower(net.viewavail).padStart(9)}  <span class="c">${spark(0)}</span>\nDemand   ${displayPower(net.viewload).padStart(9)}  <span class="w">${spark(1)}</span>\n\n<span class="d">${apcs.length} power controllers   (cell, load, equipment lighting environment)</span>\n${rows.join('')}`,
+      buttons: [{ label: 'Next', fn: () => { t.page++; } }, { label: 'Previous', fn: () => { t.page--; } }],
+    };
   }
 
   comms(c) {
@@ -227,7 +289,7 @@ export class Terminals {
 
   status(g) {
     const sim = this.sim, d = sim.director;
-    return { title: 'Status Display', live: true, html: `<span class="h">STATION STATUS</span>\n\nShuttle   ${d.evacState === 'idle' ? 'no active order' : d.evacState === 'called' ? 'ETA ' + Math.ceil(d.evacTimer) + ' s' : d.evacState === 'docked' ? 'docked ' + Math.ceil(d.evacTimer) + ' s' : 'departed'}\nGrid      ${g.power.state}\nBreaches  ${g.world.ventTiles().length}\nAlert     ${d.level}`, buttons: [] };
+    return { title: 'Status Display', live: true, html: `<span class="h">STATION STATUS</span>\n\nShuttle   ${d.evacState === 'idle' ? 'no active order' : d.evacState === 'called' ? 'ETA ' + Math.ceil(d.evacTimer) + ' s' : d.evacState === 'docked' ? 'docked ' + Math.ceil(d.evacTimer) + ' s' : 'departed'}\nGrid      ${g.powersim.status()}\nBreaches  ${g.world.ventTiles().length}\nAlert     ${d.level}`, buttons: [] };
   }
 
   atmosMap(g) {

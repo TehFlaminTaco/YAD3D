@@ -76,10 +76,13 @@ section('what happens on one grid stays on it', () => {
   step(2);
   ok(station.atmos.pressureAt(60, 60) === pStation && room.atmos.pressureAt(1, 1) < pRoom, 'emptying the room does not touch the station air');
   inbox.a.length = 0;
-  room.power.setState('out');
+  const ra = room.world.areaIdx[room.doors[0].i], sa = station.world.areaIdx[station.doors[0].i];
+  room.power.metered[ra] = 1;                                        // (a test room has all the power it wants until something meters it)
+  room.powersim.setArea(ra, 0, 3, 3, 3, 2);                          // its breaker goes off
+  room.powersim.flush();
   step(0.2);
-  const pw = evs(inbox.a, 'power');
-  ok(room.power.state === 'out' && station.power.state === 'normal', 'the room loses power, the station does not');
+  const pw = evs(inbox.a, 'area');
+  ok(!room.power.powered(ra, 2) && station.power.powered(sa, 2), 'the room loses power, the station does not');
   ok(pw.length === 1 && pw[0].g === room.id, 'and the event says which grid it was');
   ok(!room.power.doorsWork(room.doors[0]) && station.power.doorsWork(station.doors[0]), 'so its doors stop working and the station\'s do not');
   inbox.a.length = 0;

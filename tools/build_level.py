@@ -290,10 +290,10 @@ SKIP_PREFIXES = (
     '/obj/structure/cable', '/obj/machinery/atmospherics', '/obj/structure/disposalpipe', '/obj/machinery/duct',
     '/obj/effect/mapping_helpers', '/obj/effect/decal', '/obj/effect/turf_decal', '/obj/effect/landmark',
     '/obj/machinery/navbeacon', '/obj/machinery/meter', '/obj/machinery/conveyor', '/obj/item/solar_assembly',
-    '/obj/structure/transit_tube', '/obj/structure/grille', '/obj/machinery/power/solar', '/obj/docking_port',
+    '/obj/structure/transit_tube', '/obj/structure/grille', '/obj/docking_port',
     '/obj/structure/lattice', '/obj/effect/spawner/structure', '/obj/machinery/power/terminal',
     '/obj/structure/disposaloutlet', '/obj/structure/light_construct', '/obj/item/wallframe', '/obj/item/poster',
-    '/obj/structure/marker_beacon', '/obj/machinery/power/tracker', '/obj/structure/sign/poster/random',
+    '/obj/structure/marker_beacon', '/obj/structure/sign/poster/random',
     '/obj/machinery/door_buttons', '/obj/structure/plasticflaps', '/obj/effect/spawner/lootdrop/grille',
     '/obj/machinery/ai_slipper', '/obj/machinery/porta_turret', '/obj/machinery/flasher', '/obj/machinery/field',
     '/obj/machinery/telecomms', '/obj/machinery/plumbing', '/obj/item/stack/rods', '/obj/item/stack/cable_coil',
@@ -365,6 +365,25 @@ GAME_ITEMS = [
 # --------------------------------------------------------------------------- build
 
 
+def solar_image(tracker=False):
+    """A solar panel seen from above, drawn here (TG's own is in goon/, which is not usable): a frame, a dark blue panel and its cell lines. The tracker is the same with a dish."""
+    img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+    px = img.load()
+    for yy in range(32):
+        for xx in range(32):
+            edge = xx in (1, 30) or yy in (1, 30)
+            if not (1 <= xx <= 30 and 1 <= yy <= 30):
+                continue
+            line = xx % 8 == 1 or yy % 8 == 1
+            px[xx, yy] = (150, 158, 172, 255) if edge else (56, 92, 190, 255) if line else (24, 40, 104, 255)
+    if tracker:
+        for yy in range(10, 22):
+            for xx in range(10, 22):
+                if (xx - 16) ** 2 + (yy - 16) ** 2 <= 30:
+                    px[xx, yy] = (214, 220, 232, 255)
+    return img
+
+
 def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
     """Classify tiles + props for one grid. Registries (areas, wall variants, floor types, cells, sprites) are shared across calls.
     `full` is the first call (the station): only it makes the things that belong to the game as a whole (the loot pool, the mob sets, the
@@ -381,6 +400,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
     lat_a = bytearray(Wd * Ht)          # lattice over space: 1 lattice, 2 catwalk
     floor_types, floor_type_idx = shared['floor_types'], shared['floor_type_idx']
     roof = bytearray(Wd * Ht)
+    cab = bytearray(Wd * Ht)            # 1 where there is a power cable (this TG joins every cable to its neighbours: cable.dm Connect_cable, so a tile is all there is to know)
     wall_variants = shared['wall_variants']     # {name, glass, cells[4], gr?}  index = left|right<<1
     wall_variant_idx = shared['wall_variant_idx']
 
@@ -636,6 +656,14 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
         for p, v in objs:
             if p.startswith('/mob'):
                 continue
+            if p.startswith('/obj/structure/cable'):
+                cab[idx(x, y)] = 1
+                stats['cable'] += 1
+                continue
+            if p == '/obj/machinery/power/terminal':                      # under the floor: no picture, but the SMES it feeds is wired through it (`d`: which way it faces)
+                props.append({'x': x - 1, 'y': Ht - y, 'd': dir_of(resolve(p, v)), 'k': 'mach', 't': 'terminal'})
+                stats['terminal'] += 1
+                continue
             if p.startswith(SKIP_PREFIXES):
                 continue
             r = resolve(p, v)
@@ -644,6 +672,15 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
             row, col = Ht - y, x - 1
             base = {'x': col, 'y': row, 'd': d, 'n': nm}
             den = 1 if r.get('density') is True else 0
+
+            # --- solar panels and their trackers: flat on the floor, in a picture of our own
+            if p in ('/obj/machinery/power/solar', '/obj/machinery/power/tracker'):
+                trk = p.endswith('tracker')
+                sp = spr.add_image(solar_image(trk), ('solar', trk))
+                if sp >= 0:
+                    props.append(dict(base, k='mach', t='tracker' if trk else 'solar', n='solar tracker' if trk else 'solar panel', s=sp, flat=1))
+                    stats['solar'] += 1
+                continue
 
             # --- airlocks
             if p.startswith('/obj/machinery/door/airlock'):
@@ -755,6 +792,8 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                     sp = spr.add([(icon, st, face if sl.get_dmi(icon).states[st].dirs > 1 else S, None, None)])
                     if sp >= 0:
                         sub = p.split('/')[3] if p.count('/') >= 3 else 'misc'
+                        if p.startswith('/obj/machinery/power/apc'):
+                            sub = 'apc'
                         if p.startswith('/obj/structure/sign'):
                             sub = 'sign'
                         elif p.startswith('/obj/item/radio'):
@@ -762,6 +801,8 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                         # slid along the wall by the map's other pixel offset (side by side buttons, an alarm off to one side): +x on a north or south wall, +z on an east or west one
                         lat = int(max(-14, min(14, mpx if side in (N, S) else -mpy)))
                         rec = dict(base, k='wm', d=face, sd=side, s=sp, sub=sub, p=p)
+                        if sub == 'apc' and isinstance(v.get('areastring'), str):
+                            rec['as'] = v['areastring'].strip('"')        # the area it controls (by its path), when the map says
                         if how == 'onwall':
                             rec['ow'] = 1
                         if lat:
@@ -851,6 +892,12 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                     rec['anc'] = 1
                 if isinstance(r.get('drag_slowdown'), (int, float)) and r['drag_slowdown'] > 0:
                     rec['ds'] = r['drag_slowdown']
+                if p.startswith('/obj/machinery/power/smes'):                 # what the map says of a storage unit's charge and capacity (the rest is in its parts)
+                    for key, short in (('charge', 'sc'), ('capacity', 'sk')):
+                        try:
+                            rec[short] = float(str(v[key]).strip('"'))        # (only what the map itself sets: the defaults are the DM's, and in the parts)
+                        except (KeyError, ValueError):
+                            pass
                 props.append(rec)
                 stats['sprite'] += 1
                 continue
@@ -955,7 +1002,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
     print('  props', len(props), dict(stats))
     print('  unresolved:', missing.most_common(12))
 
-    return dict(tiles=tiles, kind=kind, ft=ft, lat=lat_a, area=area_a, floor=floor_c, wall=wall_v, roof=roof, props=props, spawns=spawns,
+    return dict(tiles=tiles, kind=kind, ft=ft, lat=lat_a, cab=cab, area=area_a, floor=floor_c, wall=wall_v, roof=roof, props=props, spawns=spawns,
                 pool=pool, itemdefs=itemdefs, mobs=mobs, descs=descs)
 
 
@@ -1137,6 +1184,11 @@ def build(mapname):
             img = smooth_image(icon, adj, base_state)
             row.append(cells.add(img) if img is not None else 0xFFFF)
         lat_cells[key] = row
+    # a cable laid on plating, for each of the 16 ways its four neighbours can join (N S E W = 1 2 4 8): the plating's cell with the cable drawn on it
+    cable_cells = []
+    for mask in range(16):
+        state = 'l2-' + '-'.join(str(b) for b in (1, 2, 4, 8) if mask & b) if mask else 'l2-noconnection'
+        cable_cells.append(cells.add(sl.compose([('icons/turf/floors.dmi', 'plating', S, None, None), ('icons/obj/power_cond/layer_cable.dmi', state, S, '#ffdd00', None)], (32, 32))))
     # make sure the three floors a player can make exist as types (the map has them all, this just says where)
     ftypes = shared['floor_types']
     print('  floor types:', ', '.join('%s%s' % (t['k'], ' (' + t['tile'].split('/')[-1] + ')' if t['tile'] else '') for t in ftypes))
@@ -1160,7 +1212,7 @@ def build(mapname):
     # is a "blueprint" under `grids`, and a `maps` entry says which blueprints float in it and where (a map is a space of grids).
     station = {
         'w': Wd, 'h': Ht,
-        'ft': b64u8(base['ft']), 'lat': b64u8(base['lat']),
+        'ft': b64u8(base['ft']), 'lat': b64u8(base['lat']), 'cab': b64u8(base['cab']),
         'kind': b64u8(base['kind']), 'roof': b64u8(base['roof']),
         'area': b64u16(base['area']), 'floor': b64u16(base['floor']), 'wall': b64u16(base['wall']),
         'props': base['props'], 'spawns': base['spawns'],
@@ -1169,19 +1221,19 @@ def build(mapname):
     for template, res in blueprints.items():
         w2, h2 = bases[template][4], bases[template][5]
         grids[template] = {
-            'w': w2, 'h': h2, 'ft': b64u8(res['ft']), 'lat': b64u8(res['lat']), 'kind': b64u8(res['kind']), 'roof': b64u8(res['roof']),
+            'w': w2, 'h': h2, 'ft': b64u8(res['ft']), 'lat': b64u8(res['lat']), 'cab': b64u8(res['cab']), 'kind': b64u8(res['kind']), 'roof': b64u8(res['roof']),
             'area': b64u16(res['area']), 'floor': b64u16(res['floor']), 'wall': b64u16(res['wall']),
             'props': res['props'], 'spawns': res['spawns'],
         }
     grids['centcom'] = {
-        'w': cw, 'h': ch, 'ft': b64u8(centcom['ft']), 'lat': b64u8(centcom['lat']), 'kind': b64u8(centcom['kind']), 'roof': b64u8(centcom['roof']),
+        'w': cw, 'h': ch, 'ft': b64u8(centcom['ft']), 'lat': b64u8(centcom['lat']), 'cab': b64u8(centcom['cab']), 'kind': b64u8(centcom['kind']), 'roof': b64u8(centcom['roof']),
         'area': b64u16(centcom['area']), 'floor': b64u16(centcom['floor']), 'wall': b64u16(centcom['wall']),
         'props': centcom['props'], 'spawns': [],
     }
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'tiles': base['tiles'],
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,

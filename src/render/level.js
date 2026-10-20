@@ -121,7 +121,7 @@ export class LevelMesh {
         const i = world.idx(c, r, l);
         const k = world.kind[i];
         if (k === KIND.FLOOR || k === KIND.LATTICE) {
-          this.floorQuad(ao, c, r, world.floorCell[i]);
+          this.floorQuad(ao, c, r, this.floorCellFor(i, c, r, l));
           if (k === KIND.FLOOR && this.ceilingOver(i, l)) this.ceilingQuad(ao, c, r, lvl.ceiling);
           if (k === KIND.FLOOR && l > 0) this.slabEdges(ao, c, r, l, world.floorCell[i]);
           if (world.stairs[i]) this.stairRamp(ao, c, r, world.stairs[i], world.floorCell[i]);
@@ -157,6 +157,16 @@ export class LevelMesh {
       }
     }
     for (const k of keys) this.buildChunk(k % 1000, Math.floor(k / 1000) % 1000, Math.floor(k / 1000000));
+  }
+
+  /** The picture of a floor tile: its own, or, on bare plating with a cable under it, the plating with the cable drawn on, joined to the cables beside it. */
+  floorCellFor(i, c, r, l) {
+    const { world } = this;
+    const cell = world.floorCell[i];
+    if (world.cable[i] !== 1 || world.kind[i] !== KIND.FLOOR || world.floorType(i)?.k !== 'plating') return cell;
+    const has = (dc, dr) => world.inb(c + dc, r + dr, l) && world.cable[world.idx(c + dc, r + dr, l)] === 1;
+    const mask = (has(0, -1) ? 1 : 0) | (has(0, 1) ? 2 : 0) | (has(1, 0) ? 4 : 0) | (has(-1, 0) ? 8 : 0);
+    return this.assets.level.cableCells?.[mask] ?? cell;
   }
 
   floorQuad(acc, c, r, cell) {

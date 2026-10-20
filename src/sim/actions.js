@@ -284,10 +284,11 @@ export class Actions {
     const sim = this.sim;
     const g = it.grid, area = g.world.areaIdx[g.world.idx(it.c, it.r)];
     if (it.kind === 'closet') return sim.closets.click(c, m, it, held, alt);
+    if (it.mach && it.mach.click(c, m, held, alt)) return;                        // a machine with its own rules (the power machines: src/sim/power/)
     if (it.kind === 'container') return this.openContainer(m, it);
     if (it.kind === 'wm') {
       switch (it.sub) {
-        case 'light_switch': sim.setAreaPower(g, area, undefined, !g.power.areaLights[area]); sim.sound('terminal_key', it, 0.5); return;
+        case 'light_switch': sim.setLightSwitch(g, area, !g.power.lightSwitch[area]); sim.sound('terminal_key', it, 0.5); return;
         case 'apc': sim.terminals.open(c, 'apc', { area, grid: g }); return;
         case 'airalarm': sim.terminals.open(c, 'airalarm', { area, grid: g }); return;
         case 'requests_console': sim.terminals.open(c, 'rc', { area, grid: g }); return;

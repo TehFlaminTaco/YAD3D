@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { TILE, EYE, REACH, RENDER_HEIGHT, KIND, CENTER_H, DECK_H } from '../shared/config.js';
 import { stepMovement, floatState } from '../shared/movement.js';
 import { settle, frameYaw, Frame } from '../shared/frames.js';
+import { CH } from '../shared/power.js';
 import { qTwistY, qrot, qirot, reorient, tfInvDir } from '../shared/math3.js';
 import { WINDOWS } from '../shared/windows.js';
 import { WALLS, girderLook } from '../shared/walls.js';
@@ -203,8 +204,8 @@ export class Game {
     rep.on('stack', (ev) => this.stackwin.show(ev));
     rep.on('dbg', (ev) => this.debugMenu.reply(ev));
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
-    rep.on('power', (ev) => gv(ev)?.rebuildLights());
     rep.on('area', (ev) => gv(ev)?.rebuildLights());
+    rep.on('cable', (ev) => { const v = gv(ev); if (v) { const w = v.grid.world, wh = w.W * w.H, rem = ev.i % wh; v.tilesChanged([[rem % w.W, Math.floor(rem / w.W), Math.floor(ev.i / wh)]]); } });
     rep.on('flicker', (ev) => gv(ev)?.flickerLights(ev.s, this.time));
     rep.on('self', (ev) => this.onSelf(ev));
     rep.on('msg', (ev) => this.chat.add(ev));
@@ -835,7 +836,9 @@ export class Game {
     const area = this.myGrid().world.areaAt(c, r, this.pred.l | 0);
     const vac = rep.env.p < 30;
     this.audio.setMuffle(this.phase === 'playing' ? (vac && !this.self?.suit ? 1 : vac ? 0.5 : 0) : 0);
-    this.audio.update(dt, { cat: area ? area.c : 'space', vac, power: this.myGrid().power.state, hpFrac: (this.self?.hp?.[0] ?? 100) / (this.self?.hp?.[1] || 100), dead: !!this.self?.dead });
+    const hw = this.myGrid().world;
+    const dark = hw.inb(c, r, this.pred.l | 0) && !this.myGrid().power.powered(hw.areaIdx[hw.idx(c, r, this.pred.l | 0)], CH.EQUIP);
+    this.audio.update(dt, { cat: area ? area.c : 'space', vac, power: dark ? 'out' : 'on', hpFrac: (this.self?.hp?.[0] ?? 100) / (this.self?.hp?.[1] || 100), dead: !!this.self?.dead });
     this.footsteps(dt);
 
     if (this.phase === 'playing') {

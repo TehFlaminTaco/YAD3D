@@ -312,10 +312,30 @@ export class Debug {
     this.say(c, `Alert level ${msg.level}.`);
   }
 
+  /** The grid, from the debug menu: `fill` (every cell and SMES full), `drain` (every one empty), `engine` (on or off), `fail` (every APC fails for half a minute, as in a grid check). */
   power(c, msg) {
-    if (!['normal', 'battery', 'out'].includes(msg.state)) return;
-    this.grid(c).power.setState(msg.state);
-    this.say(c, `Station power: ${msg.state}.`);
+    const ps = this.grid(c).powersim, M = ps.machines;
+    switch (msg.what) {
+      case 'fill':
+        for (const a of M.apc) if (a.cell) a.cell.charge = a.cell.max;
+        for (const s of M.smes) s.charge = s.capacity;
+        this.say(c, 'Every cell and SMES is full.');
+        break;
+      case 'drain':
+        for (const a of M.apc) if (a.cell) a.cell.charge = 0;
+        for (const s of M.smes) s.charge = 0;
+        this.say(c, 'Every cell and SMES is empty.');
+        break;
+      case 'engine':
+        ps.engine.running = !ps.engine.running;
+        this.say(c, `The engine is ${ps.engine.running ? 'running' : 'stopped'}.`);
+        break;
+      case 'fail':
+        for (const a of M.apc) a.energyFail(15);
+        this.say(c, 'Every APC fails for half a minute.');
+        break;
+      default: break;
+    }
   }
 
   /** Station gravity on / off (no `on`: flip it). */
@@ -493,8 +513,11 @@ export class Debug {
     const sim = this.sim, g = this.grid(c), w = g.world;
     let n = 0;
     for (const i of [...w.breached]) { sim.patchBreach(g, i % w.W, Math.floor(i / w.W)); n++; }
-    g.power.setState('normal');
-    for (let a = 0; a < w.areas.length; a++) sim.setAreaPower(g, a, true, true);
+    const ps = g.powersim;
+    ps.engine.running = true;
+    for (const a of ps.machines.apc) { if (a.cell) a.cell.charge = a.cell.max; a.operating = true; a.failureTimer = 0; a.broken = false; a.shorted = false; }
+    for (const s of ps.machines.smes) s.charge = s.capacity;
+    for (let a = 0; a < w.areas.length; a++) ps.setSwitch(a, true);
     this.say(c, `Hull sealed (${n} breaches), power restored.`);
   }
 

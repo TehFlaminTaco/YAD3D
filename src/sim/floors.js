@@ -1,6 +1,7 @@
 import { TILE, KIND } from '../shared/config.js';
 import { consume } from './inventory.js';
 import { toolJob } from './tooljob.js';
+import { cableClick } from './power/cables.js';
 
 const isRods = (it) => it?.def.sheet === 'rods';
 const isTile = (it) => !!it?.def.tile;
@@ -51,6 +52,11 @@ export class Floors {
     if (!th || !held) return true;
     const { c, r, i } = th, tool = held.def.tool, kind = w.kind[i];
     const level = w.level;
+
+    // ---- cables are under the floor: a tile hides them, plating, lattice and catwalks do not
+    if (kind === KIND.LATTICE || (kind === KIND.FLOOR && w.floorType(i)?.k !== 'tile' && w.floorType(i)?.k !== 'engine')) {
+      if (cableClick(sim, m, th, held, true)) return true;
+    } else if (kind === KIND.FLOOR && cableClick(sim, m, th, held, false)) return true;
 
     // ---- open space
     if (kind === KIND.SPACE) {

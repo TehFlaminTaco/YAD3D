@@ -3,7 +3,6 @@ import { rng } from '../shared/util.js';
 import { between } from '../shared/frames.js';
 
 const STRIKE_TIMES = [75, 215, 380, 560];
-const POWER_FAIL_AT = 150;
 const AUTO_CALL_AT = 600;
 const DOCK_SECONDS = 95;
 const FLIGHT_LEAD = 20;                // seconds before it docks that the emergency shuttle appears, far out, and starts its approach
@@ -38,7 +37,6 @@ export class Director {
     this.strikes = 0;
     this.pending = null;
     this.carpTimer = 0;
-    this.powerFailed = false;
     this.evacState = 'idle';          // idle | called | docked | departed (on its way: `leg`) | centcom (docked there: the round ends when `evacTimer` runs out)
     this.evacTimer = 0;
     this.leg = null;                  // while departed: out (flying away from the station) | transit (in bluespace, `legTimer` left) | in (flying in to Central Command)
@@ -102,15 +100,6 @@ export class Director {
     const t = this.t;
     if (!this.windows) this.windows = this.findExteriorWindows();
     if (this.evacState === 'departed' || this.evacState === 'centcom') { this.updateEvac(dt); return; }          // the station's troubles are behind it
-
-    if (!this.powerFailed && t > POWER_FAIL_AT) {
-      this.powerFailed = true;
-      sim.chat.announce('Critical Power Failure', 'Abnormal activity detected in the station\'s powernet. As a precautionary measure, the station\'s power will be shut off for an indeterminate duration.');
-      this.grid.power.setState('battery');
-      this.setLevel('red');
-      this.news.push('Power: the engine tripped offline. Engineers are looking into it.');
-      this.npcReact('power');
-    }
 
     if (this.strikes < STRIKE_TIMES.length && !this.pending && t > STRIKE_TIMES[this.strikes] - 18) this.scheduleStrike();
     if (this.pending && t >= this.pending.at) this.doStrike();
@@ -183,6 +172,7 @@ export class Director {
       const d = sim.dist(m, at);
       if (d < 6) sim.hurt(m, 14 * (1 - d / 6) + 4, 'brute', 'meteor shrapnel');
     }
+    g.powersim.blast(c, r, 3);                                                // the cables it hits are cut
     this.carpTimer = 22;
     this.npcReact('breach', s.room);
   }
@@ -211,16 +201,11 @@ export class Director {
     this.news.push('Atmospherics: a breach was patched.');
   }
 
-  onPowerRestored() {
-    this.sim.chat.announce('Power Systems Nominal', 'Power has been restored to Space Station 13. We apologize for the inconvenience.');
-    this.news.push('Power: the grid is back.');
-  }
-
   // ------------------------------------------------------------------ shuttle
   canCallShuttle() {
     const sim = this.sim;
     if (this.evacState !== 'idle') return { ok: false, why: 'An emergency shuttle has already been called.' };
-    if (this.grid.world.ventTiles().length > 0 || this.grid.power.state !== 'normal' || this.t > 240) return { ok: true };
+    if (this.grid.world.ventTiles().length > 0 || this.grid.powersim.status() !== 'normal' || this.t > 240) return { ok: true };
     return { ok: false, why: 'Central Command will not authorize an evacuation at this time.' };
   }
 

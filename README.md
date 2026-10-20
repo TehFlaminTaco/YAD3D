@@ -20,7 +20,7 @@ It plays like a round of SS13: lobby, job slots, a crew of other people, things 
 * **SS13 chat.** `T` to speak, `;` for the common radio, `:e` `:m` `:s` `:n` `:u` `:v` `:c` for department channels (needs a
   headset), `:h` for your own department, `Y` whisper, `M` emote, `O` OOC. Speech has a range and needs line of sight; what
   people say also floats over their heads for a few seconds. The dead talk to the dead.
-* **Systems.** Atmospherics with real partial pressures and decompression, APC power with emergency cells and a blackout, fire
+* **Systems.** Atmospherics with real partial pressures and decompression, a real power grid (the map's 2,800 cables, 119 APCs, SMES, solar fields and engine; cut a cable and a room goes dark), fire
   alarms and firelocks, access-controlled airlocks (crowbars work on dead ones), meteors that blow holes in the hull, space carp,
   characters you design (body, skin, hair, facial hair, eyes, underwear; saved in your browser) that everyone sees, with the
   clothes they really wear, a hairdresser's mirror, and your own body when you look down,
@@ -64,7 +64,7 @@ flag the server ignores every debug message and the menu does not exist. Tabs:
 * **Me**: god mode, noclip, speed, heal, revive, a master ID, put on a job's outfit, and delete the thing under the crosshair (a loose item,
   an NPC, a locker or crate).
 * **Go**: teleport to any room. Observers can use it too.
-* **Station**: alert level, power (normal, battery, out), a meteor strike, carp, call or dock or send the shuttle, open or close every door,
+* **Station**: alert level, power (fill or drain every cell and SMES, engine on or off, every APC fails), a meteor strike, carp, call or dock or send the shuttle, open or close every door,
   seal the hull and restore power, start or end the round, skip the clock ahead a minute.
 
 Every operation answers with a `[Debug]` line in the chat.
@@ -217,6 +217,7 @@ npm run test:sim      # 480 assertions on the headless simulation (spawn and out
                       #   grilles, door angles and wall mounts, chat, consoles,
                       #   drag and drop, death and ghosts)
 npm run test:level    # level mesh geometry and the character art data (no browser)
+npm run test:power    # the power grid: cables, networks, APCs, SMES, solar, PACMAN, consoles, cutting and laying cable (76 assertions)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, the inventory HUD, bags,

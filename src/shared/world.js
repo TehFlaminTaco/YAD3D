@@ -25,6 +25,7 @@ export class World {
     this.wallVar = assets.wall;
     this.ft = assets.ft;                     // what kind of floor each tile is (1 + index into level.floorTypes; 0 none)
     this.lat = assets.lat;                   // lattice over space: 1 lattice, 2 catwalk
+    this.cable = assets.cab || new Uint8Array(w * h * (assets.levels ?? 1));         // a power cable under the tile (1): the network is made of these (src/sim/power/powernet.js)
     this.stairs = assets.stairs || new Uint8Array(w * h * (assets.levels ?? 1));   // stairs: the direction (N S E W bit) you leave the tile in to go up one deck
     this.areas = level.areas;
     this.variants = level.walls;

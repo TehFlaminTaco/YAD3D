@@ -166,9 +166,9 @@ export class Round {
     lines.push(`Round length: ${Math.floor(this.time / 60)} minutes ${Math.floor(this.time % 60)} seconds.`);
     lines.push('');
     lines.push('Station status');
-    const hull = sim.station.world, power = sim.station.power;
+    const hull = sim.station.world, power = sim.station.powersim.status();
     lines.push(`  Hull breaches: ${hull.ventTiles().length} open, ${d.stats.patched} repaired`);
-    lines.push(`  Power: ${power.state === 'normal' ? 'main grid online' : power.state === 'battery' ? 'emergency cells only' : 'offline'}`);
+    lines.push(`  Power: ${power === 'normal' ? 'main grid online' : power === 'degraded' ? 'some rooms on emergency cells' : 'offline'}`);
     lines.push(`  Space carp killed: ${d.stats.carpKilled}`);
     lines.push('');
     lines.push(`Crew: ${crew.length} total, ${escaped.length} escaped, ${left.length} stranded on the station, ${dead.length} dead`);

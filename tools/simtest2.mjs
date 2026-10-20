@@ -806,13 +806,13 @@ section('debug menu', () => {
   ok(sim.director.level === 'red', 'sets the alert level');
   dbg(A, 'alert', { level: 'purple' });
   ok(sim.director.level === 'red', 'only real levels');
-  dbg(A, 'power', { state: 'battery' });
-  ok(sim.power.state === 'battery', 'power state');
+  dbg(A, 'power', { what: 'drain' });
+  ok(sim.station.powersim.machines.apc.every((x) => x.cell.charge === 0) && sim.station.powersim.machines.smes.every((x) => x.charge === 0), 'drains every cell and SMES');
   const holes = w.breached.size;
   dbg(A, 'strike');
   ok(w.breached.size === holes + 1, 'a meteor breaks a window');
   dbg(A, 'repair');
-  ok(w.breached.size === 0 && sim.power.state === 'normal', 'repair seals the hull and restores power');
+  ok(w.breached.size === 0 && sim.station.powersim.machines.apc.every((x) => x.cell.charge === x.cell.max) && sim.station.powersim.engine.running, 'repair seals the hull and fills every cell');
   dbg(A, 'shuttle', { what: 'call' });
   ok(sim.director.evacState === 'called', "calls the shuttle (without Central Command's say-so)");
   dbg(A, 'doors', { what: 'open' });
@@ -901,19 +901,17 @@ section('chat', () => {
 });
 
 section('terminals', () => {
-  const { sim, A, a, step } = setup();
-  sim.power.setState('battery');
+  const { sim, A, a, step, inbox } = setup();
   const t = [...Array(sim.world.W * sim.world.H).keys()].find((i) => sim.world.kind[i] === 1 && !sim.world.solid[i]);
   a.x = (t % sim.world.W) * TILE + 1; a.z = Math.floor(t / sim.world.W) * TILE + 1;
   sim.terminals.open(A, 'power', { name: 'power monitor' });
   ok(A.term, 'terminal opened');
-  sim.handle(A, { t: 'term', op: 'act', idx: 1 }); step(0.2);
-  ok(sim.power.restartStep === 0 && sim.time < sim.power.lockoutUntil, 'wrong order scrams the engine');
-  step(9);
-  sim.handle(A, { t: 'term', op: 'act', idx: 0 }); step(3);
-  sim.handle(A, { t: 'term', op: 'act', idx: 1 }); step(3);
-  sim.handle(A, { t: 'term', op: 'act', idx: 2 }); step(3);
-  ok(sim.power.state === 'normal', 'engine restart sequence restores power');
+  step(0.2);
+  const term = () => inbox.a.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'term' && !e.close).pop();
+  ok(/POWER MONITORING/.test(term().html) && /Supply/.test(term().html) && /Demand/.test(term().html), 'the power monitor shows the network');
+  sim.handle(A, { t: 'term', op: 'act', idx: 0 }); step(0.2);
+  ok(/\[2\//.test(term().html), 'its pages turn');
+  sim.terminals.close(A);
 });
 
 section('drag and drop', () => {

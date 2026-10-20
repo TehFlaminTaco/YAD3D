@@ -6,6 +6,7 @@ import { moveProp } from '../shared/propdata.js';
 import { qslerp } from '../shared/math3.js';
 import { setClosetState } from '../shared/closets.js';
 import { BuiltSet } from '../shared/built.js';
+import { AreaPower } from '../shared/power.js';
 
 /** A grid as the client holds it: the shared `Grid` (tiles, props, doors, pose) plus what the server has told us about it. */
 export class GridReplica extends Grid {
@@ -15,8 +16,7 @@ export class GridReplica extends Grid {
     this.fdoors = this.props.fdoors.map((p, idx) => ({
       idx, grid: this, c: p.x, r: p.y, l: p.l | 0, i: world.idx(p.x, p.y, p.l | 0), x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, closed: false, name: p.n || 'firelock', s: p.s, yaw: p.yaw,
     }));
-    const na = world.areas.length;
-    this.power = { state: 'normal', battery: 1, areaOn: new Uint8Array(na).fill(1), areaLights: new Uint8Array(na).fill(1) };
+    this.power = new AreaPower(world, false);   // what the server says of each room's power (welcome, then `area` events)
     this.built = new BuiltSet(world);        // girders and the like that players have built (shared/built.js)
   }
 }
@@ -85,9 +85,10 @@ export class Replica {
     this.grids.set(g.id, g);
     this.map.add(g);
     if (!this.station && g.kind === 'station') this.station = g;
-    g.power.state = gs.power.state; g.power.battery = gs.power.battery;
-    gs.areaOn.forEach((v, i) => { g.power.areaOn[i] = v; });
-    gs.areaLights.forEach((v, i) => { g.power.areaLights[i] = v; });
+    if (gs.pw) {
+      const p = g.power;
+      p.metered.set(gs.pw.mt); p.operating.set(gs.pw.op); p.chan.set(gs.pw.ch); p.main.set(gs.pw.mn); p.lightSwitch.set(gs.pw.sw);
+    }
     g.world.gravityOn = gs.gravity !== false;
     for (const [id, k, c, r, st] of gs.built || []) g.built.add({ id, k, c, r, st, grid: g });
     for (const ev of gs.tiles) this.setTile(g, ev);
@@ -172,8 +173,8 @@ export class Replica {
       case 'pane': if (g) this.killPane(g, ev.c, ev.r, ev.d); break;
       case 'item+': this.items.set(ev.id, { id: ev.id, s: ev.s, n: ev.n, x: ev.x, y: ev.y, z: ev.z, g: ev.g, l: ev.l | 0 }); break;
       case 'item-': this.lastRemoved = this.items.get(ev.id) || null; this.items.delete(ev.id); break;
-      case 'power': if (g) { g.power.state = ev.state; g.power.battery = ev.battery; } break;
-      case 'area': if (g) { g.power.areaOn[ev.a] = ev.on; g.power.areaLights[ev.a] = ev.lights; } break;
+      case 'cable': if (g) g.world.cable[ev.i] = ev.on; break;
+      case 'area': if (g) { g.power.set(ev.a, ev.op, ev.ch[0], ev.ch[1], ev.ch[2], ev.mn); g.power.lightSwitch[ev.a] = ev.sw; } break;
       case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, g: 0, x: 0, z: 0, l: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
       case 'look': { const m = this.mobs.get(ev.id); if (m) m.ap = ev.ap; break; }
       case 'mob-': break;                    // the view reads the mob before it is dropped (see Game.onEvent)

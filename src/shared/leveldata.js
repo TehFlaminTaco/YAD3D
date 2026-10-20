@@ -15,7 +15,7 @@ export const VOID_BP = 'void';
  * grids built from one blueprint (four escape pods) do not share tiles. `level` itself is what all grids share (art, areas, item definitions).
  */
 export function decodeGrid(level, bp) {
-  if (bp === VOID_BP) return { bp, level, w: 1, h: 1, levels: 1, kind: new Uint8Array(1), roof: new Uint8Array(1), area: new Uint16Array(1), floor: new Uint16Array(1), wall: new Uint16Array(1).fill(0xffff), ft: new Uint8Array(1), lat: new Uint8Array(1), props: [], spawns: [], void: true };
+  if (bp === VOID_BP) return { bp, level, w: 1, h: 1, levels: 1, kind: new Uint8Array(1), roof: new Uint8Array(1), area: new Uint16Array(1), floor: new Uint16Array(1), wall: new Uint16Array(1).fill(0xffff), ft: new Uint8Array(1), lat: new Uint8Array(1), cab: new Uint8Array(1), props: [], spawns: [], void: true };
   const g = level.grids?.[bp];
   if (!g) throw new Error(`no grid blueprint "${bp}" in the level data`);
   const { w, h } = g;
@@ -30,8 +30,9 @@ export function decodeGrid(level, bp) {
   const ft = g.ft ? b64(g.ft) : new Uint8Array(n);          // what kind of floor (index + 1 into level.floorTypes)
   const lat = g.lat ? b64(g.lat) : new Uint8Array(n);       // lattice over space: 1 lattice, 2 catwalk
   const stairs = g.stairs ? b64(g.stairs) : new Uint8Array(n);   // a stair tile: the direction (N S E W bit) you go up
+  const cab = g.cab ? b64(g.cab) : new Uint8Array(n);       // a power cable under the tile (1)
   if (kind.length !== n || area.length !== n) throw new Error(`grid "${bp}": arrays do not match its size`);
-  return { bp, level, w, h, levels, kind, roof, area, floor, wall, ft, lat, stairs, props: g.props, spawns: g.spawns || [] };
+  return { bp, level, w, h, levels, kind, roof, area, floor, wall, ft, lat, stairs, cab, props: g.props, spawns: g.spawns || [] };
 }
 
 export function makeRects(sprJson) {
