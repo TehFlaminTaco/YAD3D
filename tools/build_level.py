@@ -43,7 +43,7 @@ MAPS = {
 
 # Central Command is a map of its own (a separate space of grids). Only the main complex is kept, not the thunderdome, the Syndicate base or the holodecks:
 # CENTCOM_PART is (x0, x1, y0, y1) of what is kept, in the .dmm's own coordinates (y up), and the emergency shuttle docks at its `emergency_away` port, on the east side
-# of the complex. Its doors want Central Command access, which nobody carries: the crew are guests there, so every door is opened to all.
+# of the complex. Its doors keep their real access (Central Command's, which nobody on the crew carries): the crew can go as far as the doors that are open to all.
 CENTCOM = '_maps/map_files/generic/CentCom.dmm'
 CENTCOM_PART = (130, 236, 36, 122)
 CENTCOM_DOCK = ('emergency_box', 206, 85)
@@ -1108,9 +1108,6 @@ def build(mapname):
     centcom = process(part, ckeys, cells, spr, shared, cw, ch, full=False, docks=True)
     itemdefs.update(centcom['itemdefs'])
     descs.update(centcom['descs'])
-    for p in centcom['props']:
-        if p.get('k') == 'door':
-            p['a'], p['o'] = [], []
     tpl, dx, dy = CENTCOM_DOCK
     if tpl not in bases:
         raise SystemExit('the emergency shuttle template was not built')

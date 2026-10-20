@@ -1126,6 +1126,30 @@ section('Central Command', () => {
   const cc = sim.maps.get('centcom');
   ok(cc && cc.id === 'centcom' && cc.solids.length === 1 && cc.solids[0].kind === 'centcom' && cc.void, 'it is made as the shuttle leaves: a grid of its own and a void, nobody in it');
   ok(![...sim.clients.values()].some((c) => c.map === cc) && cc.solids[0].world.W === 107, 'and it is the cropped complex of the real map');
+  {
+    // its doors keep the access the real map gives them: Central Command's, which nobody on a crew carries (not even the captain's all-access ID)
+    const cw = cc.solids[0].world, doors = [...cw.doorAt.values()];
+    const cent = doors.filter((x) => [...x.a, ...x.o].some((n) => n >= 100)), free = doors.filter((x) => !x.a.length && !x.o.length);
+    const eng = { access: sim.jobs.accessOf(sim.jobs.get('station_engineer')) }, cap = { access: sim.jobs.accessOf(sim.jobs.get('captain')) };
+    ok(cent.length > 50 && free.length > 10, `its doors want Central Command access (${cent.length} of ${doors.length}), apart from the ones open to all (${free.length})`);
+    ok(cent.every((x) => !x.allows(eng) && !x.allows(cap)) && ![...cap.access].some((n) => n >= 100), 'which neither an engineer nor the captain (all access) has');
+    ok(cent.every((x) => x.allows({ access: new Set(sim.jobs.everyAccess) })) && doors.filter((x) => x.proto.t === 'poddoor').every((x) => !x.a.length && !x.o.length), 'and the debug ID has (the dock\'s shutters want none)');
+    // how far a crewman can get from where the shuttle lets them off: a good part of the complex, not all of it
+    const dock = sim.mapDocks.get('centcom').emergency, start = [Math.floor((dock.p[0] + 3) / 2) - 1, Math.floor((dock.p[2] + 27) / 2)];
+    const seen = new Set([cw.idx(...start)]), queue = [start];
+    while (queue.length) {
+      const [c, r] = queue.shift();
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nc = c + dc, nr = r + dr;
+        if (!cw.inb(nc, nr)) continue;
+        const i = cw.idx(nc, nr), dr_ = cw.doorAt.get(i);
+        if (seen.has(i) || cw.kind[i] !== KIND.FLOOR || (dr_ ? !dr_.allows(eng) : cw.solid[i])) continue;
+        seen.add(i); queue.push([nc, nr]);
+      }
+    }
+    const floors = cw.kind.reduce((n, k) => n + (k === KIND.FLOOR ? 1 : 0), 0);
+    ok(seen.size > 500 && seen.size < floors * 0.6, `the crew can walk about the docks and the hall beside them (${seen.size} of ${floors} tiles) and no further`);
+  }
   let t = 0;
   while (d.leg !== 'transit' && t < 60) { step(1); t++; }
   const jumps = () => inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'jump').length;

@@ -235,11 +235,9 @@ export class Debug {
     if (!m?.humanoid) return;
     let id = m.worn.id;
     if (!id) { id = sim.newItem('/obj/item/card/id', { name: `${m.name}'s ID Card` }); attach(sim, id, { t: 'slot', mob: m, slot: 'id' }); }
-    const all = new Set();
-    for (const j of sim.jobs.list) for (const a of sim.jobs.accessOf(j)) all.add(a);
-    id.access = [...all];
+    id.access = [...sim.jobs.everyAccess];                                   // (every one there is, Central Command's too: the debug ID is not anybody's job)
     recalc(sim, m);
-    this.say(c, `Your ID opens everything (${all.size} accesses).`);
+    this.say(c, `Your ID opens everything (${id.access.length} accesses).`);
   }
 
   /** Put on a job's whole outfit; what you wore goes to the floor. */

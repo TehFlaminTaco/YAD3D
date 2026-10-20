@@ -5,7 +5,8 @@ export class Jobs {
     this.all = json.jobs;
     this.byId = Object.fromEntries(json.jobs.map((j) => [j.id, j]));
     this.accessNames = json.access;
-    this.allAccess = Object.keys(json.access).map(Number);
+    this.everyAccess = Object.keys(json.access).map(Number);
+    this.allAccess = this.everyAccess.filter((n) => n < 100);           // what an all-access ID opens (get_all_accesses): the station's. Central Command's (101 and up), the Syndicate's and the away missions' are on nobody's ID
   }
 
   get(id) { return this.byId[id] || this.byId.assistant; }
