@@ -111,14 +111,20 @@ def layer_image(layer):
 
 
 def compose(layers, size=None):
-    imgs = [layer_image(l) for l in layers]
-    imgs = [i for i in imgs if i is not None]
+    """Stack the layers, bottom first. A layer may carry a seventh element (dx, dy): how many pixels it is shifted (BYOND's pixel_x, pixel_y: +y is up)."""
+    imgs = [(layer_image(l), l[6] if len(l) > 6 else (0, 0)) for l in layers]
+    imgs = [(i, o) for i, o in imgs if i is not None]
     if not imgs:
         return None
-    w = size[0] if size else max(i.width for i in imgs)
-    h = size[1] if size else max(i.height for i in imgs)
+    w = size[0] if size else max(i.width for i, _ in imgs)
+    h = size[1] if size else max(i.height for i, _ in imgs)
     out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    for i in imgs:
+    for i, (dx, dy) in imgs:
         # bottom-align oversized frames (BYOND anchors sprites at the tile's SW corner)
-        out.alpha_composite(i, ((w - i.width) // 2, h - i.height))
+        x, y = (w - i.width) // 2 + dx, h - i.height - dy
+        if x < 0 or y < 0 or x + i.width > w or y + i.height > h:       # (a shifted picture can leave the frame: the part inside is kept)
+            cropped = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+            cropped.paste(i, (x, y))
+            i, x, y = cropped, 0, 0
+        out.alpha_composite(i, (x, y))
     return out

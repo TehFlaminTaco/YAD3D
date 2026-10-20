@@ -1,6 +1,7 @@
 import { TILE, KIND, DV, OPP, N, S, E, W, PLAYER_R, GRIP_REACH, WALL_H, DECK_H, DECK_THICK } from './config.js';
 import { WS, WINDOWS } from './windows.js';
 import { WALLS, RW } from './walls.js';
+import { pipeArrays } from './pipedata.js';
 
 /**
  * One grid's tile store + collision + queries. Its own coordinates: x = col * TILE, z = row * TILE, y up; north is -z. Where the grid is
@@ -27,6 +28,11 @@ export class World {
     this.lat = assets.lat;                   // lattice over space: 1 lattice, 2 catwalk
     this.cable = assets.cab || new Uint8Array(w * h * (assets.levels ?? 1));         // a power cable under the tile (1): the network is made of these (src/sim/power/powernet.js)
     this.stairs = assets.stairs || new Uint8Array(w * h * (assets.levels ?? 1));   // stairs: the direction (N S E W bit) you leave the tile in to go up one deck
+    const pa = pipeArrays(assets.pipes, w * h * this.levels, (c, r) => r * w + c);
+    this.pipe = pa.pipe;                     // the pipes under the tiles (src/shared/pipedata.js): a shape byte for each of four pipe slots, slot 0's tiles first
+    this.pipeCol = pa.pipeCol;               // and what colour each is
+    this.pipeLy = pa.pipeLy;                 // and which piping layer
+    this.gasInit = assets.gas || [];         // the floors that do not start with ordinary air: [col, row, {gas: kPa}] (an airless floor, a gas chamber)
     this.areas = level.areas;
     this.variants = level.walls;
 

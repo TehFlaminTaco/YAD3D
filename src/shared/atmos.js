@@ -41,6 +41,8 @@ export class Atmos {
     this.statAcc = 0;
     this.pruneAcc = 0;
     this.ventsOn = true;
+    this.real = false;                                 // the room's vents and scrubbers are machines on pipes (PipeNet), not the stand-ins `ventsAndScrubbers` makes of them
+    this.probes = null;                                // room -> a tile of it to read its pressure by, when `real`
     this.leaking = 0;
 
     this.buildTopology(true);
@@ -75,6 +77,14 @@ export class Atmos {
     }
     this.pairs = Int32Array.from(pairs);
     this.vents = Int32Array.from(vents);
+    if (initial) {                                                                      // the floors that do not start with ordinary air (airless ones, the gas chambers)
+      for (const [c, r, g] of world.gasInit || []) {
+        if (!world.inb(c, r)) continue;
+        const i = world.idx(c, r);
+        if (!this.isCell[i]) continue;
+        for (let k = 0; k < GAS_IDS.length; k++) { const v = g[GAS_IDS[k]] || 0; this.arrs[k][i] = v; if (v) this.hot[k] = true; }
+      }
+    }
     this.sinkCells.clear();
     for (let i = 0; i < n; i++) if (this.isCell[i]) { const l = Math.floor(i / WH), rem = i - l * WH; this.scanSinks(rem % W, Math.floor(rem / W), l); }
   }
@@ -210,7 +220,7 @@ export class Atmos {
     const o2 = this.o2, n2 = this.n2;
     const ok = this._ok || (this._ok = new Int8Array(world.areas.length));
     ok.fill(-1);
-    for (let k = 0; k < this.vents.length; k++) {
+    for (let k = 0; !this.real && k < this.vents.length; k++) {
       const i = this.vents[k];
       if (airBlock[i]) continue;
       const a = areaIdx[i];
@@ -259,6 +269,7 @@ export class Atmos {
 
   /** Some air cell in room `a`, to read its pressure by (the first vent in it), or -1. */
   areaProbe(a) {
+    if (this.probes) return this.probes.get(a) ?? -1;
     const idx = this._probe || (this._probe = new Map());
     if (!idx.size) for (let k = 0; k < this.vents.length; k++) { const ar = this.world.areaIdx[this.vents[k]]; if (!idx.has(ar)) idx.set(ar, this.vents[k]); }
     return idx.get(a) ?? -1;

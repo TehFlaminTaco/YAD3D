@@ -33,9 +33,9 @@ export class Mix {
   }
 
   total() { let s = 0; for (const id of GAS_IDS) s += this.g[id]; return s; }
-  pressure() { return kpaOf(this.total(), this.vol); }
+  pressure() { return this.vol > 0 ? kpaOf(this.total(), this.vol) : 0; }
   /** The partial pressure of one gas. */
-  pp(id) { return kpaOf(this.g[id], this.vol); }
+  pp(id) { return this.vol > 0 ? kpaOf(this.g[id], this.vol) : 0; }
   copy() { return new Mix(this.vol, this.g); }
   clear() { for (const id of GAS_IDS) this.g[id] = 0; }
 

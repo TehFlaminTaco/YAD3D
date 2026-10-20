@@ -32,7 +32,7 @@ export function decodeGrid(level, bp) {
   const stairs = g.stairs ? b64(g.stairs) : new Uint8Array(n);   // a stair tile: the direction (N S E W bit) you go up
   const cab = g.cab ? b64(g.cab) : new Uint8Array(n);       // a power cable under the tile (1)
   if (kind.length !== n || area.length !== n) throw new Error(`grid "${bp}": arrays do not match its size`);
-  return { bp, level, w, h, levels, kind, roof, area, floor, wall, ft, lat, stairs, cab, props: g.props, spawns: g.spawns || [] };
+  return { bp, level, w, h, levels, kind, roof, area, floor, wall, ft, lat, stairs, cab, pipes: g.pipes || [], gas: g.gas || [], props: g.props, spawns: g.spawns || [] };
 }
 
 export function makeRects(sprJson) {

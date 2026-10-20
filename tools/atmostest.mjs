@@ -53,7 +53,10 @@ function round(job = 'station_engineer', opts = {}) {
   return { sim, A, a, g, w, at, dev, inbox, step, events, msgs, empty, hold, clickAt, click, standBy, can, term, press };
 }
 
-const sumOf = (arr) => { let s = 0; for (let i = 0; i < arr.length; i++) s += arr[i]; return s; };
+/** The gas chambers of the atmospherics room hold tens of thousands of kPa of one gas each and their vents draw on them: sums of the air leave their tiles out. */
+const chamber = new Uint8Array(DATA.level.grids.station.w * DATA.level.grids.station.h);
+for (const [c, r, gas] of DATA.level.grids.station.gas) if (Object.values(gas).some((v) => v > 1000)) chamber[r * DATA.level.grids.station.w + c] = 1;
+const sumOf = (arr) => { let s = 0; for (let i = 0; i < arr.length; i++) if (!chamber[i]) s += arr[i]; return s; };
 
 section('gases, as the DM counts them', () => {
   ok(near(CELL_MOLES_PER_KPA * ONE_ATMOSPHERE, 104.0, 0.5), 'a tile is 104 moles at one atmosphere (MOLES_CELLSTANDARD)');
@@ -168,9 +171,61 @@ section('a canister fills a tank', () => {
   sim.handle(A, { t: 'examine', target: { k: 'prop', g: g.id, idx: c.it.idx } });
   step(0.1);
   ok(msgs().some((t) => /This canister is tier 1\. The o2 canister contains the emergency oxygen tank\. Alt-click the o2 canister to remove it\. Click the o2 canister with another gas tank to hot swap the emergency oxygen tank\.$/.test(t)), 'examining it says it is tier 1 and what is in it');
+});
+
+section('a canister on a connector port', () => {
+  const { sim, g, w, a, step, can, dev, standBy, click, hold, msgs, events, term, press, empty } = round();
+  const net = g.pipenet;
+  const port = net.devices.find((d) => d.isConnector && !d.device && d.parents[0].slots.length > 3 && d.parents[0].slots.length < 90 && ![...d.parents[0].devs].some((x) => ['VentPump', 'Scrubber', 'Injector', 'DPVent'].includes(x.constructor.name)));
+  const c = can('oxygen')[0], c2 = can('oxygen')[1];
+  const put = (m, at) => {                                                                // stand a canister on a port
+    const x = (at.it.c + 0.5) * TILE, z = (at.it.r + 0.5) * TILE;
+    m.it.x = x; m.it.z = z; m.it.c = at.it.c; m.it.r = at.it.r;
+    w.boxMove(m.it, x, z);
+  };
+  put(c, port);
+  const line = port.parents[0];
+  ok(standBy(c) && c.portHere() === port && !c.port, 'a canister on a connector port is not fastened to it');
   hold('/obj/item/wrench');
+  const air0 = c.mix.total() + line.air.total() + line.ports.reduce((s, p) => s + p.dev.airs[p.k].total(), 0);
   click(c);
-  ok(msgs().includes('Nothing happens.'), 'a wrench does nothing (there are no pipes to connect it to)');
+  ok(c.port === port && port.device === c && msgs().includes('You fasten the o2 canister to the port.'), 'a wrench fastens it: "You fasten the o2 canister to the port."');
+  ok(c.it.anc && g.world.solid[c.tile] === 1 && events().some((e) => e.e === 'pa' && e.i === c.it.idx && e.a === 1), 'it is bolted down, and everyone is told');
+  ok(c.v >= 11 && c.v < 21, 'and shows the port (the picture with the connector)');
+  step(1);
+  const lineAir = line.air.total() + line.ports.reduce((s, p) => s + p.dev.airs[p.k].total(), 0);
+  ok(near(c.mix.total() + lineAir, air0, air0 * 1e-9), 'the canister and the pipes share their gas, and none is lost');
+  ok(near(c.mix.pressure(), line.air.pressure(), 1), `to one pressure (${c.mix.pressure().toFixed(0)} kPa in both)`);
+  ok(line.air.pressure() > 1000, 'a canister puts a good deal of pressure on a short pipe');
+  empty(); click(c);
+  ok(/Port +<span class="c">Connected/.test(term().html), 'its console says it is connected');
+  // gas goes the other way too
+  const moles = c.mix.total();
+  for (const l of [line]) { l.air.g.n2 = molesAt(3000, l.air.vol); l.update = true; }
+  step(1);
+  ok(c.mix.g.n2 > 0 && c.mix.total() > moles, 'and what is put into the pipes goes into the canister');
+  // a second canister cannot take the same port
+  put(c2, port);
+  standBy(c2); hold('/obj/item/wrench');
+  click(c2);
+  ok(!c2.port && msgs().includes('O2 canister failed to connect to the port.'), 'a port has room for one: "O2 canister failed to connect to the port."');
+  put(c2, { it: { c: c2.it.c + 3, r: c2.it.r } });
+  // taking it off
+  standBy(c); hold('/obj/item/wrench');
+  click(c);
+  ok(!c.port && !port.device && !c.it.anc && msgs().includes('You unfasten the o2 canister from the port.'), 'a wrench takes it off: "You unfasten the o2 canister from the port."');
+  ok(c.v < 11, 'and it is loose again');
+  click(c);
+  ok(c.port === port, 'and on again');
+  // away from a port a wrench does nothing
+  const d = dev.list.find((m) => m instanceof Canister && !m.portHere() && m !== c && m !== c2);
+  standBy(d); hold('/obj/item/wrench');
+  click(d);
+  ok(msgs().includes('Nothing happens.') && !d.port, 'with no port under it, "Nothing happens."');
+  // a canister shot open lets go of its port
+  for (let k = 0; k < 40 && !c.broken; k++) c.hit(22);
+  ok(c.broken && !c.port && !port.device, 'a canister that is broken open is no longer fastened');
+  void dev;
 });
 
 section('the canister console', () => {
@@ -202,8 +257,8 @@ section('the canister console', () => {
 section('a canister lets its gas out into the room', () => {
   const { at, step, can } = round();
   const c = can('toxins').find((m) => at.isCell[m.tile]);
-  const all = () => sumOf(at.tox);
-  ok(all() === 0, 'there is no plasma in the air at the start');
+  const base = sumOf(at.tox), all = () => sumOf(at.tox) - base;                          // (the plasma chamber of the atmospherics room has plasma in its air)
+  ok(all() === 0, 'there is no more plasma in the air at the start');
   const start = c.mix.total();
   c.valve = true; c.release = 200;
   step(4);
@@ -220,7 +275,7 @@ section('a canister lets its gas out into the room', () => {
 section('a canister can be broken, and cut apart', () => {
   const { sim, g, at, step, can, standBy, hold, click, events, a } = round();
   const c = can('carbon_dioxide').find((m) => at.isCell[m.tile]);
-  const co2 = () => sumOf(at.co2) * CELL_MOLES_PER_KPA;
+  const co2base = sumOf(at.co2), co2 = () => (sumOf(at.co2) - co2base) * CELL_MOLES_PER_KPA;
   const was = c.mix.total();
   for (let k = 0; k < 5; k++) c.hit(22);
   ok(!c.broken, 'it takes more than five laser shots');
@@ -378,8 +433,9 @@ function step0(sim) { for (let k = 0; k < 3; k++) sim.step(SIM_DT); }
 
 section('the air alarm and its modes', () => {
   const { a, g, at, w, step, dev, click, standBy, hold, msgs } = round();
+  const net = g.pipenet;
   const cellsOf = (area) => { const out = []; for (let i = 0; i < w.n; i++) if (at.isCell[i] && w.areaIdx[i] === area) out.push(i); return out; };
-  const ventsOf = (area) => at.vents.filter((i) => w.areaIdx[i] === area);
+  const devsOf = (area) => net.devices.filter((d) => d.controlled && d.area === area);
   /** Is the room shut in: nothing it touches lets its air through (a closed door is a wall), and none of it leaks to space? */
   const sealed = (area) => {
     const P = at.pairs;
@@ -391,12 +447,19 @@ section('the air alarm and its modes', () => {
     }
     return ![...at.sinkCells].some((i) => w.areaIdx[i] === area);
   };
-  const al = dev.alarms.find((x) => { const cells = cellsOf(x.area), v = ventsOf(x.area); return cells.length >= 12 && cells.length <= 60 && v.length >= 3 && (x.it.l | 0) === 0 && sealed(x.area); });
+  const al = dev.alarms.find((x) => {
+    const cells = cellsOf(x.area), ds = devsOf(x.area);
+    return cells.length >= 9 && cells.length <= 20 && ds.some((d) => d.isVent) && ds.some((d) => !d.isVent) && ds.every((d) => d.nodes[0] != null) && (x.it.l | 0) === 0 && sealed(x.area);
+  });
   ok(al && at.mode[al.area] === AIR_MODE.SCRUBBING, 'a room starts with its alarm on Filtering');
-  const cells = cellsOf(al.area);
+  const cells = cellsOf(al.area), ds = devsOf(al.area), vent = ds.find((d) => d.isVent), scrub = ds.find((d) => !d.isVent);
   const avg = () => cells.reduce((s, i) => s + at.total(i), 0) / cells.length;
   const plasma = () => cells.reduce((s, i) => s + at.tox[i], 0) / cells.length;
-  console.log(`  (${w.areas[al.area].n}: ${cells.length} tiles, ${ventsOf(al.area).length} vents, ${avg().toFixed(0)} kPa)`);
+  const waste = () => scrub.parents[0].air, supply = () => vent.parents[0].air;
+  /** (The air supply fills at a pump's pace and the rooms that are short of air draw on it as they go: charge it again so what the vent does is what is measured.) */
+  const charge = () => { const A = supply(), m = molesAt(ONE_ATMOSPHERE, A.vol); A.g.o2 = m * 0.21; A.g.n2 = m * 0.79; vent.parents[0].update = true; };
+  console.log(`  (${w.areas[al.area].n}: ${cells.length} tiles, ${ds.length} vent and scrubber, ${avg().toFixed(0)} kPa)`);
+  ok(ds.every((d) => d.on) && vent.out && vent.checks === 1 && near(vent.ext, ONE_ATMOSPHERE, 1e-9) && scrub.scrubbing && [...scrub.filters].join() === 'co2' && !scrub.widenet, 'its vent and scrubber start as Filtering sets them');
   ok(standBy(al.it), 'she stands by an air alarm');
   hold('/obj/item/card/id'); a.access = new Set([24]);
   click(al, { wait: 0.1 });
@@ -407,41 +470,61 @@ section('the air alarm and its modes', () => {
   a.access = new Set([24]);
   click(al, { wait: 0.1 });
   ok(al.locked && msgs().includes('You lock the air alarm interface.'), 'and the right one locks it again');
+  // a leak of plasma: Filtering leaves it, Contaminated takes it into the waste pipes
   for (const i of cells) at.tox[i] = 10;
   at.hot[2] = true;
-  const p0 = plasma();
+  const p0 = plasma(), w0 = waste().g.tox + scrub.airs[0].g.tox;
   step(10);
-  ok(plasma() > p0 * 0.9, `on Filtering the scrubbers leave plasma alone (${plasma().toFixed(1)} of ${p0.toFixed(1)} kPa left)`);
+  ok(plasma() > p0 * 0.95, `on Filtering the scrubber leaves plasma alone (${plasma().toFixed(1)} of ${p0.toFixed(1)} kPa left)`);
   al.setMode(AIR_MODE.CONTAMINATED);
-  step(30);
-  ok(plasma() < p0 * 0.2, `on Contaminated they take it out (${(plasma() / p0 * 100).toFixed(0)}% left after 30 s)`);
-  al.setMode(AIR_MODE.SCRUBBING);
-  step(25);
-  ok(avg() > 85 && avg() < 120, `and the vents keep a room at an atmosphere (${avg().toFixed(0)} kPa)`);
-  al.setMode(AIR_MODE.PANIC);
+  ok(scrub.widenet && scrub.filters.has('tox') && scrub.filters.size === 5 && scrub.v === 2, 'Contaminated sets it wide, filtering every foul gas');
   step(40);
+  ok(plasma() < p0 * 0.3, `on Contaminated it takes the plasma out (${(plasma() / p0 * 100).toFixed(0)}% left after 40 s)`);
+  const moved = (waste().g.tox + scrub.airs[0].g.tox) - w0;
+  ok(moved > 0.5 * p0 * cells.length * CELL_MOLES_PER_KPA, `and it is in the waste pipes (${moved.toFixed(1)} moles)`);
+  al.setMode(AIR_MODE.SCRUBBING);
+  ok(!scrub.widenet && scrub.filters.size === 1, 'Filtering sets it back');
+  step(40);
+  ok(avg() > 85 && avg() < 120, `and the vent keeps a room at an atmosphere (${avg().toFixed(0)} kPa)`);
+  // Panic Siphon: the air goes into the pipes, the vents shut
+  const s0 = supply().total();
+  al.setMode(AIR_MODE.PANIC);
+  ok(!vent.on && scrub.on && !scrub.scrubbing && scrub.widenet, 'Panic Siphon shuts the vent and sets the scrubber to siphon, wide');
+  step(60);
   ok(avg() < 15, `Panic Siphon empties the room (${avg().toFixed(1)} kPa)`);
   al.setMode(AIR_MODE.OFF);
+  ok(!vent.on && !scrub.on, 'Off shuts them both');
   for (const i of cells) { for (const arr of at.arrs) arr[i] = 0; at.o2[i] = 20; }
   step(8);
-  ok(near(avg(), 20, 1), 'Off stops the vents and the scrubbers');
+  ok(near(avg(), 20, 1), 'and nothing moves');
   al.setMode(AIR_MODE.REPLACEMENT);
-  step(40);
-  ok(al.mode === AIR_MODE.SCRUBBING && at.mode[al.area] === AIR_MODE.SCRUBBING, 'Cycle empties the room and then goes back to Filtering');
   step(60);
-  ok(avg() > 85, `and the vents fill it again (${avg().toFixed(0)} kPa)`);
+  ok(al.mode === AIR_MODE.SCRUBBING && at.mode[al.area] === AIR_MODE.SCRUBBING && vent.on, 'Cycle empties the room and then goes back to Filtering');
+  charge();
+  const m0 = avg() * cells.length * CELL_MOLES_PER_KPA;
+  step(10);
+  const rate = (avg() * cells.length * CELL_MOLES_PER_KPA - m0) / 10;
+  ok(rate > 6 && rate < 20, `and the vent fills it again, about as fast as a vent does (${rate.toFixed(1)} moles a second: a vent is 200 litres every half second)`);
+  step(60);
+  charge();
+  const was = avg();
   al.setMode(AIR_MODE.REFILL);
-  step(60);
-  ok(avg() > 250, `Refill brings a room to three atmospheres (${avg().toFixed(0)} kPa)`);
+  ok(near(vent.ext, ONE_ATMOSPHERE * 3, 1e-9), 'Refill sets the vent to three atmospheres');
+  step(40);
+  ok(avg() > was, `and it goes on filling (${was.toFixed(0)} to ${avg().toFixed(0)} kPa)`);
+  const high = avg();
   al.setMode(AIR_MODE.VENTING);
+  ok(near(vent.ext, ONE_ATMOSPHERE * 2, 1e-9) && !scrub.scrubbing, 'Draught sets it to two and the scrubber to siphon');
   step(60);
-  ok(avg() > 110 && avg() < 215, `Draught brings it down from three atmospheres to somewhere short of two, the siphon taking what the vents put in (${avg().toFixed(0)} kPa)`);
+  ok(avg() < high, `and the siphon takes what the vent puts in (${high.toFixed(0)} down to ${avg().toFixed(0)} kPa)`);
+  void s0;
   g.power.areaPowered = () => false;
+  g.power.powered = () => false;
   al.setMode(AIR_MODE.PANIC);
   const a0 = avg();
   step(10);
   ok(near(avg(), a0, 5), 'a room whose environment power is off has vents and scrubbers that do nothing');
-  delete g.power.areaPowered;
+  delete g.power.areaPowered; delete g.power.powered;
 });
 
 section('the air alarm console', () => {
@@ -492,9 +575,9 @@ section('what joiners and clients are told', () => {
 section('a blast lets the gas out', () => {
   const { sim, g, at, can } = round();
   const c = can('toxins').find((m) => at.isCell[m.tile]);
-  const moles = c.mix.total();
+  const moles = c.mix.total(), tox0 = sumOf(at.tox);
   sim.explosion(g, c.it.x, c.it.z, { heavy: 1, light: 3 });
-  ok(c.it.gone && c.mix.total() === 0 && sumOf(at.tox) * CELL_MOLES_PER_KPA > moles * 0.95, 'a canister near a blast is destroyed and its gas is in the room');
+  ok(c.it.gone && c.mix.total() === 0 && (sumOf(at.tox) - tox0) * CELL_MOLES_PER_KPA > moles * 0.95, 'a canister near a blast is destroyed and its gas is in the room');
   const d = can('oxygen').find((m) => at.isCell[m.tile] && !m.it.gone);
   const far = can('nitrogen').find((m) => at.isCell[m.tile] && !m.it.gone && Math.hypot(m.it.x - d.it.x, m.it.z - d.it.z) > 8 * TILE);
   sim.explosion(g, d.it.x + 2.5 * TILE, d.it.z, { heavy: 1, light: 4 });
@@ -505,13 +588,15 @@ section('a blast lets the gas out', () => {
 section('the debug menu lets gas out', () => {
   const { sim, A, at, step } = round('station_engineer', { debug: true });
   const dbg = (op, extra = {}) => { sim.handle(A, { t: 'dbg', op, ...extra }); step(0.05); };
+  const tox0 = sumOf(at.tox), co20 = sumOf(at.co2), before = Float32Array.from(at.tox);
   dbg('gas', { gas: 'tox', kpa: 50 });
-  ok(near(sumOf(at.tox), 50, 0.5), 'the gas button lets 50 kPa of plasma out');
+  ok(near(sumOf(at.tox) - tox0, 50, 0.5), 'the gas button lets 50 kPa of plasma out');
   dbg('gas', { gas: 'co2', kpa: 30 });
-  ok(near(sumOf(at.co2), 30, 0.5), 'and carbon dioxide');
+  ok(near(sumOf(at.co2) - co20, 30, 0.5), 'and carbon dioxide');
   dbg('gas', { gas: 'nonsense', kpa: 30 });
-  ok(near(sumOf(at.co2), 30, 0.5), 'a gas that is not one is refused');
-  const i = at.tox.indexOf(Math.max(...at.tox));
+  ok(near(sumOf(at.co2) - co20, 30, 0.5), 'a gas that is not one is refused');
+  let i = 0;
+  for (let k = 0; k < at.tox.length; k++) if (at.tox[k] - before[k] > at.tox[i] - before[i]) i = k;
   dbg('gas', {});
   ok(at.total(i) === 0, 'with no gas named it takes the air of the tile away');
 });

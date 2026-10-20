@@ -71,6 +71,7 @@ class Portable {
     this.holding = null;                     // a tank (an item with a `mix`) in the connector
     this.hp = 250;                           // max_integrity
     this.broken = false;
+    this.port = null;                        // the connector port (a pipe machine) it is fastened to
     this.rev = 0;                            // changes with every change of state (a timed job notices the machine was worked on)
     this.v = 0;                              // which of its pictures it shows
     this.name = it.name;
@@ -93,6 +94,37 @@ class Portable {
     if (v === this.v) return;
     this.v = v;
     this.grid.emit({ e: 'pv', i: this.it.idx, v });
+  }
+
+  /** The connector port on its tile, if there is one for it to be fastened to. */
+  portHere() {
+    const net = this.grid.pipenet, i = this.tile;
+    return (net?.devAt.get(i) || []).find((d) => d.isConnector) ?? null;
+  }
+
+  /** portable_atmospherics.dm connect(): fastened to a port it shares its gas with the pipes, and it cannot be moved. */
+  connect(port) {
+    if (this.port || !port || port.device) return false;
+    this.port = port; port.device = this;
+    const it = this.it;
+    setPropAnchored(this.grid.world, it, true);
+    this.grid.anchorLog.set(it.idx, 1);
+    this.grid.emit({ e: 'pa', i: it.idx, a: 1 });
+    if (port.parents[0]) { port.parents[0].update = true; this.grid.pipenet.reconcile(port.parents[0]); }
+    this.touch();
+    return true;
+  }
+
+  disconnect() {
+    if (!this.port) return false;
+    const port = this.port, it = this.it;
+    this.port = null; port.device = null;
+    setPropAnchored(this.grid.world, it, false);
+    this.grid.anchorLog.set(it.idx, 0);
+    this.grid.emit({ e: 'pa', i: it.idx, a: 0 });
+    if (port.parents[0]) port.parents[0].update = true;
+    this.touch();
+    return true;
   }
 
   /** portable_atmospherics.dm replace_tank: what is in it comes out into the user's hands; `tank` (if any) goes in. */
@@ -130,7 +162,24 @@ class Portable {
       return true;
     }
     if (held?.def.analyzer) return scanMix(sim, m, this.analyzable(), a_(this.name));
-    if (held?.def.tool === 'wrench') { sim.tell(m, 'notice', 'Nothing happens.'); return true; }      // (there is no connector port under it to fasten it to: no pipes)
+    if (held?.def.tool === 'wrench') {                                                         // attackby: fasten it to the port under it, or take it off
+      if (this.broken) return true;
+      const what = a_(this.name);
+      if (this.port) {
+        this.disconnect();
+        sim.sound('wrench', this.at, 0.5);
+        sim.tell(m, 'notice', `You unfasten ${what} from the port.`);
+        sim.chat.visible(m, `${m.name} disconnects ${what}.`, 'notice', 8, m);
+        return true;
+      }
+      const port = this.portHere();
+      if (!port) { sim.tell(m, 'notice', 'Nothing happens.'); return true; }
+      if (!this.connect(port)) { sim.tell(m, 'notice', `${this.name[0].toUpperCase()}${this.name.slice(1)} failed to connect to the port.`); return true; }
+      sim.sound('wrench', this.at, 0.5);
+      sim.tell(m, 'notice', `You fasten ${what} to the port.`);
+      sim.chat.visible(m, `${m.name} connects ${what}.`, 'notice', 8, m);
+      return true;
+    }
     return false;
   }
 
@@ -144,6 +193,7 @@ class Portable {
   destroy() {
     const it = this.it;
     if (it.gone) return;
+    this.disconnect();
     const air = this.air();
     const gas = this.mix.remove(this.mix.total());
     if (air) air.merge(gas);
@@ -169,12 +219,12 @@ export class Canister extends Portable {
     this.shootable = true;
   }
 
-  /** Which of its eleven pictures: broken; else with or without a tank in it, and the lamp for how full it is (canister.dm update_overlays). */
+  /** Which of its twenty-one pictures: broken; else with or without a tank in it, and the lamp for how full it is, then the same with a port (canister.dm update_overlays). */
   variant() {
     if (this.broken) return 10;
     const p = this.mix.pressure();
     const lvl = p >= 40 * ONE_ATMOSPHERE ? 3 : p >= 10 * ONE_ATMOSPHERE ? 2 : p >= 5 * ONE_ATMOSPHERE ? 1 : p >= 10 ? 0 : -1;
-    return (this.holding ? 5 : 0) + lvl + 1;
+    return (this.port ? 11 : 0) + (this.holding ? 5 : 0) + lvl + 1;
   }
 
   process() {
@@ -192,6 +242,7 @@ export class Canister extends Portable {
   breakOpen() {
     if (this.broken) return false;
     const it = this.it, sim = this.sim;
+    this.disconnect();
     this.broken = true; this.valve = false;
     const air = this.air();
     const gas = this.mix.remove(this.mix.total());
@@ -246,7 +297,7 @@ export class Canister extends Portable {
     const h = this.holding;
     return {
       title: 'Canister', live: true,
-      html: `<span class="h">${esc(this.name)}</span>   <span class="d">${esc(this.desc)}</span>\n\nTank pressure     ${Math.round(p)} kPa  ${bar(p / (90 * ONE_ATMOSPHERE))}\nPort              <span class="w">Disconnected</span>\nRelease pressure  ${Math.round(this.release)} kPa  <span class="d">(${Math.round(CAN_MIN)} to ${Math.round(CAN_MAX)})</span>\nValve             ${this.valve ? '<span class="c">Open</span>' : '<span class="w">Closed</span>'}\nHolding tank      ${h ? `${esc(h.name)}   ${Math.round(h.mix.pressure())} kPa` : '<span class="d">none</span>'}`,
+      html: `<span class="h">${esc(this.name)}</span>   <span class="d">${esc(this.desc)}</span>\n\nTank pressure     ${Math.round(p)} kPa  ${bar(p / (90 * ONE_ATMOSPHERE))}\nPort              ${this.port ? '<span class="c">Connected</span>' : '<span class="w">Disconnected</span>'}\nRelease pressure  ${Math.round(this.release)} kPa  <span class="d">(${Math.round(CAN_MIN)} to ${Math.round(CAN_MAX)})</span>\nValve             ${this.valve ? '<span class="c">Open</span>' : '<span class="w">Closed</span>'}\nHolding tank      ${h ? `${esc(h.name)}   ${Math.round(h.mix.pressure())} kPa` : '<span class="d">none</span>'}`,
       buttons: [
         { label: this.valve ? 'Close valve' : 'Open valve', fn: () => { this.valve = !this.valve; this.touch(); } },
         { label: 'Release: min', fn: () => { this.release = CAN_MIN; } }, { label: '-100', fn: step(-100) }, { label: '-10', fn: step(-10) }, { label: '-1', fn: step(-1) },
@@ -267,7 +318,7 @@ export class Pump extends Portable {
     super(dev, it, 1000);
     this.on = false; this.out = true; this.target = ONE_ATMOSPHERE;
   }
-  variant() { return (this.on ? 2 : 0) + (this.holding ? 1 : 0); }
+  variant() { return (this.port ? 4 : 0) + (this.on ? 2 : 0) + (this.holding ? 1 : 0); }
 
   process() {
     if (!this.on || this.broken) return;
@@ -293,7 +344,7 @@ export class Pump extends Portable {
     const h = this.holding;
     return {
       title: 'Portable Air Pump', live: true,
-      html: `<span class="h">${esc(this.name)}</span>\n\nPower             ${this.on ? '<span class="c">On</span>' : '<span class="w">Off</span>'}\nPort              <span class="w">Disconnected</span>\nMode              ${this.out ? 'Out' : 'In'}\nTarget pressure   ${Math.round(this.target)} kPa  <span class="d">(${Math.round(PUMP_MIN)} to ${Math.round(PUMP_MAX)})</span>\nPump pressure     ${Math.round(p)} kPa  ${bar(p / PUMP_MAX)}\nHolding tank      ${h ? `${esc(h.name)}   ${Math.round(h.mix.pressure())} kPa` : '<span class="d">none</span>'}`,
+      html: `<span class="h">${esc(this.name)}</span>\n\nPower             ${this.on ? '<span class="c">On</span>' : '<span class="w">Off</span>'}\nPort              ${this.port ? '<span class="c">Connected</span>' : '<span class="w">Disconnected</span>'}\nMode              ${this.out ? 'Out' : 'In'}\nTarget pressure   ${Math.round(this.target)} kPa  <span class="d">(${Math.round(PUMP_MIN)} to ${Math.round(PUMP_MAX)})</span>\nPump pressure     ${Math.round(p)} kPa  ${bar(p / PUMP_MAX)}\nHolding tank      ${h ? `${esc(h.name)}   ${Math.round(h.mix.pressure())} kPa` : '<span class="d">none</span>'}`,
       buttons: [
         { label: this.on ? 'Turn off' : 'Turn on', fn: () => { this.on = !this.on; this.touch(); } },
         { label: this.out ? 'Mode: in' : 'Mode: out', fn: () => { this.out = !this.out; } },
@@ -321,7 +372,7 @@ export class Scrubber extends Portable {
     if (huge) this.name = 'huge air scrubber';
   }
 
-  variant() { return this.huge ? (this.on ? 1 : 0) : (this.on ? 2 : 0) + (this.holding ? 1 : 0); }
+  variant() { return this.huge ? (this.on ? 1 : 0) : (this.port ? 4 : 0) + (this.on ? 2 : 0) + (this.holding ? 1 : 0); }
   get anchored() { return !!this.it.anc; }
 
   /** Is the room's power on (the huge one is a machine on the equipment channel)? */
@@ -405,7 +456,7 @@ export class Scrubber extends Portable {
     const rows = GAS_IDS.map((id) => ({ label: `${this.filters.has(id) ? '[x]' : '[ ]'} ${GAS_NAME[id]}`, fn: () => { if (this.filters.has(id)) this.filters.delete(id); else this.filters.add(id); } }));
     return {
       title: this.huge ? 'Huge Air Scrubber' : 'Portable Air Scrubber', live: true,
-      html: `<span class="h">${esc(this.name)}</span>\n\nPower             ${this.on ? '<span class="c">On</span>' : '<span class="w">Off</span>'}${this.huge && !this.operational ? '  <span class="b">(no power)</span>' : ''}\nPort              <span class="w">Disconnected</span>\nPressure          ${Math.round(p)} kPa  ${bar(p / this.over)}\nHolding tank      ${h ? `${esc(h.name)}   ${Math.round(h.mix.pressure())} kPa` : '<span class="d">none</span>'}\n\nFilters           <span class="d">${[...this.filters].map((id) => GAS_NAME[id]).join(', ') || 'none'}</span>`,
+      html: `<span class="h">${esc(this.name)}</span>\n\nPower             ${this.on ? '<span class="c">On</span>' : '<span class="w">Off</span>'}${this.huge && !this.operational ? '  <span class="b">(no power)</span>' : ''}\nPort              ${this.port ? '<span class="c">Connected</span>' : '<span class="w">Disconnected</span>'}\nPressure          ${Math.round(p)} kPa  ${bar(p / this.over)}\nHolding tank      ${h ? `${esc(h.name)}   ${Math.round(h.mix.pressure())} kPa` : '<span class="d">none</span>'}\n\nFilters           <span class="d">${[...this.filters].map((id) => GAS_NAME[id]).join(', ') || 'none'}</span>`,
       buttons: [
         { label: this.on ? 'Turn off' : 'Turn on', disabled: this.huge && (!this.anchored || !this.operational), fn: () => { this.on = !this.on; this.setLoad(this.on); this.touch(); } },
         ...rows,
@@ -452,6 +503,7 @@ export class AirAlarm {
   setMode(mode) {
     this.mode = mode;
     this.grid.atmos.setMode(this.area, mode);
+    this.grid.pipenet?.applyMode(this.area, mode);
     this.rev++;
   }
 
@@ -500,7 +552,7 @@ export class AtmosDevices {
       else if (it.kind === 'wm' && it.sub === 'airalarm') { const al = new AirAlarm(this, it); this.alarms.push(al); it.mach = al; continue; }
       if (m) { this.list.push(m); it.mach = m; }
     }
-    grid.atmos.onMode = (a) => { for (const al of this.alarms) if (al.area === a) al.mode = grid.atmos.mode[a]; };
+    grid.atmos.onMode = (a) => { for (const al of this.alarms) if (al.area === a) al.mode = grid.atmos.mode[a]; grid.pipenet?.applyMode(a, grid.atmos.mode[a]); };
   }
 
   update(dt) {

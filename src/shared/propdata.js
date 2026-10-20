@@ -131,10 +131,12 @@ export function buildPropData(world, rects, props, level, prev = null) {
         // stand on the floor (or on the table it shares a tile with): the empty rows under an SS13 sprite are top-down depth, not height
         const y = yb + (world.tableH[i] > 0 ? world.tableH[i] + 0.005 : 0);
         // a thing that looks different from each side (a chair, a console) gets its four pictures, picked by where you stand
-        const st = sprite({ tag: 'sprite', rect: p.s, mode: p.bb ? 0 : 1, x: cx, y, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz, l], ...(p.fr ? { views: p.fr, face: p.d } : {}) });
+        // (a flat one lies on the floor, a pipe fitting: it is a hair above it, higher on the layers that are drawn over the others)
+        const st = p.flat ? sprite({ tag: 'sprite', rect: p.s, mode: 3, x: cx, y: y + 0.04 + 0.004 * (p.ly | 0), z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.oy + rc.h / 2 - rc.fh / 2) * PX, lit: [cx, cz, l] })
+          : sprite({ tag: 'sprite', rect: p.s, mode: p.bb ? 0 : 1, x: cx, y, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz, l], ...(p.fr ? { views: p.fr, face: p.d } : {}) });
         // what is bolted down fills its tile; what is loose is a box of its own size that can be dragged about
         const loose = !!p.den && !p.anc;
-        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, l, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0, sc: p.sc, sk: p.sk, sv: p.sv, bh: p.den ? blockHalf(w) : 0 };
+        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, l, x: cx, z: cz, y0: y, y1: y + (p.flat ? 0.4 : Math.max(1.0, h)), rad: 0.8, flat: !!p.flat, ly: p.ly, mv: p.mv, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0, sc: p.sc, sk: p.sk, sv: p.sv, bh: p.den ? blockHalf(w) : 0 };
         if (loose) world.boxAdd(it); else if (p.den) world.solid[i] = 1;
         out.interact.push(it); out.added.interact.push(it);
         break;

@@ -439,7 +439,7 @@ export class Sim {
       pw: g.powersim.state(),
       lights: g.props.lights.filter((L) => L.status).map((L) => [L.idx, L.status]),                 // the fixtures that are not whole
       gone: g.props.interact.filter((it) => it.gone && it.kind !== 'closet').map((it) => it.idx),    // things that were blown up
-      pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv()],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
+      pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv(), ...g.pipenet.pv()],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
       pd: g.atmosdev.pd(),                                                                         // canisters broken open: no longer in the way
       pa: [...g.anchorLog],                                                                        // props bolted down or freed
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
@@ -480,7 +480,7 @@ export class Sim {
     for (const g of this.grids.values()) g.firedoors.update(dt);
     this.windows.update();
     this.sun.update(dt);
-    for (const g of this.grids.values()) { g.atmos.update(dt); g.powersim.update(dt); g.atmosdev.update(dt); }
+    for (const g of this.grids.values()) { g.atmos.update(dt); g.powersim.update(dt); g.atmosdev.update(dt); g.pipenet.update(dt); }
     this.shuttles.update(dt);
     this.physics.step(dt);
     this.ai.update(dt);

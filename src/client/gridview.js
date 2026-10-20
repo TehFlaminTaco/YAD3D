@@ -4,6 +4,7 @@ import { ITEM_SCALE } from '../shared/propdata.js';
 import { lightMode } from '../shared/power.js';
 import { closetSprite } from '../shared/closets.js';
 import { girderLook } from '../shared/walls.js';
+import { PIPE_SLOTS, isHidden, pipeSpriteKey } from '../shared/pipedata.js';
 import { tfCompose, tfInverse } from '../shared/math3.js';
 import { LevelMesh } from '../render/level.js';
 import { LightField } from '../render/lighting.js';
@@ -72,7 +73,8 @@ export class GridView {
     this.dyn = new SpriteBatch(big ? 3000 : Math.max(300, (props.doors.length + props.fdoors.length) * 2 + 200), mat);
     this.itemB = new SpriteBatch(big ? 6000 : 900, mat);
     this.mobB = new SpriteBatch(600, mat);        // the people on this grid: drawn here so they stand upright on it, however it is turned in the scene
-    this.trayB = new SpriteBatch(64, mat);        // the cables a T-ray scanner shows under the floor around you
+    this.trayB = new SpriteBatch(400, mat);       // the cables and pipes a T-ray scanner shows under the floor around you
+    this.pipeB = new SpriteBatch(big ? 9000 : 400, mat);       // the pipes you can see: those in the open and those on bare plating
     this.trayKey = '';
     this.mobFree = [];
     this.cam = { x: 0, y: 0, z: 0, yaw: 0 };      // where the camera is in this grid's frame (set every frame by the WorldView)
@@ -88,7 +90,7 @@ export class GridView {
 
     this.lightField = new LightField(world);
     this.levelMesh = new LevelMesh(world, assets, { tables: props.tables, panes: props.panes });
-    this.group.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh, this.mobB.mesh, this.trayB.mesh);
+    this.group.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh, this.mobB.mesh, this.trayB.mesh, this.pipeB.mesh);
     scene.add(this.group);
     this.addStatics(props.statics);
     for (const it of props.closets) this.setClosetView(it);     // the welcome may have told us some are open
@@ -105,6 +107,9 @@ export class GridView {
     this.itemSlot = new Map();                   // item id -> sprite id
     this.itemFree = [];
     this.coverSeen = grid.world.covered.slice();
+    this.pipeSlot = new Map();                   // (tile, layer) -> its sprite in `pipeB`
+    this.pipeFree = [];
+    this.addPipes();
     this.rebuildLights();
   }
 
@@ -122,7 +127,7 @@ export class GridView {
     this.scene.remove(this.group);
     for (const ch of [...this.levelMesh.chunks.keys()]) this.levelMesh.disposeChunk(ch);
     for (const m of this.mirrors) { m.mesh.geometry.dispose(); m.mat.dispose(); }
-    for (const b of [this.stat, this.dyn, this.itemB, this.mobB, this.trayB]) b.geometry.dispose();
+    for (const b of [this.stat, this.dyn, this.itemB, this.mobB, this.trayB, this.pipeB]) b.geometry.dispose();
   }
 
   // ------------------------------------------------------------------ static scenery
@@ -427,12 +432,64 @@ export class GridView {
     if (id !== undefined) this.itemB.setHighlight(id, on ? 1 : 0);
   }
 
+  // ------------------------------------------------------------------ pipes
+  /** Is the pipe `byte` on tile `i` in sight? One that lies under the floor is hidden by a floor tile (`undertile`), not by bare plating or no floor at all. */
+  pipeShown(i, byte) {
+    if (!byte) return false;
+    if (!isHidden(byte)) return true;
+    const w = this.grid.world;
+    return w.kind[i] !== KIND.FLOOR || w.floorType(i)?.k === 'plating';
+  }
+
+  /** The sprite of a pipe (flat on the floor, a hair higher for the layers drawn over the others), placed on tile (c, r) of deck `l`. */
+  pipeSprite(byte, col, layer, c, r, l, o = {}) {
+    const rc = this.rects[this.assets.level.pipeSprites?.[pipeSpriteKey(byte, layer, col)]];
+    if (!rc) return null;
+    return { x: c * TILE + TILE / 2, y: l * DECK_H + 0.02 + 0.004 * layer, z: r * TILE + TILE / 2, mode: 3, w: rc.w * PX, h: rc.h * PX, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.oy + rc.h / 2 - rc.fh / 2) * PX, rect: rc, ...o };
+  }
+
+  addPipes() {
+    const w = this.grid.world, n = w.n;
+    for (let k = 0; k < PIPE_SLOTS; k++) for (let i = 0; i < n; i++) if (w.pipe[k * n + i]) this.setPipe(i, k);
+    this.pipeB.flush();
+  }
+
+  /** Show, change or hide the pipe in slot `k` of tile `i` as the world says it is now. */
+  setPipe(i, k) {
+    const w = this.grid.world, n = w.n, wh = w.W * w.H, s = k * n + i, byte = w.pipe[s], col = w.pipeCol[s], layer = w.pipeLy[s];
+    const key = i * PIPE_SLOTS + k, slot = this.pipeSlot.get(key);
+    const rem = i % wh, c = rem % w.W, r = Math.floor(rem / w.W), l = Math.floor(i / wh);
+    const o = this.pipeShown(i, byte) ? this.pipeSprite(byte, col, layer, c, r, l) : null;
+    if (!o) {
+      if (slot) { this.pipeB.setAlpha(slot.id, 0); this.pipeFree.push(slot.id); const k = this.lit.indexOf(slot.lit); if (k >= 0) this.lit.splice(k, 1); this.pipeSlot.delete(key); }
+      return;
+    }
+    if (slot) { this.pipeB.setRect(slot.id, o.rect, o.w, o.h, o.ox, o.oy); return; }
+    const free = this.pipeFree.pop();
+    let id;
+    if (free !== undefined) { id = free; this.pipeB.setPos(id, o.x, o.y, o.z); this.pipeB.setRect(id, o.rect, o.w, o.h, o.ox, o.oy); this.pipeB.setAlpha(id, 1); }
+    else id = this.pipeB.add(o);
+    const lit = { batch: this.pipeB, id, sx: o.x, sz: o.z, sl: l };
+    this.lit.push(lit);
+    this.pipeSlot.set(key, { id, lit });
+  }
+
+  /** Floor tiles went down or came up (`tiles`: [[c, r, l], ...]), or pipes changed there: what shows of the pipes on them changes. */
+  refreshPipes(tiles) {
+    const w = this.grid.world;
+    for (const [c, r, l] of tiles) {
+      const i = w.idx(c, r, l | 0);
+      for (let k = 0; k < PIPE_SLOTS; k++) this.setPipe(i, k);
+    }
+    this.pipeB.flush();
+  }
+
   /**
-   * The T-ray scanner (t_scanner.dm: objects under the floor within three tiles, half see-through): the cables under floor tiles that hide them, round tile (c, r) of deck `l`.
+   * The T-ray scanner (t_scanner.dm: objects under the floor within three tiles, half see-through): the cables and pipes under floor tiles that hide them, round tile (c, r) of deck `l`.
    * `on` false hides them.
    */
   updateTray(on, c, r, l) {
-    const key = on ? `${c},${r},${l},${this.grid.cableRev | 0}` : '';
+    const key = on ? `${c},${r},${l},${this.grid.cableRev | 0},${this.grid.pipeRev | 0}` : '';
     if (key === this.trayKey) return;
     this.trayKey = key;
     const B = this.trayB, w = this.grid.world, sprites = this.assets.level.cableSprites;
@@ -443,6 +500,12 @@ export class GridView {
         const cc = c + dc, rr = r + dr;
         if (!w.inb(cc, rr, l)) continue;
         const i = w.idx(cc, rr, l);
+        for (let k = 0; k < PIPE_SLOTS; k++) {                                                                                                                // (the pipes under the tiles)
+          const s = k * w.n + i, byte = w.pipe[s];
+          if (!byte || !isHidden(byte) || this.pipeShown(i, byte)) continue;
+          const o = this.pipeSprite(byte, w.pipeCol[s], w.pipeLy[s], cc, rr, l, { alpha: 0.5, tint: [1.2, 1.2, 1.2] });
+          if (o) B.add({ ...o, y: o.y + 0.03 });
+        }
         if (w.cable[i] !== 1 || (w.kind[i] === KIND.FLOOR && w.floorType(i)?.k === 'plating') || w.kind[i] === KIND.LATTICE) continue;       // (the bare ones are drawn already)
         const has = (a, b) => w.inb(cc + a, rr + b, l) && w.cable[w.idx(cc + a, rr + b, l)] === 1;
         const mask = (has(0, -1) ? 1 : 0) | (has(0, 1) ? 2 : 0) | (has(1, 0) ? 4 : 0) | (has(-1, 0) ? 8 : 0);
@@ -465,6 +528,10 @@ export class GridView {
     it.gone = false;
     if (it.st.views) { it.st.views = it.sv[v]; it.st.vi = -1; return; }                                         // (a thing with four sides: its four pictures are swapped, the next frame picks one)
     const rc = this.rects[it.sv[v]];
+    if (rc && it.flat) {                                                                                        // a flat one (a pump, a vent): each state is cut to its own size
+      this.stat.setRect(it.st.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, (rc.oy + rc.h / 2 - rc.fh / 2) * PX);
+      return;
+    }
     if (rc && !it.base) {                                                                                       // a standing thing with one picture a state (a collector)
       this.stat.setRect(it.st.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, 0);
       return;
@@ -565,6 +632,7 @@ export class GridView {
 
   tilesChanged(tiles) {
     this.levelMesh.rebuildTiles(tiles);
+    this.refreshPipes(tiles);
     this.rebuildLights();
   }
 

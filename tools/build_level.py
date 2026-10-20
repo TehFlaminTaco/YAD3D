@@ -287,9 +287,9 @@ def adj_from(pred):
 # --------------------------------------------------------------------------- classification tables
 
 SKIP_PREFIXES = (
-    '/obj/structure/cable', '/obj/machinery/atmospherics', '/obj/structure/disposalpipe', '/obj/machinery/duct',
+    '/obj/structure/cable', '/obj/structure/disposalpipe', '/obj/machinery/duct',
     '/obj/effect/mapping_helpers', '/obj/effect/decal', '/obj/effect/turf_decal', '/obj/effect/landmark',
-    '/obj/machinery/navbeacon', '/obj/machinery/meter', '/obj/machinery/conveyor', '/obj/item/solar_assembly',
+    '/obj/machinery/navbeacon', '/obj/machinery/conveyor', '/obj/item/solar_assembly',
     '/obj/structure/transit_tube', '/obj/structure/grille', '/obj/docking_port',
     '/obj/structure/lattice', '/obj/effect/spawner/structure', '/obj/machinery/power/terminal',
     '/obj/structure/disposaloutlet', '/obj/structure/light_construct', '/obj/item/wallframe', '/obj/item/poster',
@@ -396,26 +396,196 @@ def solar_image(tracker=False):
 
 
 def portable_variants(p, st, icon, spr):
-    """The pictures of a portable atmospherics machine (the `sv` the sim picks from, see src/sim/atmosdev.js): a canister is eleven (with or without a tank in it, and its lamp for how full
-    it is: canister.dm update_overlays; the last broken: `<colour>-1`), a pump and a scrubber four (off or on, with or without a tank: pump.dm / scrubber.dm update_icon_state and
-    update_overlays), the huge scrubber two."""
+    """The pictures of a portable atmospherics machine (the `sv` the sim picks from, see src/sim/atmosdev.js): a canister is twenty-one (with or without a tank in it, and its lamp for how full
+    it is: canister.dm update_overlays; the eleventh broken: `<colour>-1`; then the same ten again with it fastened to a connector port), a pump and a scrubber eight (off or on, with or without a
+    tank, without and then with a port: pump.dm / scrubber.dm update_icon_state and update_overlays), the huge scrubber two."""
     def one(*states):
         layers = [(icon, s_, S, None, None) for s_ in states]
         return spr.add(layers) if all(icon_ok(icon, s_) for s_ in states) else -1
     if '/canister' in p:
         out = []
-        for hold in (False, True):
-            for lvl in range(-1, 4):
-                out.append(one(st, 'tier 1-0', *(['can-open'] if hold else []), *([f'can-{lvl}'] if lvl >= 0 else [])))
-        out.append(one(st + '-1', 'tier 1-1'))
+        for conn in (False, True):
+            for hold in (False, True):
+                for lvl in range(-1, 4):
+                    out.append(one(st, 'tier 1-0', *(['can-open'] if hold else []), *(['can-connector'] if conn else []), *([f'can-{lvl}'] if lvl >= 0 else [])))
+            if not conn:
+                out.append(one(st + '-1', 'tier 1-1'))
         return out
     if '/pump' in p:
-        return [one(f'psiphon:{on}', *(['siphon-open'] if hold else [])) for on in (0, 1) for hold in (False, True)]
+        return [one(f'psiphon:{on}', *(['siphon-open'] if hold else []), *(['siphon-connector'] if conn else [])) for conn in (False, True) for on in (0, 1) for hold in (False, True)]
     if '/scrubber/huge' in p:
         return [one(f'scrubber:{on}') for on in (0, 1)]
     if '/scrubber' in p:
-        return [one(f'pscrubber:{on}', *(['scrubber-open'] if hold else [])) for on in (0, 1) for hold in (False, True)]
+        return [one(f'pscrubber:{on}', *(['scrubber-open'] if hold else []), *(['scrubber-connector'] if conn else [])) for conn in (False, True) for on in (0, 1) for hold in (False, True)]
     return None
+
+
+# --------------------------------------------------------------------------- atmospherics: pipes, and what is connected to them
+
+AT = 'icons/obj/atmospherics/'
+PIPE_HIDDEN = 32                                  # (in a pipe's shape byte: it lies under the floor tiles, src/shared/pipedata.js)
+PIPE_COLORS = {                                   # colour name -> (index, tint); the paths say which a pipe is (pipes/mapping.dm HELPER)
+    'general': (0, None), 'yellow': (1, '#ffc600'), 'cyan': (2, '#00fff9'), 'green': (3, '#1eff00'), 'orange': (4, '#ff8119'), 'purple': (5, '#8000b6'),
+    'dark': (6, '#454545'), 'brown': (7, '#b26438'), 'violet': (8, '#400080'), 'scrubbers': (9, '#ff0000'), 'supply': (10, '#0000ff'), 'supplymain': (11, '#822bff'),
+    'he': (12, '#404040'),
+}
+BEND_CODE = {5: 3, 6: 4, 9: 5, 10: 6}            # a bent simple pipe by its dir (NE, SE, NW, SW) -> shape code
+BEND_DIR = {3: 5, 4: 6, 5: 9, 6: 10}
+CW = {N: E, E: S, S: W, W: N}                     # turn(dir, -90)
+PIPE_VARS = ('name', 'target_pressure', 'filter_type', 'external_pressure_bound', 'internal_pressure_bound', 'pressure_checks', 'node1_concentration', 'node2_concentration',
+             'volume_rate', 'id_tag', 'id', 'frequency', 'initialize_directions', 'on', 'piping_layer')
+METER_STATES = ['meter0'] + ['meter1_%d' % i for i in range(1, 7)] + ['meter2_%d' % i for i in range(1, 7)] + ['meter3_%d' % i for i in range(1, 7)] + ['meter4']
+
+
+GAS_IDS_DM = {'o2': 'o2', 'n2': 'n2', 'plasma': 'tox', 'co2': 'co2', 'n2o': 'n2o', 'bz': 'bz', 'water_vapor': 'h2o'}      # the DM's gas ids -> ours (src/shared/gases.js)
+DEFAULT_GAS = 'o2=22;n2=82;TEMP=293.15'                                                                              # what an open turf starts with (OPENTURF_DEFAULT_ATMOS)
+
+
+def gas_kpa(mix):
+    """A turf's `initial_gas_mix` ("o2=22;n2=82;TEMP=293.15") as the partial pressure of each gas in kPa in a 2,500 litre tile at 20 degrees: {'o2': 21.4, ...}. The game has no temperature."""
+    out = {}
+    for tok in str(mix).strip('"').split(';'):
+        if '=' not in tok:
+            continue
+        k, v = tok.split('=', 1)
+        if k.strip() in GAS_IDS_DM:
+            try:
+                kpa = round(float(v) * 8.31 * 293.15 / 2500.0, 2)
+            except ValueError:
+                continue
+            if kpa:
+                out[GAS_IDS_DM[k.strip()]] = kpa
+    return out
+
+
+def pipe_shape(p, d):
+    """The shape code (src/shared/pipedata.js SHAPE) of a pipe atom at path p turned to d, or 0."""
+    simple = 1 if d in (N, S) else 2 if d in (E, W) else BEND_CODE.get(d, 1)
+    if '/pipe/manifold4w' in p:
+        return 11
+    if '/pipe/manifold' in p:
+        return {N: 7, S: 8, E: 9, W: 10}.get(d, 8)
+    if '/pipe/layer_manifold' in p:
+        return 13 if d in (E, W) else 12
+    if '/pipe/heat_exchanging/simple' in p:
+        return simple + 13
+    if '/pipe/heat_exchanging/junction' in p:
+        return {N: 20, S: 21, E: 22, W: 23}.get(d, 21)
+    if '/pipe/simple' in p:
+        return simple
+    return 0
+
+
+def pipe_color(p):
+    seg = p.split('/')
+    if len(seg) > 5 and seg[5] == 'heat_exchanging':
+        return PIPE_COLORS['he'][0]
+    if len(seg) > 6 and seg[6] in PIPE_COLORS:
+        return PIPE_COLORS[seg[6]][0]
+    return 0
+
+
+def piping_layer(p):
+    m = re.search(r'/layer(\d)$', p)
+    return int(m.group(1)) if m else 2
+
+
+def pipe_layers(code, layer, col):
+    """The picture of a pipe of shape `code` on piping layer `layer` in colour `col`: pipes/simple.dmi, manifold.dmi, he-*.dmi (the pipes are drawn as pipe.dm / manifold.dm update_icon does, joined on every open side)."""
+    color = next((h for i_, h in PIPE_COLORS.values() if i_ == col), None)
+    shift = (layer - 2) * 5                        # (PIPING_LAYER_P_X: the centre of a manifold is moved on both axes; the arms and the straight pipes have it in their pictures)
+    if 1 <= code <= 6 or 14 <= code <= 19:
+        he = code >= 14
+        k = code - 13 if he else code
+        return [(AT + ('pipes/he-simple.dmi' if he else 'pipes/simple.dmi'), 'pipe11-%d' % layer, {1: S, 2: E}.get(k, BEND_DIR.get(k)), color, None)]
+    if 7 <= code <= 11:
+        icon = AT + 'pipes/manifold.dmi'
+        if code == 11:
+            arms, center = (N, S, E, W), ('manifold4w_center', S)
+        else:
+            closed = {7: N, 8: S, 9: E, 10: W}[code]
+            arms, center = tuple(dd for dd in (N, S, E, W) if dd != closed), ('manifold_center', closed)
+        return [(icon, center[0], center[1], color, None, 0, (shift, shift))] + [(icon, 'pipe-%d' % layer, dd, color, None) for dd in arms]
+    if code in (12, 13):
+        return [(AT + 'pipes/manifold.dmi', 'manifoldlayer', E if code == 13 else S, None, None)]
+    if 20 <= code <= 23:
+        return [(AT + 'pipes/he-junction.dmi', 'pipe11-%d' % layer, {20: N, 21: S, 22: E, 23: W}[code], '#404040', None)]
+    return []
+
+
+def atmos_pictures(p, r, d, spr):
+    """What a pipe component looks like in each of its states (the `sv` the sim picks from, src/sim/pipenet.js), whether it is flat on the floor or stands (`stand`).
+    The states are the DM's update_icon_nopipes; a piece that hides under the floor shows only its own grating and the stub of pipe (the cap)."""
+    q = p[len('/obj/machinery/atmospherics/components/'):]
+    kind, _, rest = q.partition('/')
+    name = rest.split('/')[0]
+    U, B, T = AT + 'components/unary_devices.dmi', AT + 'components/binary_devices.dmi', AT + 'components/trinary_devices.dmi'
+
+    def one(icon, state, dd, extra=(), under=()):
+        layers = [(i_, s_, d_, None, None) for i_, s_, d_ in under] + [(icon, state, dd, None, None)] + [(i_, s_, d_, None, None) for i_, s_, d_ in extra]
+        return spr.add(layers)
+
+    if kind == 'unary':
+        if name == 'vent_pump':
+            cap = [(U, 'vent_cap', d)]
+            return {'sv': [one(U, st, d, cap) for st in ('vent_out-off', 'vent_out', 'vent_in-off', 'vent_in', 'vent_welded')]}
+        if name == 'vent_scrubber':
+            cap = [(U, 'scrub_cap', d)]
+            return {'sv': [one(U, st, d, cap) for st in ('scrub_off', 'scrub_on', 'scrub_wide', 'scrub_purge', 'scrub_welded')]}
+        if name == 'portables_connector':
+            return {'sv': [one(U, 'connector', S, [(U, 'connector_cap', d)])]}
+        if name == 'outlet_injector':
+            return {'sv': [one(U, st, d, [(U, 'inje_cap', d)]) for st in ('inje_off', 'inje_on')]}
+        if name == 'tank':
+            st = r.get('icon_state') if isinstance(r.get('icon_state'), str) else 'generic'
+            return {'sv': [one(AT + 'pipes/pressure_tank.dmi', st, S)], 'stand': 1}
+        if name == 'thermomachine':
+            base = 'heater' if 'heater' in rest else 'freezer'
+            return {'sv': [one(AT + 'components/thermomachine.dmi', base, S), one(AT + 'components/thermomachine.dmi', base + '_1', S)], 'stand': 1}
+    elif kind == 'binary':
+        if name == 'pump':
+            under = [(B, 'pipe_intact', dd) for dd in (OPP[d], d)]
+            return {'sv': [one(B, st, d, (), under) for st in ('pump_off', 'pump_on')]}
+        if name == 'valve':
+            dv = {S: N, W: E}.get(d, d)
+            under = [(B, 'pipe_intact', dd) for dd in (OPP[dv], dv)]
+            t = 'd' if 'digital' in rest else 'm'
+            return {'sv': [one(B, '%svalve_%s' % (t, s_), dv, (), under) for s_ in ('off', 'on')] + ([one(B, 'dvalve_nopower', dv, (), under)] if t == 'd' else []), 'dir': dv}
+        if name == 'dp_vent_pump':
+            return {'sv': [one(U, st, d, [(U, 'dpvent_cap', d)]) for st in ('vent_off', 'vent_out', 'vent_in')]}
+    elif kind == 'trinary' and name in ('filter', 'mixer'):
+        suf = '_f' if '/flipped' in p else ''
+        caps = [(T, 'cap', dd) for dd in (OPP[d], CW[d], d)]
+        return {'sv': [one(T, '%s_%s%s' % (name, s_, suf), d, caps) for s_ in ('off', 'on')]}
+    # anything else (the cryo cell, ...): its own picture
+    icon, st = r.get('icon'), r.get('icon_state')
+    if icon_ok(icon, st) if isinstance(st, str) else False:
+        return {'sv': [spr.add([(icon, st, d, None, None)])], 'stand': 1 if kind == 'unary' else 0}
+    return None
+
+
+def atmos_prop(p, v, r, d, base, spr):
+    """The prop record of a pipe component or a gas meter: a flat picture on the floor (or a standing machine), with its pictures `sv`, its piping layer `ly` and the vars the map sets."""
+    if p.startswith('/obj/machinery/meter'):
+        pic = {'sv': [spr.add([(AT + 'pipes/meter.dmi', st, S, None, None)]) for st in METER_STATES]}
+    else:
+        pic = atmos_pictures(p, r, d, spr)
+    if not pic or any(s_ < 0 for s_ in pic['sv']):
+        return None
+    pv = {}
+    for k in PIPE_VARS:
+        if k in v and not isinstance(r.get(k), (dict, list)):
+            pv[k] = r.get(k)
+    rec = dict(base, k='sprite', s=pic['sv'][0], sv=pic['sv'], p=p.split('/', 2)[2], ly=piping_layer(p), den=0, cont=0)
+    if pic.get('stand'):
+        rec.update(den=1, anc=1, bb=1)
+    else:
+        rec['flat'] = 1
+    if pic.get('dir'):
+        rec['d'] = pic['dir']
+    if pv:
+        rec['mv'] = pv                             # (the vars the map sets: `pv` is already what a prop calls the picture it shows)
+    return rec
 
 
 def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
@@ -445,6 +615,8 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
         return 1 <= x <= Wd and 1 <= y <= Ht
 
     props = []
+    pipes = []                          # [col, row, piping layer, shape code (+ PIPE_HIDDEN), colour index] for every pipe: they are tile data, like the cables
+    gas = []                            # [col, row, {gas: kPa}] for a floor that does not start with ordinary air (an airless one, a gas chamber)
     floor_cache = {}
 
     def floor_cell(turf_path, turf_vars, decals):
@@ -607,6 +779,9 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
             kind[i] = 1
             floor_c[i] = floor_cell(tp, tv, decals)
             ft[i] = floor_type(tp)
+            gm = resolve(tp, tv).get('initial_gas_mix')
+            if isinstance(gm, str) and gm.strip('"') != DEFAULT_GAS:
+                gas.append([x - 1, Ht - y, gas_kpa(gm)])
         tile_atoms[(x, y)] = (tp, tv, objs, atoms)
 
     def is_kind(x, y, *ks):
@@ -689,6 +864,26 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
     for (x, y), (tp, tv, objs, atoms) in tile_atoms.items():
         for p, v in objs:
             if p.startswith('/mob'):
+                continue
+            if p.startswith('/obj/machinery/atmospherics/') or p.startswith('/obj/machinery/meter'):
+                try:
+                    r = resolve(p, v)
+                except Exception:
+                    r = dict(v)
+                d = dir_of(r)
+                if p.startswith('/obj/machinery/atmospherics/pipe/'):
+                    code = pipe_shape(p, d)
+                    if code:
+                        hidden = '/heat_exchanging/' not in p and '/visible' not in p
+                        pipes.append([x - 1, Ht - y, piping_layer(p), code | (PIPE_HIDDEN if hidden else 0), pipe_color(p)])
+                        stats['pipe'] += 1
+                    continue
+                rec = atmos_prop(p, v, r, d, {'x': x - 1, 'y': Ht - y, 'd': d, 'n': clean_name(r.get('name', ''))}, spr)
+                if rec:
+                    props.append(rec)
+                    stats['pipe_part'] += 1
+                else:
+                    missing[p] += 1
                 continue
             if p.startswith('/obj/structure/cable'):
                 cab[idx(x, y)] = 1
@@ -951,6 +1146,13 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                 stats['sprite'] += 1
                 continue
 
+    # the pictures of the pipes that are there (one for each shape, layer and colour in use)
+    psp = shared.setdefault('pipe_sprites', {})
+    for _c, _r, ly, code, col in pipes:
+        key = '%d-%d-%d' % (code & 31, ly, col)
+        if key not in psp:
+            psp[key] = spr.add(pipe_layers(code & 31, ly, col))
+
     # loot pool sprites
     pool = []
     for pth, tag in (LOOT_POOL if full else []):
@@ -1051,7 +1253,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
     print('  props', len(props), dict(stats))
     print('  unresolved:', missing.most_common(12))
 
-    return dict(tiles=tiles, kind=kind, ft=ft, lat=lat_a, cab=cab, area=area_a, floor=floor_c, wall=wall_v, roof=roof, props=props, spawns=spawns,
+    return dict(tiles=tiles, kind=kind, ft=ft, lat=lat_a, cab=cab, pipes=pipes, gas=gas, area=area_a, floor=floor_c, wall=wall_v, roof=roof, props=props, spawns=spawns,
                 pool=pool, itemdefs=itemdefs, mobs=mobs, descs=descs)
 
 
@@ -1271,7 +1473,7 @@ def build(mapname):
         'ft': b64u8(base['ft']), 'lat': b64u8(base['lat']), 'cab': b64u8(base['cab']),
         'kind': b64u8(base['kind']), 'roof': b64u8(base['roof']),
         'area': b64u16(base['area']), 'floor': b64u16(base['floor']), 'wall': b64u16(base['wall']),
-        'props': base['props'], 'spawns': base['spawns'],
+        'props': base['props'], 'spawns': base['spawns'], 'pipes': base['pipes'], 'gas': base['gas'],
     }
     grids = {'station': station}
     for template, res in blueprints.items():
@@ -1279,17 +1481,17 @@ def build(mapname):
         grids[template] = {
             'w': w2, 'h': h2, 'ft': b64u8(res['ft']), 'lat': b64u8(res['lat']), 'cab': b64u8(res['cab']), 'kind': b64u8(res['kind']), 'roof': b64u8(res['roof']),
             'area': b64u16(res['area']), 'floor': b64u16(res['floor']), 'wall': b64u16(res['wall']),
-            'props': res['props'], 'spawns': res['spawns'],
+            'props': res['props'], 'spawns': res['spawns'], 'pipes': res['pipes'], 'gas': res['gas'],
         }
     grids['centcom'] = {
         'w': cw, 'h': ch, 'ft': b64u8(centcom['ft']), 'lat': b64u8(centcom['lat']), 'cab': b64u8(centcom['cab']), 'kind': b64u8(centcom['kind']), 'roof': b64u8(centcom['roof']),
         'area': b64u16(centcom['area']), 'floor': b64u16(centcom['floor']), 'wall': b64u16(centcom['wall']),
-        'props': centcom['props'], 'spawns': [],
+        'props': centcom['props'], 'spawns': [], 'pipes': centcom['pipes'], 'gas': centcom['gas'],
     }
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'lightItems': light_items, 'tiles': base['tiles'],
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'lightItems': light_items, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,

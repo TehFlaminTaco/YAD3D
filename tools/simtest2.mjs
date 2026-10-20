@@ -1353,6 +1353,7 @@ section('tiny fans seal against air', () => {
 section('walls and girders', () => {
   const { sim, A, a, inbox, step, evs, hand } = setup({ debug: true });
   sim.director.strikes = 99; sim.director.carpTimer = 1e9;    // no meteor strikes and no carp this shift: where they land is not what this is about
+  a.body.god = true;                                          // (and an outside wall taken down empties the room the pipes cannot fill again as fast: the vacuum is not what this is about either)
   const w = sim.world, I = (c, r) => r * w.W + c, TERR = w.level.terrain;
   const tool = (path, extra = {}) => { const it = sim.newItem(path, extra); hand(a, it, 0); a.active = 0; a.cool = 0; return it; };
   const welder = () => { const it = tool('/obj/item/weldingtool'); it.lit = true; it.fuel = 20; return it; };
