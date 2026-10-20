@@ -14,7 +14,7 @@ browser. It works end to end. **Not everything is committed or pushed** (below).
   the repo's original Unlicense: the project is now **AGPL-3.0** (`LICENSE`), art and sound CC BY-SA 3.0.
 * **Git state (2026-10-20):** everything is committed. `99cef4d` holds the work of two sessions that ran side by side (the debug menu 13, the inventory HUD 14, the observer and rune
   fixes, zero gravity 15, windows and grilles 17, door angles and wall mounts 18, the TG notes and `tools/tg*.py` 16) as one commit, because their edits share files (`sim.js`, `world.js`,
-  `movement.js`, `hud.js`, `simtest2.mjs`) and could not be split. Local `HEAD` is four commits ahead of `origin` (`ca706f5`: the two earlier unpushed ones, that commit, and a handover fix). **Nothing has been pushed since `ca706f5`**, so PR #1
+  `movement.js`, `hud.js`, `simtest2.mjs`) and could not be split. Local `HEAD` is several commits ahead of `origin` (`ca706f5`; `git log origin/claude/yad3d-game..HEAD` lists them). **Nothing has been pushed since `ca706f5`**, so PR #1
   does not have any of it yet.
 * **Tests (all pass now):** `node tools/simtest2.mjs` 339/339, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
   (191 assertions, about 4 min) and `node tools/nettest.mjs` (29) were last run before the window work, were **edited for the new HUD but never run** (they hard-code a Playwright path that
