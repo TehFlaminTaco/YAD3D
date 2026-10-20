@@ -66,7 +66,7 @@ export class Replica {
     w.kind[i] = ev.kind; w.wallVar[i] = ev.wall; w.glass[i] = ev.glass; w.solid[i] = ev.solid; w.airBlock[i] = ev.air;
     w.floorCell[i] = ev.floor; w.roof[i] = ev.roof; w.areaIdx[i] = ev.area;
     if (ev.brk) w.breached.add(i); else w.breached.delete(i);
-    w.grille[i] = ev.gr ?? w.grille[i]; w.ws[i] = ev.ws ?? w.ws[i];
+    w.grille[i] = ev.gr ?? w.grille[i]; w.ws[i] = ev.ws ?? w.ws[i]; w.ft[i] = ev.ft ?? w.ft[i]; w.lat[i] = ev.lat ?? w.lat[i];
   }
 
   setCloset(i, cs, gone) {

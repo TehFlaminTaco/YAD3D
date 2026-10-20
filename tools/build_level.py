@@ -349,7 +349,9 @@ GAME_ITEMS = [
     '/obj/item/clothing/under/color/grey', '/obj/item/clothing/shoes/sneakers/black', '/obj/item/storage/backpack',
     # what windows and grilles drop and are rebuilt from (window.dm spawnDebris, grille.dm deconstruct)
     '/obj/item/stack/rods', '/obj/item/stack/sheet/rglass', '/obj/item/stack/sheet/plasmaglass', '/obj/item/stack/sheet/plasmarglass', '/obj/item/shard',
-    '/obj/item/stack/tile/plasteel',               # what a metal sheet makes (the "floor tile" recipe) and a floor leaves when it is pried up
+    # the tiles the map's floors are made of: what prying one up leaves, and what puts one down again
+    '/obj/item/stack/tile/plasteel', '/obj/item/stack/tile/wood', '/obj/item/stack/tile/carpet', '/obj/item/stack/tile/carpet/blue',
+    '/obj/item/stack/tile/grass', '/obj/item/stack/tile/circuit', '/obj/item/stack/tile/mineral/titanium', '/obj/item/stack/tile/mineral/plastitanium',
 ]
 
 
@@ -364,6 +366,9 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
     area_a = [0] * (Wd * Ht)
     floor_c = [0xFFFF] * (Wd * Ht)
     wall_v = [0xFFFF] * (Wd * Ht)
+    ft = bytearray(Wd * Ht)             # floor type: 0 none, else 1 + index into shared['floor_types']
+    lat_a = bytearray(Wd * Ht)          # lattice over space: 1 lattice, 2 catwalk
+    floor_types, floor_type_idx = shared['floor_types'], shared['floor_type_idx']
     roof = bytearray(Wd * Ht)
     wall_variants = shared['wall_variants']     # {name, glass, cells[4], gr?}  index = left|right<<1
     wall_variant_idx = shared['wall_variant_idx']
@@ -399,6 +404,22 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                 layers.append((di, ds, dir_of(dr), col, al))
         floor_cache[key] = cells.add(sl.compose(layers, (32, 32)))
         return floor_cache[key]
+
+    def floor_type(turf_path):
+        """What kind of floor this is, for taking it apart: plating (bare), a tile floor (the tile it leaves), or a reinforced floor."""
+        raw = dm.lookup(turf_path)
+        tile = raw.get('floor_tile')
+        tile = tile.strip() if isinstance(tile, str) and tile.strip().startswith('/') else None
+        intact = str(raw.get('intact', 'TRUE')).strip().upper() not in ('FALSE', '0')
+        klass = 'engine' if turf_path.startswith('/turf/open/floor/engine') else ('tile' if intact else 'plating')
+        if klass == 'plating':
+            tile = None
+        name = str(raw.get('name', '')).strip().strip('"') or {'plating': 'plating', 'engine': 'reinforced floor', 'tile': 'floor'}[klass]
+        key = (klass, tile, name)
+        if key not in floor_type_idx:
+            floor_type_idx[key] = len(floor_types)
+            floor_types.append({'k': klass, 'tile': tile, 'n': name})
+        return 1 + floor_type_idx[key]
 
     def window_of(objs):
         """(tag, has_grille) for a full-tile window on this tile, else None. A window spawner always brings a grille."""
@@ -514,9 +535,13 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
             kind[i] = 2
         elif tp.startswith('/turf/open/space'):
             kind[i] = 3 if has_lat else 0
+            if has_lat:
+                lat_objs = [p for p, _ in objs if p.startswith('/obj/structure/lattice')]
+                lat_a[i] = 2 if lat_objs[0].startswith('/obj/structure/lattice/catwalk') else 1       # drawn from the first one, like the cell below
         else:
             kind[i] = 1
             floor_c[i] = floor_cell(tp, tv, decals)
+            ft[i] = floor_type(tp)
         tile_atoms[(x, y)] = (tp, tv, objs, atoms)
 
     def is_kind(x, y, *ks):
@@ -883,10 +908,18 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
             r = resolve(full)
             dsc = r.get('desc')
             descs[pth] = [clean_name(r.get('name', '')), dsc if isinstance(dsc, str) else '']
+    # what each tile item turns a bit of plating into (turf_type): the floor type and the cell it is drawn with
+    tiles = {}
+    for tp_ in ('/obj/item/stack/tile/plasteel', '/obj/item/stack/tile/wood', '/obj/item/stack/tile/carpet', '/obj/item/stack/tile/carpet/blue',
+                '/obj/item/stack/tile/grass', '/obj/item/stack/tile/circuit', '/obj/item/stack/tile/mineral/titanium', '/obj/item/stack/tile/mineral/plastitanium'):
+        turf = dm.lookup(tp_).get('turf_type')
+        if isinstance(turf, str) and turf.strip().startswith('/turf/'):
+            turf = turf.strip()
+            tiles[tp_] = {'ft': floor_type(turf), 'cell': floor_cell(turf, {}, [])}
     print('  props', len(props), dict(stats))
     print('  unresolved:', missing.most_common(12))
 
-    return dict(kind=kind, area=area_a, floor=floor_c, wall=wall_v, roof=roof, props=props, spawns=spawns,
+    return dict(tiles=tiles, kind=kind, ft=ft, lat=lat_a, area=area_a, floor=floor_c, wall=wall_v, roof=roof, props=props, spawns=spawns,
                 pool=pool, itemdefs=itemdefs, mobs=mobs, descs=descs)
 
 
@@ -1001,7 +1034,7 @@ def build(mapname):
 
     cells = Cells()
     spr = Sprites()
-    shared = {'areas': [], 'area_idx': {}, 'wall_variants': [], 'wall_variant_idx': {}}
+    shared = {'areas': [], 'area_idx': {}, 'wall_variants': [], 'wall_variant_idx': {}, 'floor_types': [], 'floor_type_idx': {}}
     base = process(grid, keys, cells, spr, shared, Wd, Ht)
 
     # emergency shuttle: processed on a copy, stored as an overlay applied when it docks
@@ -1029,6 +1062,18 @@ def build(mapname):
         structs[key] = spr.add([('icons/obj/structures.dmi', state, S, None, None)])
     floors = {key: cells.add(sl.compose([('icons/turf/floors.dmi', state, S, None, None)], (32, 32)))
               for key, state in (('plating', 'plating'), ('floor', 'floor'), ('engine', 'engine'))}
+    # a lattice or catwalk drawn for every pattern of lattice/floor neighbours (N S E W NE NW SE SW = bits 0..7), so one can be put up or cut away at run time
+    lat_cells = {}
+    for key, icon, base_state in (('lat', 'icons/obj/smooth_structures/lattice.dmi', 'lattice'), ('cat', 'icons/obj/smooth_structures/catwalk.dmi', 'catwalk')):
+        row = []
+        for mask in range(256):
+            adj = {d: bool(mask & (1 << b)) for b, d in enumerate(('N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW'))}
+            img = smooth_image(icon, adj, base_state)
+            row.append(cells.add(img) if img is not None else 0xFFFF)
+        lat_cells[key] = row
+    # make sure the three floors a player can make exist as types (the map has them all, this just says where)
+    ftypes = shared['floor_types']
+    print('  floor types:', ', '.join('%s%s' % (t['k'], ' (' + t['tile'].split('/')[-1] + ')' if t['tile'] else '') for t in ftypes))
     print('  cells', len(cells.imgs), 'sprites', len(spr.items), 'areas', len(areas), 'wall variants', len(wall_variants))
 
     # ---- write ----------------------------------------------------------------------------
@@ -1050,7 +1095,8 @@ def build(mapname):
     level = {
         'name': mapname, 'w': Wd, 'h': Ht,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs,
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'tiles': base['tiles'],
+        'ft': b64u8(base['ft']), 'lat': b64u8(base['lat']),
         'kind': b64u8(base['kind']), 'roof': b64u8(base['roof']),
         'area': b64u16(base['area']), 'floor': b64u16(base['floor']), 'wall': b64u16(base['wall']),
         'areas': areas, 'walls': wall_variants, 'props': base['props'], 'spawns': base['spawns'], 'pool': base['pool'],

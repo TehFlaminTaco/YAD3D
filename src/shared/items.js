@@ -60,7 +60,7 @@ export const BEHAVIORS = [
   ['/obj/item/stack/sheet/plasmaglass', { sheet: 'plasmaglass', stack: 10 }],
   ['/obj/item/stack/sheet/plasmarglass', { sheet: 'plasmarglass', stack: 10 }],
   ['/obj/item/stack/rods', { sheet: 'rods', stack: 1 }],
-  ['/obj/item/stack/tile/plasteel', { stack: 1 }],
+  ['/obj/item/stack/tile', { stack: 1, tile: true }],
   ['/obj/item/stack/cable_coil', { stack: 30 }],
   ['/obj/item/reagent_containers/food/drinks', { consume: { msg: 'You take a swig.' } }],
   ['/obj/item/reagent_containers/food/snacks', { consume: { heal: 3, msg: 'You eat it.' } }],

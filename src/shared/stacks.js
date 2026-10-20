@@ -13,6 +13,13 @@ export const STACKS = [
   ['/obj/item/stack/sheet/metal', { max: 50, one: 'metal sheet' }],
   ['/obj/item/stack/rods', { max: 50, one: 'metal rod' }],
   ['/obj/item/stack/tile/plasteel', { max: 60, one: 'floor tile' }],
+  ['/obj/item/stack/tile/wood', { max: 60, one: 'wood floor tile' }],
+  ['/obj/item/stack/tile/carpet/blue', { max: 60, one: 'carpet' }],
+  ['/obj/item/stack/tile/carpet', { max: 60, one: 'carpet' }],
+  ['/obj/item/stack/tile/grass', { max: 60, one: 'grass floor tile' }],
+  ['/obj/item/stack/tile/circuit', { max: 60, one: 'blue circuit tile' }],
+  ['/obj/item/stack/tile/mineral/titanium', { max: 60, one: 'titanium floor tile' }],
+  ['/obj/item/stack/tile/mineral/plastitanium', { max: 60, one: 'plastitanium floor tile' }],
 ];
 
 /** The STACKS entry an item path belongs to (its merge_type), or null. */

@@ -1,5 +1,6 @@
 import { TILE, KIND, SLOTS } from '../shared/config.js';
 import { attach, detach, place, recalc } from './inventory.js';
+import { stackInfo } from '../shared/stacks.js';
 
 const MAX_ITEMS = 25;             // most things one spawn makes (a stack counts as one thing with that many in it)
 const MAX_STACK = 50;
@@ -91,8 +92,9 @@ export class Debug {
     const sim = this.sim;
     const path = typeof msg.path === 'string' ? msg.path : '';
     if (!Object.hasOwn(sim.db.defs, path)) { this.say(c, 'No such item.'); return; }
-    const stack = (sim.db.behavior(path).stack || 0) > 1;
-    const n = int(msg.n, 1, stack ? MAX_STACK : MAX_ITEMS, 1);
+    const info = stackInfo(path);
+    const stack = !!info || (sim.db.behavior(path).stack || 0) > 1;
+    const n = int(msg.n, 1, stack ? (info?.max ?? MAX_STACK) : MAX_ITEMS, 1);
     const items = stack ? [sim.newItem(path, { amount: n })] : Array.from({ length: n }, () => sim.newItem(path));
     const m = c.mob;
     const [x, z] = this.target(c, msg);

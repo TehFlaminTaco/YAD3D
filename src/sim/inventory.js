@@ -252,6 +252,7 @@ function tagsOf(it) {
   if (d.internals) t.push('mask');
   if (d.headset) t.push('headset');
   if (d.sheet) t.push('sheet');
+  if (d.tile) t.push('tile');
   if (d.cell) t.push('cell');
   if (d.stun || d.breaks || (it.force || 0) >= 9) t.push('weapon');
   return t.join(' ');

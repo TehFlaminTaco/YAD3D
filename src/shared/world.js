@@ -16,6 +16,8 @@ export class World {
     this.areaIdx = assets.area;
     this.floorCell = assets.floor;
     this.wallVar = assets.wall;
+    this.ft = assets.ft;                     // what kind of floor each tile is (1 + index into level.floorTypes; 0 none)
+    this.lat = assets.lat;                   // lattice over space: 1 lattice, 2 catwalk
     this.areas = level.areas;
     this.variants = level.walls;
 
@@ -94,6 +96,88 @@ export class World {
     this.ws[i] = 0;
     this.hp.delete(i);
     this.breached.add(i);
+  }
+
+  // ------------------------------------------------------------------ floors, lattice and the space between
+  /** The `level.floorTypes` entry of floor tile `i` ({k: 'plating' | 'tile' | 'engine', tile, n}), or null. */
+  floorType(i) { return this.ft[i] ? this.level.floorTypes[this.ft[i] - 1] : null; }
+
+  /** What a turf is called (the DM names): floor, plating, reinforced floor, lattice, catwalk, space. */
+  floorName(i) {
+    switch (this.kind[i]) {
+      case KIND.SPACE: return 'space';
+      case KIND.LATTICE: return this.lat[i] === 2 ? 'catwalk' : 'lattice';
+      case KIND.FLOOR: return this.floorType(i)?.n || 'floor';
+      default: return '';
+    }
+  }
+
+  /** The floor type index (+ 1) of the first type of a class: 'plating', or 'engine' (the plain reinforced floor). */
+  floorTypeId(klass) {
+    if (!this._fti) this._fti = {};
+    if (this._fti[klass] === undefined) {
+      const types = this.level.floorTypes;
+      const k = types.findIndex((t) => t.k === klass && (klass !== 'engine' || t.n === 'reinforced floor'));
+      this._fti[klass] = k < 0 ? 0 : k + 1;
+    }
+    return this._fti[klass];
+  }
+
+  /** Which of the 8 neighbours of tile (c, r) are lattice or floor (N S E W NE NW SE SW = bits 0..7): what a lattice is drawn from. */
+  latticeMask(c, r) {
+    let mask = 0;
+    const at = (dc, dr) => { const k = this.kindAt(c + dc, r + dr); return k === KIND.LATTICE || k === KIND.FLOOR; };
+    if (at(0, -1)) mask |= 1; if (at(0, 1)) mask |= 2; if (at(1, 0)) mask |= 4; if (at(-1, 0)) mask |= 8;
+    if (at(1, -1)) mask |= 16; if (at(-1, -1)) mask |= 32; if (at(1, 1)) mask |= 64; if (at(-1, 1)) mask |= 128;
+    return mask;
+  }
+
+  /** The cell a lattice (or catwalk) tile should be drawn with, from what is around it. */
+  latticeCell(c, r) {
+    const i = r * this.W + c;
+    return this.level.latCells[this.lat[i] === 2 ? 'cat' : 'lat'][this.latticeMask(c, r)];
+  }
+
+  /** Put a lattice (or, with `catwalk`, a catwalk) on a space tile. Its neighbours' pictures change too: the caller redraws them (`latticeAround`). */
+  makeLattice(c, r, catwalk = false) {
+    const i = r * this.W + c;
+    this.kind[i] = KIND.LATTICE;
+    this.lat[i] = catwalk ? 2 : 1;
+    this.ft[i] = 0;
+    this.solid[i] = 0;
+    this.airBlock[i] = 0;
+    this.floorCell[i] = this.latticeCell(c, r);
+  }
+
+  /** The lattice is cut away: open space again. */
+  clearLattice(c, r) {
+    const i = r * this.W + c;
+    this.kind[i] = KIND.SPACE;
+    this.lat[i] = 0;
+    this.floorCell[i] = 0xffff;
+  }
+
+  /** A floor is laid (over lattice or space, or on bare plating): its type and the cell it is drawn with. */
+  setFloor(c, r, ftId, cell) {
+    const i = r * this.W + c;
+    this.kind[i] = KIND.FLOOR;
+    this.lat[i] = 0;
+    this.ft[i] = ftId;
+    this.floorCell[i] = cell;
+  }
+
+  /** The tiles around (c, r) that are lattice need drawing again (what is next to them changed): returns their indexes whose cell changed. */
+  latticeAround(c, r) {
+    const out = [];
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const cc = c + dc, rr = r + dr;
+      if (!this.inb(cc, rr)) continue;
+      const i = rr * this.W + cc;
+      if (this.kind[i] !== KIND.LATTICE) continue;
+      const cell = this.latticeCell(cc, rr);
+      if (cell !== this.floorCell[i]) { this.floorCell[i] = cell; out.push(i); }
+    }
+    return out;
   }
 
   /** A plain or reinforced wall stands on tile (c, r): its `WALLS` key, else undefined (glass, shuttle walls, floor...). */

@@ -15,7 +15,7 @@ browser. It works end to end. **Not everything is committed or pushed** (below).
 * **Git state (2026-10-20):** committed and pushed; PR #1 has everything. `99cef4d` is one commit holding the work of two sessions that ran side by side (the debug menu 13, the inventory HUD 14,
   the observer and rune fixes, zero gravity 15, windows and grilles 17, door angles and wall mounts 18, the TG notes and `tools/tg*.py` 16): their edits share files (`sim.js`, `world.js`,
   `movement.js`, `hud.js`, `simtest2.mjs`) and could not be split. Check `git status -sb` for anything newer.
-* **Tests (all pass now):** `node tools/simtest2.mjs` 436/436, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
+* **Tests (all pass now):** `node tools/simtest2.mjs` 480/480, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
   (191 assertions, about 4 min) and `node tools/nettest.mjs` (29) were last run before the window work, were **edited for the new HUD but never run** (they hard-code a Playwright path that
   only exists in the Linux container, see section 3), and could not be run in the Windows sessions since: re-run both before you say "all green". The multiplayer suite is the one most worth
   running (tile, `look`, `pm`, `imv`, `strip` and `grav` events and the debug flag are all new since it last ran).
@@ -73,7 +73,7 @@ The user is casual and direct ("Get that shit goin'"). Their actual feedback so 
 ```sh
 git clone https://github.com/TehFlaminTaco/YAD3D && cd YAD3D && git checkout claude/yad3d-game
 npm install                        # three (vendored copy is what the page loads), ws
-node tools/simtest2.mjs            # sanity: 436 passed
+node tools/simtest2.mjs            # sanity: 480 passed
 python3 tools/serve.py 8123 &      # static server; needed by uitest.mjs and shot.mjs
 npm start                          # or the multiplayer server on :8080
 ```
@@ -195,7 +195,7 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 
 | What | Command | Notes |
 | --- | --- | --- |
-| Sim logic (no browser) | `node tools/simtest2.mjs` | 436 assertions, seconds. Add a `section()` for any new server rule. Sections: spawn, inventory, combat, doors, breaches, closets, characters, people, structures, observers, debug menu, door angles and wall mounts, zero gravity, windows and grilles, chat, consoles, drag and drop, death. |
+| Sim logic (no browser) | `node tools/simtest2.mjs` | 480 assertions, seconds. Add a `section()` for any new server rule. Sections: spawn, inventory, combat, doors, breaches, closets, characters, people, structures, observers, debug menu, door angles and wall mounts, zero gravity, windows and grilles, chat, consoles, drag and drop, death. |
 | Long soak | `node tools/simtest.mjs 12 --player` | a 12-minute simulated shift, ~4 s |
 | Browser UI (local round) | `node tools/uitest.mjs` | needs :8123 static server; ~4 min; `BASE=`, `SHOTS=` env; drives the real mouse/keyboard |
 | Closets, people (in simtest2) | `node tools/simtest2.mjs` | the `closets` section: DM contents, locks, welding, breakout, personal lockers; the `people` section: handcuffs, strip window, pockets, grabs, examine, stuffing |
@@ -491,4 +491,17 @@ dozens of entries (chairs, frames, airlock assemblies, wall frames...), only the
 * **Building**: a structure goes on the tile **in front of you** (the DM builds under your feet; here you would stand inside it, so `moveOut` also nudges you back if you overlap). Checks and messages are `building_checks`' ("There is another wall girders here!",
   "The wall girders must be constructed on the floor!", "You haven't got enough the metal to build the 2 wall girderss!": the DM's own grammar). It stops if you walk away or put the stack down.
 * Items: `/obj/item/stack/tile/plasteel` (the floor tile) is in `GAME_ITEMS`. Test: the `stacks` section of `tools/simtest2.mjs` (436 assertions in all).
+
+### Stage 3: floors, plating, tiles, lattice, catwalks (`src/sim/floors.js`)
+From `floor.dm`, `plating.dm`, `reinf_floor.dm`, `lattice.dm`, `space.dm`. Target `floor` `{c, r}`, shown (hover name `World.floorName`: floor / plating / reinforced floor / lattice / catwalk / space) only while you hold
+a crowbar, wrench, wirecutters, rods or a tile (`Game.holdingBuilder`, `floorAlong`: the ray down to the floor plane).
+* **Data** (build, `level.json`): `ft` per tile (1 + index into `floorTypes`: `{k: 'plating'|'tile'|'engine', tile (what prying it leaves), n (name)}`, 23 types on BoxStation), `lat` (1 lattice, 2 catwalk), `latCells`
+  (the lattice and catwalk art for every pattern of the 8 neighbours, `World.latticeMask`/`latticeCell`; a simtest checks it reproduces all 1,721 of the map's own lattice tiles) and `tiles` (what each tile item
+  turns plating into: floor type + cell). Tile events carry `ft` and `lat`. Shuttle-overlay floors have no type, so they cannot be taken apart.
+* **Rules** (all messages the DM's): a crowbar pries a tile floor up **at once** (leaves its tile, plating; a reinforced floor cannot be lifted); a tile on plating lays it **at once** (any of plasteel, wood, carpet, blue carpet, grass, circuit,
+  titanium, plastitanium); a tile on a floor with a crowbar in the other hand replaces it; two rods (30 ds) reinforce plating; a wrench (30 ds) takes a reinforced floor back to plating and two rods. In space: a rod makes a lattice, a rod on a
+  lattice a catwalk, wirecutters cut either away (1 rod, 2 for a catwalk), a plasteel tile on a lattice or catwalk makes plating ("You build a floor."), a tile on bare space says plating needs support. A floor built out in space has gravity like
+  any other (the generator). Redrawing: any change redraws the lattice around it (`World.latticeAround`, `Sim.emitTile`).
+* Not done: broken / burnt plating and welding dents smooth, foam plating, light and mineral floors, building a floor under girders, cables on catwalks.
+* The debug spawn menu now makes real stacks (`stackInfo`). Test: the `floors, plating and lattice` section of `tools/simtest2.mjs` (480 assertions in all; the soak `node tools/simtest.mjs 12 --player` is clean).
 

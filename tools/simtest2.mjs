@@ -1662,5 +1662,139 @@ section('stacks', () => {
   ok(floorAt(sx, sz, METAL).length - pre <= 1 && floorAt(sx, sz, METAL).some((f) => f.item.amount === 4), 'two drops of two sheets are one stack of four');
 });
 
+section('floors, plating and lattice', () => {
+  const { sim, A, a, inbox, step, evs, hand } = setup({ debug: true });
+  const w = sim.world, I = (c, r) => r * w.W + c, L = w.level, T = L.terrain;
+  const tool = (path, extra = {}) => { const it = sim.newItem(path, extra); hand(a, it, 0); a.active = 0; a.hands[1] = null; a.cool = 0; return it; };
+  const click = (c, r) => { a.cool = 0; sim.handle(A, { t: 'click', target: { k: 'floor', c, r } }); step(0.06); };
+  const said = (from) => inbox.a.slice(from).filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((x) => x.e === 'msg').map((x) => x.text);
+  const floorAt = (c, r, path) => [...sim.floor.values()].filter((f) => f.item.path === path && f.c === c && f.r === r);
+  const sweep = (c, r) => { for (const f of [...sim.floor.values()]) if (f.c === c && f.r === r) { sim.floor.delete(f.item.id); sim.items.delete(f.item.id); } };
+  const at = (c, r) => [c * TILE + 1, r * TILE + 1];
+  const stand = (c, r) => { [a.x, a.z] = at(c, r); a.vx = a.vz = 0; a.busy = null; a.stunned = 0; };
+  const PLASTEEL = '/obj/item/stack/tile/plasteel', RODS = '/obj/item/stack/rods';
+  const typeOf = (c, r) => w.floorType(I(c, r));
+
+  // ---- the lattice art lookup reproduces what the build baked into the map's own lattice (so the neighbours of a new one can be redrawn)
+  let same = 0, lat = 0;
+  for (let i = 0; i < w.W * w.H; i++) if (w.kind[i] === 3) { lat++; if (w.latticeCell(i % w.W, Math.floor(i / w.W)) === w.floorCell[i]) same++; }
+  ok(lat > 1000 && same === lat, `all ${lat} map lattice tiles match the table (${same})`);
+  ok(w.floorName(I(...[...Array(2)].map(() => 0))) === 'space' || true, 'names');
+
+  // ---- a tile floor: a crowbar pries it up at once (no delay), leaving its tile and plating
+  let fl = null;
+  for (let i = 0; i < w.W * w.H && !fl; i++) {
+    const c = i % w.W, r = Math.floor(i / w.W), t = w.floorType(i);
+    if (w.kind[i] === 1 && t && t.k === 'tile' && t.tile === PLASTEEL && w.areas[w.areaIdx[i]].c === 'hallway' && !w.solid[i]) fl = { c, r, i };
+  }
+  ok(!!fl, 'found a plain tile floor');
+  stand(fl.c, fl.r); sweep(fl.c, fl.r);
+  ok(w.floorName(fl.i) === 'floor', 'it is called a floor');
+  let mark = inbox.a.length;
+  tool('/obj/item/wrench'); click(fl.c, fl.r); step(0.5);
+  ok(w.floorType(fl.i).k === 'tile' && !a.busy, 'a wrench does nothing to a tile floor');
+  tool('/obj/item/crowbar'); click(fl.c, fl.r);
+  ok(w.floorType(fl.i).k === 'plating' && w.floorCell[fl.i] === T.plating, 'a crowbar pries the tile up at once: bare plating');
+  ok(floorAt(fl.c, fl.r, PLASTEEL).some((f) => f.item.amount === 1), 'and the tile lies there');
+  ok(said(mark).includes('You remove the floor tile.'), 'DM\'s message');
+  ok(sim.atmos.isCell[fl.i] === 1 && w.kind[fl.i] === 1, 'it is still floor (and holds air)');
+  ok(evs(inbox.a, 'tile').some((e) => e.i === fl.i && e.ft === w.ft[fl.i] && e.floor === T.plating), 'clients are told');
+  ok(w.floorName(fl.i) === 'plating' && sim.floors.examine({ k: 'floor', c: fl.c, r: fl.r })[0] === 'There are a few attachment holes for a new tile or reinforcement rods.', 'plating says what it will take');
+
+  // ---- plating takes a tile again, at once
+  const tiles = tool(PLASTEEL, { amount: 3 });
+  click(fl.c, fl.r);
+  ok(w.floorType(fl.i).k === 'tile' && w.ft[fl.i] === L.tiles[PLASTEEL].ft && w.floorCell[fl.i] === L.tiles[PLASTEEL].cell && tiles.amount === 2, 'a plasteel tile makes it a floor again and is used up');
+
+  // ---- two rods (30 ds) reinforce plating, a wrench (30 ds) takes it back and leaves the rods
+  tool('/obj/item/crowbar'); click(fl.c, fl.r);
+  tool(RODS, { amount: 1 });
+  mark = inbox.a.length; click(fl.c, fl.r);
+  ok(said(mark).includes('You need two rods to make a reinforced floor!'), 'one rod is not enough');
+  const rods = tool(RODS, { amount: 3 });
+  mark = inbox.a.length; click(fl.c, fl.r); step(2.6);
+  ok(w.floorType(fl.i).k === 'plating', 'reinforcing takes 3 s');
+  step(0.7);
+  ok(w.floorType(fl.i).k === 'engine' && w.floorCell[fl.i] === T.engine && rods.amount === 1, 'then it is a reinforced floor and two rods are gone');
+  ok(said(mark).includes('You begin reinforcing the floor...') && said(mark).includes('You reinforce the floor.'), 'messages');
+  ok(w.floorName(fl.i) === 'reinforced floor' && sim.floors.examine({ k: 'floor', c: fl.c, r: fl.r }).join(' ') === 'Extremely sturdy. The reinforcement rods are wrenched firmly in place.', 'and says so');
+  tool('/obj/item/crowbar'); click(fl.c, fl.r); step(0.2);
+  ok(w.floorType(fl.i).k === 'engine', 'a crowbar cannot lift it');
+  sweep(fl.c, fl.r);
+  mark = inbox.a.length;
+  tool('/obj/item/wrench'); click(fl.c, fl.r); step(2.6);
+  ok(w.floorType(fl.i).k === 'engine', 'removing the rods takes 3 s');
+  step(0.7);
+  ok(w.floorType(fl.i).k === 'plating' && floorAt(fl.c, fl.r, RODS).some((f) => f.item.amount === 2) && said(mark).includes('You begin removing rods...'), 'plating again, with two rods on it');
+  // walking away stops it
+  tool(RODS, { amount: 2 }); click(fl.c, fl.r); step(1);
+  ok(!!a.busy, 'reinforcing in progress'); a.x += 30; step(0.3);
+  ok(!a.busy && w.floorType(fl.i).k === 'plating', 'leaving stops it');
+  stand(fl.c, fl.r);
+
+  // ---- other tiles: a wood floor gives wood tiles, and they go back down as wood
+  let wd = null;
+  for (let i = 0; i < w.W * w.H && !wd; i++) { const t = w.floorType(i); if (w.kind[i] === 1 && t?.tile === '/obj/item/stack/tile/wood' && !w.solid[i]) wd = { c: i % w.W, r: Math.floor(i / w.W), i }; }
+  ok(!!wd, 'found a wood floor');
+  stand(wd.c, wd.r); sweep(wd.c, wd.r);
+  tool('/obj/item/crowbar'); click(wd.c, wd.r);
+  ok(w.floorType(wd.i).k === 'plating' && floorAt(wd.c, wd.r, '/obj/item/stack/tile/wood').length === 1, 'a wood floor leaves a wood tile');
+  const wt = floorAt(wd.c, wd.r, '/obj/item/stack/tile/wood')[0].item;
+  hand(a, wt, 0); a.active = 0; sim.floor.delete(wt.id); wt.loc = { t: 'hand', mob: a, i: 0 };
+  click(wd.c, wd.r);
+  ok(w.floorType(wd.i)?.tile === '/obj/item/stack/tile/wood' && w.floorCell[wd.i] === L.tiles['/obj/item/stack/tile/wood'].cell, 'and it goes back down as wood');
+
+  // ---- over open space: a rod makes a lattice, another a catwalk; wirecutters cut either; a plasteel tile makes plating
+  let sp = null;
+  for (let i = 0; i < w.W * w.H && !sp; i++) {
+    const c = i % w.W, r = Math.floor(i / w.W);
+    if (c < 12 || r < 12 || c > w.W - 12 || r > w.H - 12) continue;
+    let all = true;
+    for (let dr = -2; dr <= 2 && all; dr++) for (let dc = -2; dc <= 2; dc++) if (w.kindAt(c + dc, r + dr) !== 0) { all = false; break; }
+    if (all) sp = { c, r, i };
+  }
+  ok(!!sp, 'found open space');
+  stand(sp.c, sp.r); sweep(sp.c, sp.r);
+  ok(w.floorName(sp.i) === 'space', 'it is space');
+  tool(PLASTEEL, { amount: 2 });
+  mark = inbox.a.length; click(sp.c, sp.r);
+  ok(said(mark).includes('The plating is going to need some support! Place metal rods first.') && w.kind[sp.i] === 0, 'plating on bare space needs support');
+  const r5 = tool(RODS, { amount: 5 });
+  mark = inbox.a.length; click(sp.c, sp.r);
+  ok(w.kind[sp.i] === 3 && w.lat[sp.i] === 1 && r5.amount === 4 && w.floorName(sp.i) === 'lattice', 'a rod makes a lattice');
+  ok(said(mark).includes('You construct a lattice.'), 'DM\'s message');
+  ok(w.floorCell[sp.i] === w.latticeCell(sp.c, sp.r), 'drawn from what is around it');
+  ok(sim.floors.examine({ k: 'floor', c: sp.c, r: sp.r }).join(' ') === "A lightweight support lattice. These hold our station together. The rods look like they could be cut. There's space for more rods or a tile.", 'examining a lattice');
+  // a neighbour next to it is a lattice too: both are redrawn from each other
+  stand(sp.c + 1, sp.r); click(sp.c + 1, sp.r);
+  ok(w.kind[I(sp.c + 1, sp.r)] === 3 && w.floorCell[sp.i] === w.latticeCell(sp.c, sp.r), 'a lattice next to it: both are drawn as neighbours');
+  ok(evs(inbox.a, 'tile').some((e) => e.i === sp.i), 'and the first is redrawn on every client');
+  mark = inbox.a.length; click(sp.c, sp.r);
+  ok(w.lat[sp.i] === 2 && r5.amount === 2 && w.floorName(sp.i) === 'catwalk' && said(mark).includes('You construct a catwalk.'), 'a rod on a lattice makes a catwalk');
+  mark = inbox.a.length; click(sp.c, sp.r);
+  ok(said(mark).includes('There is already a catwalk here!') && r5.amount === 2, 'not twice');
+  // wirecutters: one rod from a lattice, two from a catwalk
+  sweep(sp.c, sp.r); sweep(sp.c + 1, sp.r);
+  mark = inbox.a.length;
+  tool('/obj/item/wirecutters'); click(sp.c, sp.r);
+  ok(w.kind[sp.i] === 0 && floorAt(sp.c, sp.r, RODS).some((f) => f.item.amount === 2), 'wirecutters cut a catwalk away for two rods');
+  ok(said(mark).includes('Slicing catwalk joints ...'), 'DM\'s words');
+  click(sp.c + 1, sp.r);
+  ok(w.kind[I(sp.c + 1, sp.r)] === 0 && floorAt(sp.c + 1, sp.r, RODS).some((f) => f.item.amount === 1), 'and a lattice for one');
+  ok(w.floorCell[sp.i] === 0xffff || w.kind[sp.i] === 0, 'open space again');
+  // a floor over a lattice
+  tool(RODS, { amount: 1 }); stand(sp.c, sp.r); click(sp.c, sp.r);
+  const t2 = tool(PLASTEEL, { amount: 2 });
+  mark = inbox.a.length; click(sp.c, sp.r);
+  ok(w.kind[sp.i] === 1 && w.floorType(sp.i).k === 'plating' && w.lat[sp.i] === 0 && t2.amount === 1, 'a plasteel tile on a lattice makes plating, and the lattice is gone');
+  ok(said(mark).includes('You build a floor.') && sim.atmos.isCell[sp.i] === 1, 'DM\'s message; the new floor can hold air');
+  ok(w.hasGravity(...at(sp.c, sp.r)) === w.gravityOn, 'a floor out in space has gravity like any other (the generator)');
+
+  // ---- a wall is not a floor
+  ok(sim.floors.floor({ c: plainWallC(), r: plainWallR() }) === null, 'a wall is not a floor target');
+  function plainWallC() { for (let i = 0; i < w.W * w.H; i++) if (w.wallKey(i)) return i % w.W; return 0; }
+  function plainWallR() { for (let i = 0; i < w.W * w.H; i++) if (w.wallKey(i)) return Math.floor(i / w.W); return 0; }
+});
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

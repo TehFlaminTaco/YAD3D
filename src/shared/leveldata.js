@@ -16,8 +16,10 @@ export function decodeLevel(level) {
   const area = u16(level.area);
   const floor = u16(level.floor);
   const wall = u16(level.wall);
+  const ft = level.ft ? b64(level.ft) : new Uint8Array(n);          // what kind of floor (index + 1 into level.floorTypes)
+  const lat = level.lat ? b64(level.lat) : new Uint8Array(n);       // lattice over space: 1 lattice, 2 catwalk
   if (kind.length !== n || area.length !== n) throw new Error('level arrays do not match grid size');
-  return { level, w, h, kind, roof, area, floor, wall };
+  return { level, w, h, kind, roof, area, floor, wall, ft, lat };
 }
 
 export function makeRects(sprJson) {

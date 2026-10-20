@@ -22,6 +22,7 @@ import { People } from './people.js';
 import { Windows } from './windows.js';
 import { Walls } from './walls.js';
 import { Stacks } from './stacks.js';
+import { Floors } from './floors.js';
 import { BuiltSet } from '../shared/built.js';
 import { GIRDER } from '../shared/walls.js';
 import { Debug } from './debug.js';
@@ -112,6 +113,7 @@ export class Sim {
     this.windows = new Windows(this);
     this.walls = new Walls(this);
     this.stacks = new Stacks(this);
+    this.floors = new Floors(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // after the floor items: closed closets swallow what lies on them
   }
@@ -372,7 +374,7 @@ export class Sim {
   // ------------------------------------------------------------------ hull & world changes
   tileEvent(i, extra = {}) {
     const w = this.world;
-    return { e: 'tile', i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], brk: w.breached.has(i) ? 1 : 0, gr: w.grille[i], ws: w.ws[i], ...extra };
+    return { e: 'tile', i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], brk: w.breached.has(i) ? 1 : 0, gr: w.grille[i], ws: w.ws[i], ft: w.ft[i], lat: w.lat[i], ...extra };
   }
 
   /** Something is built on a tile (a girder). Everyone is told; it is dense and takes the tile's `solid`. */
@@ -397,6 +399,11 @@ export class Sim {
   tileChanged(c, r) {
     const i = r * this.world.W + c;
     this.atmos.tileChanged(c, r);
+    this.emitTile(i);
+  }
+
+  /** Tell everyone how tile `i` is now (and keep it for those who join later). */
+  emitTile(i) {
     const ev = this.tileEvent(i);
     this.tileLog.push(ev); this.emit(ev);
   }

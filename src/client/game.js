@@ -490,7 +490,7 @@ export class Game {
       // what is left of a window (its grille, or just the floor) and windows themselves: TG has no "broken window" object
       const br = this.breachAlong(o, f);
       if (br) best = { k: 'breach', c: br.c, r: br.r, name: rep.world.grille[br.r * rep.world.W + br.c] ? 'grille' : 'floor', d: 2 };
-      else best = this.windowAlong(o, f);
+      else best = this.windowAlong(o, f) || this.floorAlong(o, f);
     }
     return best;
   }
@@ -500,6 +500,27 @@ export class Game {
     const inv = this.self?.inv;
     const tg = inv?.hands?.[inv.active]?.tg;
     return !!tg && /(?:^| )(?:welder|screwdriver|crowbar|wrench|wirecutters)(?: |$)/.test(tg);
+  }
+
+  /** Is what you hold something to build or take up floors with: a crowbar, wrench or wirecutters, rods, a tile? */
+  holdingBuilder() {
+    const inv = this.self?.inv;
+    const tg = inv?.hands?.[inv.active]?.tg;
+    return !!tg && /(?:^| )(?:crowbar|wrench|wirecutters|sheet|tile)(?: |$)/.test(tg);
+  }
+
+  /** The tile of floor (or lattice, or open space) the ray meets within reach, with a clear line to it. Only while you hold something that works on it. */
+  floorAlong(o, f) {
+    if (f.y > -0.05 || !this.holdingBuilder()) return null;
+    const w = this.rep.world, t = -o.y / f.y;
+    const x = o.x + f.x * t, z = o.z + f.z * t, hd = Math.hypot(x - o.x, z - o.z);
+    if (hd > REACH + 0.6) return null;
+    const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
+    if (!w.inb(c, r)) return null;
+    const i = r * w.W + c;
+    if (w.kind[i] === KIND.WALL) return null;
+    if (w.raycast(o.x, o.z, x - o.x, z - o.z, hd, 'shot') < hd - 0.05) return null;
+    return { k: 'floor', c, r, name: w.floorName(i), d: hd };
   }
 
   /** The window (a whole glass tile, or a thin pane on a tile's edge) the ray reaches first, if nothing else is in the way. */
@@ -571,7 +592,7 @@ export class Game {
     if (!t) return { k: 'none' };
     switch (t.k) {
       case 'item': case 'mob': return { k: t.k, id: t.id };
-      case 'breach': case 'window': case 'wall': return { k: t.k, c: t.c, r: t.r };
+      case 'breach': case 'window': case 'wall': case 'floor': return { k: t.k, c: t.c, r: t.r };
       case 'built': return { k: 'built', id: t.id };
       case 'pane': return { k: 'pane', c: t.c, r: t.r, d: t.pd };
       default: return { k: t.k, idx: t.idx };
