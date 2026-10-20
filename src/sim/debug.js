@@ -90,7 +90,7 @@ export class Debug {
       // -- going places
       tp: this.tp, area: this.goArea, goto: this.goMob, bring: this.bring, who: this.who,
       // -- the station
-      alert: this.alert, power: this.power, strike: this.strike, carp: this.carp, shuttle: this.shuttle, doors: this.doors,
+      map: this.mapOp, alert: this.alert, power: this.power, strike: this.strike, carp: this.carp, shuttle: this.shuttle, doors: this.doors,
       repair: this.repair, round: this.round, skip: this.skip, gravity: this.gravity, space: this.space, grid: this.gridOp,
       // -- what the network test uses
       kill: this.kill, finish: this.finish, tile: this.tile, noop() {},
@@ -405,6 +405,28 @@ export class Debug {
       }
       default: break;
     }
+  }
+
+  /** Go to another map: `away` (made on the first visit: a copy of a shuttle, alone in a map of its own) or back `home` to where the crew arrive. A watcher goes too. */
+  mapOp(c, msg) {
+    const sim = this.sim, what = String(msg.what);
+    let g, x, z;
+    if (what === 'away') {
+      let map = sim.maps.get('away');
+      if (!map) {
+        map = sim.addMap('away', 'Away Mission');
+        const bp = sim.level.maps[sim.level.map].grids.find((p) => p.kind === 'shuttle').bp;
+        sim.addGrid(bp, { map, kind: 'away', name: 'Away Mission', tf: { p: [0, 0, 0], q: [0, 0, 0, 1] } });
+      }
+      g = map.solids[0];
+      const w = g.world;
+      for (let i = 0; i < w.n; i++) if (w.kind[i] === KIND.FLOOR && !w.solid[i] && !w.doorAt.has(i)) { x = (i % w.W) * TILE + 1; z = Math.floor(i / w.W) * TILE + 1; break; }
+    } else if (what === 'home') {
+      const sp = sim.spawnPoints().find((s) => s.job === 'latejoin') || sim.spawnPoints()[0];
+      g = sp.grid; x = sp.x * TILE + 1; z = sp.y * TILE + 1;
+    } else return;
+    this.teleport(c, c.mob, g, x, z);
+    this.say(c, what === 'away' ? 'You are somewhere else.' : 'You are home.');
   }
 
   strike(c) {

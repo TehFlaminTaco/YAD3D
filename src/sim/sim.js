@@ -47,6 +47,7 @@ export class SimClient {
     this.ready = false;
     this.outbox = [];
     this.known = new Set();        // mob ids this client has been told about
+    this.mapSeen = null;           // the map the client's picture of the world is of (it is sent the whole of another when it moves to one)
     this.inputs = [];
     this.lastSeq = 0;
     this.budget = 0.3;
@@ -173,6 +174,25 @@ export class Sim {
     this.relink(map);
   }
 
+  /**
+   * A grid, with whoever and whatever is on it, goes to another map and stands at `pose` there (let go, at rest). People aboard see it as nothing but the world around
+   * them changing: they are sent the new map whole at the next snapshot. Everyone else in the old map sees the grid go, and everyone in the new one sees it come.
+   */
+  moveGrid(g, map, pose = g.tf) {
+    const from = g.map;
+    this.shuttles.flights.delete(g.id);
+    const aboard = [...this.clients.values()].filter((c) => c.at.grid === g);
+    g.emit({ e: 'grid-' }, { except: aboard });
+    this.physics.remove(g);
+    map.add(g);
+    g.tf = tfClone(pose); g.home = tfClone(pose); g.vel = [0, 0, 0]; g.ang = [0, 0, 0]; g.poseSeq = undefined;
+    this.physics.add(g);
+    if (from !== map) this.relink(from);
+    this.relink(map);
+    g.emit({ e: 'grid+', ...this.gridState(g) });
+    return g;
+  }
+
   /** Work out again which grids of a map lie over which (they moved, came or went), and redo the air of any whose space is not space any more. */
   relink(map) {
     for (const g of map.relink()) g.atmos.buildTopology(false);
@@ -272,10 +292,10 @@ export class Sim {
   /** The grid a request (a click target, a message) is about: the one it names, else the one its sender stands on. */
   gridFor(id, c) { return (id !== undefined && this.grids.get(id)) || c?.mob?.grid || null; }
 
-  /** Everyone's start points: [{ grid, job, x, y }] (tiles). */
+  /** Everyone's start points: [{ grid, job, x, y }] (tiles), in the map the round is played in. */
   spawnPoints() {
     const out = [];
-    for (const g of this.grids.values()) for (const s of g.spawns) out.push({ grid: g, job: s.job, x: s.x, y: s.y });
+    for (const g of this.grids.values()) if (g.map === this.defaultMap) for (const s of g.spawns) out.push({ grid: g, job: s.job, x: s.x, y: s.y });
     return out;
   }
 
@@ -293,7 +313,7 @@ export class Sim {
   // ------------------------------------------------------------------ events
   /**
    * scope: undefined = everyone; {to: client}; {near: {at, r}} (anyone within r metres of `at`: a body, an item record, a door...);
-   * {ghosts: true}. An event with a `g` is about that grid, so only players in the grid's map get it.
+   * {ghosts: true}; {except: [clients]}. An event with a `g` is about that grid, so only players in the grid's map get it.
    */
   emit(ev, scope) {
     const map = ev.g !== undefined ? this.grids.get(ev.g)?.map : null;
@@ -301,6 +321,7 @@ export class Sim {
       if (map && c.map !== map) continue;
       if (scope) {
         if (scope.to && scope.to !== c) continue;
+        if (scope.except && scope.except.includes(c)) continue;
         if (scope.near && this.dist(c.at, scope.near.at) > scope.near.r) continue;
         if (scope.ghosts && c.state !== 'ghost') continue;
       }
@@ -342,6 +363,7 @@ export class Sim {
     const p = sp.grid.worldPoint(sp.x * TILE + 1, 0, sp.y * TILE + 1);
     c.ghost.x = p[0]; c.ghost.y = p[1]; c.ghost.z = p[2]; c.ghost.map = sp.grid.map;
     send({ t: 'welcome', you: c.id, ...this.worldState(c) });
+    c.mapSeen = c.map;
     this.round.onJoin(c);
     return c;
   }
@@ -365,15 +387,22 @@ export class Sim {
     };
   }
 
-  /** Everything a joining client needs to build its view of the world. */
-  worldState(c) {
+  /** What a client needs to know to build its picture of the map it is in: its grids and what lies on them. (Sent whole when it joins and when it moves to another map.) */
+  mapState(c) {
     const map = c.map;
     return {
       name: this.level.name,
       map: map.id,
-      round: this.round.publicState(),
       grids: [...map.grids.values()].map((g) => this.gridState(g)),
       items: [...this.floor.values()].filter((f) => f.grid.map === map).map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z, f.grid.id]),
+    };
+  }
+
+  /** Everything a joining client needs to build its view of the world. */
+  worldState(c) {
+    return {
+      ...this.mapState(c),
+      round: this.round.publicState(),
       debug: !!this.opts.debug,
       jobs: this.jobs.list.map((j) => ({ id: j.id, title: j.title, color: j.color, supervisors: j.supervisors, slots: this.jobs.slots(j), total: j.id === 'assistant' ? 99 : j.total, ap: this.outfitPreview(j) })),
     };
@@ -758,6 +787,11 @@ export class Sim {
     const mobsArr = [...this.mobs.values()];
     for (const c of this.clients.values()) {
       const here = c.at, map = c.map;
+      if (c.mapSeen !== map) {                                           // it has moved to another map (its grid was carried there, or it was sent): it is told the whole of that one
+        c.mapSeen = map;
+        c.known.clear(); c.poses = new Map();
+        c.send({ t: 'map', ...this.mapState(c) });
+      }
       const list = [];
       const seen = new Set();
       for (const m of mobsArr) {

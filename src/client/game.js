@@ -163,6 +163,16 @@ export class Game {
     return m?.ap || null;
   }
 
+  /** The server moved us to another map (the grid we are on was carried there): everything of the old one goes, and the new one is built from what we are sent. */
+  onMap(w) {
+    if (!this.rep) return;
+    this.view.dispose();
+    this.rep.switchMap(w);
+    this.view = new WorldView(this.scene, this.assets, this.rep, this.opts);
+    this.target = this.cursorTarget = null;
+    if (!this.rep.grids.has(this.pred.g)) this.pred.g = this.yawG = this.rep.map.void?.id ?? 0;            // (a ghost was somewhere in the old one)
+  }
+
   /** Called once the server's welcome arrives: build the replica and everything that draws it. */
   onWelcome(w) {
     document.getElementById('boot')?.remove();
@@ -340,7 +350,7 @@ export class Game {
   }
 
   /** The grid your body is on (the map's void while you are in the lobby, a ghost, or floating free): whose tiles you collide with and whose air you breathe. */
-  myGrid() { return this.rep.grids.get(this.pred.g) || this.rep.station; }
+  myGrid() { return this.rep.grids.get(this.pred.g) || this.rep.station || this.rep.map.void; }
 
   // ---------------------------------------------------------------- prediction
   predictCtx() {
@@ -897,6 +907,7 @@ export class Game {
   handle(m) {
     switch (m.t) {
       case 'welcome': this.onWelcome(m); break;
+      case 'map': this.onMap(m); break;
       case 'snap': this.onSnap(m); break;
       case 'ev': for (const ev of m.list) this.rep?.apply(ev); break;
       case 'reset': this.screens.showReset(m); break;

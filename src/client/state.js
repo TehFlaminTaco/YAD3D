@@ -65,8 +65,16 @@ export class Replica {
   // ------------------------------------------------------------------ initial state
   applyWelcome(w) {
     for (const gs of w.grids) this.addGrid(gs, true);
+    if (!this.station) this.station = [...this.grids.values()].find((g) => g.kind !== 'void') || null;          // a map with no station (hyperspace, an away mission): its first grid is the one to fall back on
     this.relink();
     for (const [id, s, n, x, y, z, g] of w.items) this.items.set(id, { id, s, n, x, y, z, g });
+  }
+
+  /** We have moved to another map (the grid we are on was carried there): everything of the old one goes, and the new is built from what the server sends. */
+  switchMap(w) {
+    this.map = new GameMap(w.map, w.name);
+    this.grids = new Map(); this.station = null; this.items = new Map(); this.mobs = new Map();
+    this.applyWelcome(w);
   }
 
   /** A grid exists: build it from its blueprint and bring it up to the state the server describes. */

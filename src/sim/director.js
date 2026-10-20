@@ -331,9 +331,17 @@ export class Director {
     // it pulls away, with everyone aboard, and is gone once it is far enough (it stays out there if somebody is still on it)
     const dock = sim.docks.emergency, a = this.approach || [1, 0, 0];
     sim.shuttles.fly(this.evacGrid, { p: [dock.p[0] + a[0] * APPROACH, dock.p[1], dock.p[2] + a[2] * APPROACH], q: dock.q }, {
-      done: (g) => { if (![...sim.clients.values()].some((c) => c.mob?.grid === g)) sim.removeGrid(g); },
+      done: (g) => {
+        if (![...sim.clients.values()].some((c) => c.mob?.grid === g)) sim.removeGrid(g);
+        else sim.moveGrid(g, this.hyperspace(), { p: [0, 0, 0], q: [0, 0, 0, 1] });                  // with people aboard it goes on, to a map of its own: stars and a shuttle
+      },
     });
     this.finish('shuttle');
+  }
+
+  /** The map the emergency shuttle crosses on its way to Central Command: nothing in it but the shuttle. */
+  hyperspace() {
+    return this.sim.maps.get('hyperspace') || this.sim.addMap('hyperspace', 'Hyperspace');
   }
 
   launchPod(c) {

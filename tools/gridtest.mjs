@@ -1025,6 +1025,90 @@ section('grids across each other', () => {
   }
 });
 
+// ---------------------------------------------------------------------------------------------------------------- several maps
+section('several maps', () => {
+  // ---- a grid carried to another map, with someone aboard
+  {
+    const { sim, data, A, B, a, b, inbox, step, room, put } = setup([300, 0, 300]);
+    const away = sim.addMap('away', 'Away Mission');
+    put(a, room, 3, 4);                                       // Alice stands on the room, Bob on the station
+    step(0.3);
+    const welcomeA = inbox.a.find((m) => m.t === 'welcome');
+    inbox.a.length = 0; inbox.b.length = 0;
+    const before = sim.dist(a, b);
+    sim.moveGrid(room, away, { p: [20, 0, 20], q: qYaw(0) });
+    step(0.3);
+    const mapA = inbox.a.find((m) => m.t === 'map'), mapB = inbox.b.find((m) => m.t === 'map');
+    ok(room.map === away && !sim.station.map.grids.has(room.id) && away.grids.has(room.id), 'the grid is in the other map');
+    ok(mapA && mapA.map === 'away' && mapA.grids.some((g) => g.g === room.id) && mapA.grids.some((g) => g.kind === 'void') && !mapA.grids.some((g) => g.kind === 'station'), 'Alice, aboard, is sent the new map whole: the grid and its void, no station');
+    ok(!mapB, 'Bob, who stayed, is not');
+    const gone = (inb) => inb.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'grid-' && e.g === room.id).length;
+    ok(gone(inbox.b) === 1 && gone(inbox.a) === 0, 'Bob sees it go, and Alice, who goes with it, is not told it is gone');
+    ok(before < Infinity && sim.dist(a, b) === Infinity && sim.mapOf(a) === away && sim.mapOf(b) === sim.station.map, 'they are in different maps now: infinitely far apart');
+    const snapA = inbox.a.filter((m) => m.t === 'snap').pop(), snapB = inbox.b.filter((m) => m.t === 'snap').pop();
+    ok(snapA.you.g === room.id && !snapA.mobs.some((r) => r[0] === b.id) && !snapB.mobs.some((r) => r[0] === a.id), 'and neither is in the other\'s snapshots');
+    ok(sim.physics.worlds.has('away') && sim.physics.world(away).pose(room.id) !== null && sim.physics.world(sim.station.map).pose(room.id) === null, 'the body is in the other map\'s physics world, and out of the first');
+    // the client builds the other map
+    const rep = new Replica({ level: data.level, rects: data.rects }, { ...welcomeA, you: A.id });
+    rep.switchMap(mapA);
+    ok(rep.map.id === 'away' && rep.grids.size === 2 && rep.grids.has(room.id) && rep.station === rep.grids.get(room.id) && rep.map.void === rep.grids.get(away.void.id), 'a replica switches to it: just those grids, the first its main one');
+    ok(rep.mobs.size === 0 && [...rep.items.values()].every((it) => rep.grids.has(it.g)), 'and has nothing left of the old map');
+    sim.step(SIM_DT);
+    void B;
+  }
+  // ---- someone sent to another map, and a watcher too
+  {
+    const sim = new Sim(DATA, { bots: 0, debug: true });
+    const inbox = [];
+    const A = sim.addClient('Alice', (m) => inbox.push(m));
+    sim.handle(A, { t: 'lobby', op: 'job', id: 'station_engineer' });
+    sim.handle(A, { t: 'lobby', op: 'ready', v: true });
+    sim.handle(A, { t: 'lobby', op: 'start' });
+    const step = (sec) => { for (let k = 0; k < sec / SIM_DT; k++) sim.step(SIM_DT); };
+    const a = A.mob, st = sim.station;
+    inbox.length = 0;
+    sim.handle(A, { t: 'dbg', op: 'map', what: 'away' });
+    step(0.3);
+    const away = sim.maps.get('away');
+    ok(away && a.grid.map === away && A.map === away && inbox.some((m) => m.t === 'map' && m.map === 'away'), 'the debug menu sends you to an away mission (made on the first visit)');
+    ok(a.grid.kind === 'away' && a.grid.world.kind[a.grid.world.idx(Math.floor(a.x / TILE), Math.floor(a.z / TILE))] === KIND.FLOOR, 'to a floor of it');
+    inbox.length = 0;
+    sim.handle(A, { t: 'dbg', op: 'map', what: 'home' });
+    step(0.3);
+    ok(a.grid.map === st.map && inbox.some((m) => m.t === 'map' && m.map === st.map.id && m.grids.some((g) => g.kind === 'station')), 'and home again: the station map is sent whole');
+    // a watcher
+    const B = sim.addClient('Bob', () => {});
+    const bin = [];
+    B.send = (m) => bin.push(m);
+    B.state = 'ghost';
+    sim.handle(B, { t: 'dbg', op: 'map', what: 'away' });
+    step(0.3);
+    ok(B.map === away && B.ghost.map === away && bin.some((m) => m.t === 'map' && m.map === 'away'), 'a watcher goes too');
+  }
+  // ---- the emergency shuttle crosses hyperspace
+  {
+    const { sim, A, a, inbox, step } = realRound(0);
+    const d = sim.director;
+    d.dockShuttle();
+    const eg = d.evacGrid;
+    a.grid = eg; a.map = eg.map; a.x = 9; a.z = 9; a.vx = a.vz = 0; a.dirty = true;
+    const w = eg.world;
+    for (let i = 0; i < w.n; i++) if (w.kind[i] === KIND.FLOOR && !w.solid[i] && !w.doorAt.has(i)) { a.x = (i % w.W) * TILE + 1; a.z = Math.floor(i / w.W) * TILE + 1; break; }
+    inbox.length = 0;
+    d.depart();
+    step(1);
+    ok(a.evacuated && A.escaped, 'it leaves with her aboard');
+    let t = 0;
+    while (eg.map.id !== 'hyperspace' && t < 60) { step(1); t++; }
+    const h = inbox.find((m) => m.t === 'map');
+    ok(eg.map.id === 'hyperspace' && h && h.map === 'hyperspace' && h.grids.length === 2 && sim.maps.get('hyperspace').solids.length === 1, `at the far mark it goes on to hyperspace (after ${t} s): a map of its own, with only the shuttle in it`);
+    ok(sim.grids.has(eg.id) && a.grid === eg && !eg.docked && Math.hypot(...eg.vel) < 1e-9, 'where it stays, with her on it');
+    step(1);
+    const snap = inbox.filter((m) => m.t === 'snap').pop();
+    ok(snap && snap.you.g === eg.id, 'and her snapshots are of it');
+  }
+});
+
 section('no single-grid assumptions are left in the source', () => {
   // The shortcuts that mean "the station's" (sim.world, rep.doors...) exist for the tests. Nothing under src/ may use them, or a second grid
   // would silently be given the station's tiles, doors or air. Naming the station on purpose (.station) is allowed in a few places.

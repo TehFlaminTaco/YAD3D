@@ -253,6 +253,7 @@ export class DebugMenu {
     grp('Trouble', this.button('Meteor strike', () => this.send('strike')), this.button('3 carp where I look', () => this.send('carp', { n: 3, ...this.place() })));
     grp('Shuttle', this.button('Call', () => this.send('shuttle', { what: 'call' })), this.button('Dock now', () => this.send('shuttle', { what: 'dock' })), this.button('Depart (ends the round)', () => this.send('shuttle', { what: 'depart' })));
     grp('Doors', this.button('Open all', () => this.send('doors', { what: 'open' })), this.button('Close all', () => this.send('doors', { what: 'close' })));
+    grp('Other maps', this.button('To an away mission', () => this.send('map', { what: 'away' })), this.button('Back to the station', () => this.send('map', { what: 'home' })));
     grp('Fix', this.button('Seal the hull, restore power', () => this.send('repair')));
     grp('Round', this.button('Start now (lobby)', () => this.send('round', { what: 'start' })), this.button('End it', () => this.send('round', { what: 'end' })), this.button('Skip ahead a minute', () => this.send('skip', { sec: 60 })));
   }

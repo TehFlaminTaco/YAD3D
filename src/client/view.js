@@ -21,7 +21,7 @@ export class WorldView {
     this.rep = rep;
     this.rects = assets.rects;
     this.opts = opts;
-    this.frame = rep.station;                    // the grid the scene is drawn in
+    this.frame = rep.station || rep.map.void;    // the grid the scene is drawn in
     this.views = new Map();                      // grid id -> GridView
     this.itemView = new Map();                   // item id -> the GridView it is drawn in
     for (const g of rep.grids.values()) this.addGrid(g);
@@ -53,6 +53,17 @@ export class WorldView {
   }
 
   viewOf(gid) { return this.views.get(gid); }
+
+  /** Take everything this has put in the scene out again (we are changing to another map). */
+  dispose() {
+    for (const id of [...this.views.keys()]) this.removeGrid(id);
+    for (const v of this.mobViews.values()) if (v.chars) this.assets.charart.release(v.set);
+    this.mobViews.clear();
+    for (const b of this.beams) { this.scene.remove(b.line); b.line.geometry.dispose(); }
+    this.beams = [];
+    this.scene.remove(this.stars); this.stars.geometry.dispose(); this.stars.material.dispose();
+    if (this.marker) { this.scene.remove(this.marker); this.marker.geometry.dispose(); this.marker.material.dispose(); }
+  }
 
   /** The grids lie differently against each other now (one came or went): redraw what that changes. */
   coverChanged() { for (const v of this.views.values()) v.refreshCovered(); }
