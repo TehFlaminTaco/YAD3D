@@ -168,7 +168,7 @@ data/          generated: jobs.json (jobs, slots, access, outfits), contents.jso
 tools/         Python data pipeline (DMI/DMM/DM readers), test harnesses, screenshot helper
 src/shared/    rules both sides run: grids (a tile map, its props and doors, its pose in a map) & collision, movement, doors, atmos, power, items, chat rules,
                transform maths, the physics adapter (Rapier)
-src/sim/       the authoritative game: Sim, rounds, jobs, inventory, actions, chat, AI, director, consoles
+src/sim/       the authoritative game: Sim, rounds, jobs, inventory, actions, chat, AI, director, consoles, grid physics and shuttle flight
 src/render/    Three.js terrain mesh, instanced sprites, lighting
 src/client/    transports, replica of the world, view, prediction, and the interface (below)
 server/        static files + WebSocket host

@@ -9,6 +9,8 @@ import { stepMovement, floatState } from '../shared/movement.js';
 import { clamp, rng } from '../shared/util.js';
 import { Mob } from './mob.js';
 import { GridSim } from './gridsim.js';
+import { GridPhysics, IMPACT_MIN } from './physics.js';
+import { Shuttles } from './shuttle.js';
 import { ChatSys } from './chatsys.js';
 import { Round } from './round.js';
 import { Director } from './director.js';
@@ -80,6 +82,8 @@ export class Sim {
     this.maps = new Map();               // id -> GameMap
     this.grids = new Map();              // id -> GridSim
     this.gridSeq = 1;
+    this.physics = new GridPhysics(this);   // the grids as rigid bodies (throws unless `await initPhysics()` has been done)
+    this.shuttles = new Shuttles(this);     // flights of grids that are not docked
     this.station = null;                 // the main grid; the director's meteors and the round's hull checks are about this one
     this.builtSeq = 1;                   // ids of what players have built, over all grids
     this.chat = new ChatSys(this);
@@ -111,6 +115,7 @@ export class Sim {
     this.defaultMap = map;
     for (const pl of def.grids) this.addGrid(pl.bp, { map, kind: pl.kind, name: pl.name, tf: { p: pl.p, q: pl.q }, quiet: true });
     this.relink(map);
+    this.physics.warm();
     this.docks = def.docks || {};        // where a shuttle that arrives later (the emergency shuttle) is held: { name: { bp, kind, name, p, q } }
   }
 
@@ -124,9 +129,10 @@ export class Sim {
   /** Bring a grid into being in `o.map` at pose `o.tf`: its tiles, its air and power, its map's girders, the items that lie about on it, its closets. */
   addGrid(bp, o = {}) {
     const map = o.map || this.defaultMap;
-    const g = new GridSim(this, decodeGrid(this.level, bp), { id: this.gridSeq++, kind: o.kind, name: o.name, tf: o.tf });
+    const g = new GridSim(this, decodeGrid(this.level, bp), { id: this.gridSeq++, kind: o.kind, name: o.name, tf: o.tf, docked: o.docked });
     this.grids.set(g.id, g);
     map.add(g);
+    this.physics.add(g);
     if (!this.station && g.kind === 'station') this.station = g;
     for (const gd of g.props.girders) g.built.add({ id: this.builtSeq++, k: 'girder', c: gd.c, r: gd.r, st: GIRDER.NORMAL, grid: g });
     for (const it of g.props.items) {
@@ -147,6 +153,8 @@ export class Sim {
    */
   removeGrid(g) {
     const map = g.map;
+    this.shuttles.flights.delete(g.id);
+    this.physics.remove(g);
     for (const [id, rec] of [...this.floor]) if (rec.grid === g) { this.floor.delete(id); this.items.delete(id); }
     g.emit({ e: 'grid-' });
     map.remove(g);
@@ -157,6 +165,35 @@ export class Sim {
   /** Work out again which grids of a map lie over which (they moved, came or went), and redo the air of any whose space is not space any more. */
   relink(map) {
     for (const g of map.relink()) g.atmos.buildTopology(false);
+  }
+
+  /** A grid is let go (a shuttle undocks): it is a free body now, and no longer lies against the station. */
+  undock(g) {
+    if (!g.docked) return;
+    g.docked = false;
+    this.physics.setDocked(g, false);
+    this.relink(g.map);
+    g.emit({ e: 'grid~', docked: false, tf: tfClone(g.tf) });
+  }
+
+  /** A grid is held at `pose` (exactly there, standing still): it lies against its neighbours again. */
+  dock(g, pose = g.tf) {
+    g.docked = true;
+    this.physics.setDocked(g, true, pose);
+    this.relink(g.map);
+    g.emit({ e: 'grid~', docked: true, tf: tfClone(g.tf) });
+  }
+
+  /** Two grids have hit each other, hard (`force` in newtons): everyone near either feels it. No damage: they are only bumped. */
+  gridImpact(a, b, force) {
+    if (!a || !b || force < IMPACT_MIN || this.time - Math.max(a.lastImpact || -9, b.lastImpact || -9) < 1) return;
+    a.lastImpact = b.lastImpact = this.time;
+    const amt = Math.min(1, force / 400000);
+    for (const g of [a, b]) {
+      const at = { grid: g, x: g.world.W * TILE / 2, z: g.world.H * TILE / 2 };
+      this.shake(at, amt, 80);
+      this.sound('explosion_far', at, Math.min(1, 0.4 + amt));
+    }
   }
 
   /** How much to turn a facing given in grid `from`'s frame to have it in grid `to`'s. */
@@ -294,7 +331,7 @@ export class Sim {
   /** What a joining client needs to know about one grid: which it is, and how it has changed since the map made it. */
   gridState(g) {
     return {
-      g: g.id, bp: g.bp, kind: g.kind, name: g.name, tf: tfClone(g.tf),
+      g: g.id, bp: g.bp, kind: g.kind, name: g.name, tf: tfClone(g.tf), docked: g.docked,
       power: { state: g.power.state, battery: g.power.battery },
       areaOn: [...g.power.areaOn], areaLights: [...g.power.areaLights],
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
@@ -328,6 +365,8 @@ export class Sim {
     for (const g of this.grids.values()) g.firedoors.update(dt);
     this.windows.update();
     for (const g of this.grids.values()) { g.atmos.update(dt); g.power.update(dt); }
+    this.shuttles.update(dt);
+    this.physics.step(dt);
     this.ai.update(dt);
     this.tickBodies(dt);
     this.actions.update(dt);
@@ -528,6 +567,7 @@ export class Sim {
   /** A tile's glass, grille or anchoring changed: tell the air and the clients. (A smashed window is `breachTile`: it is also loud.) */
   tileChanged(g, c, r) {
     g.atmos.tileChanged(c, r);
+    this.physics.touch(g);
     this.emitTile(g, g.world.idx(c, r));
   }
 
@@ -706,6 +746,8 @@ export class Sim {
       }
       for (const id of [...c.known]) if (!seen.has(id)) { c.known.delete(id); c.outbox.push({ e: 'mob-', id }); }
       const snap = { t: 'snap', tick: this.tick, ack: c.lastSeq, mobs: list };
+      const moved = this.movedGrids(c, map);
+      if (moved.length) snap.grids = moved;
       const m = c.mob;
       if (m) {
         const [tc, tr] = m.tile, g = m.grid;
@@ -721,6 +763,19 @@ export class Sim {
       }
       c.send(snap);
     }
+  }
+
+  /** The poses of the grids in `map` that have moved since this client was last told (flying ones; a docked grid is told exactly when it docks). */
+  movedGrids(c, map) {
+    const out = [];
+    c.poses ||= new Map();
+    for (const g of map.grids.values()) {
+      if (g.docked || g.poseSeq === undefined || c.poses.get(g.id) === g.poseSeq) continue;
+      c.poses.set(g.id, g.poseSeq);
+      const f = (a, n) => a.map((v) => +v.toFixed(n));
+      out.push([g.id, ...f(g.tf.p, 3), ...f(g.tf.q, 5), ...f(g.vel, 3), ...f(g.ang, 4)]);
+    }
+    return out;
   }
 
   /** Private per-player state (inventory, vitals, access). */

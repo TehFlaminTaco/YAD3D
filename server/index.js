@@ -10,6 +10,7 @@ import { WebSocketServer } from 'ws';
 import { loadSimData } from '../src/sim/load.js';
 import { Sim } from '../src/sim/sim.js';
 import { SIM_DT } from '../src/shared/config.js';
+import { initPhysics } from '../src/shared/physics.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -23,6 +24,7 @@ const MAX_PLAYERS = +arg('max', 40);
 const DEBUG = argv.includes('--debug');           // the debug menu and its {t:'dbg'} commands: spawn anything, heal, teleport, cause trouble (never on a public server)
 
 const DATA = loadSimData(root);
+await initPhysics();                              // the grids are rigid bodies (Rapier is WebAssembly: it starts asynchronously)
 let sim = newSim();
 let roundNo = 1;
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadSimData } from '../src/sim/load.js';
+import { initPhysics } from '../src/shared/physics.js';
 import { Sim } from '../src/sim/sim.js';
 import { Replica } from '../src/client/state.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
@@ -13,6 +14,7 @@ import { makeBlueprint, withGrids } from './gridkit.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = loadSimData(root);
+await initPhysics();
 let pass = 0, fail = 0;
 const ok = (cond, name) => { if (cond) pass++; else { fail++; console.log('  FAIL:', name); } };
 const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
@@ -236,8 +238,8 @@ section('the client replica', () => {
 
 // ---------------------------------------------------------------------------------------------------- the real level: shuttles docked at the station
 /** A real round: the level's own map (the station and every shuttle docked at it), one player (an engineer) and `bots` NPCs. */
-function realRound(bots = 0) {
-  const sim = new Sim(DATA, { bots });
+function realRound(bots = 0, opts = {}) {
+  const sim = new Sim(DATA, { bots, ...opts });
   const inbox = [];
   const A = sim.addClient('Alice', (m) => inbox.push(m));
   sim.handle(A, { t: 'lobby', op: 'job', id: 'station_engineer' });
@@ -264,6 +266,26 @@ function seamsOf(sim) {
 }
 
 const degrees = (g) => Math.round(qToYaw(g.tf.q) * 180 / Math.PI);
+
+/** A direction (a unit vector in the map) along which a docked grid can fly away from the station without touching any of its walls or floors for 60 m (lattice is fine: it is not solid) (not every shuttle can leave every way: the arrival shuttle sits in a notch). */
+function awayOf(sim, g) {
+  const w = sim.station.world, tiles = [];
+  for (let r = 0; r < g.world.H; r++) for (let c = 0; c < g.world.W; c++) if (g.world.kind[g.world.idx(c, r)] !== KIND.SPACE) tiles.push(g.worldPoint(c * TILE + 1, 0, r * TILE + 1));
+  for (const d of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
+    let clear = true;
+    for (let m = 1; m <= 60 && clear; m++) for (const p of tiles) { const k = w.kindAt(Math.floor((p[0] + d[0] * m) / TILE), Math.floor((p[2] + d[2] * m) / TILE)); if (k !== KIND.SPACE && k !== KIND.LATTICE) { clear = false; break; } }
+    if (clear) return d;
+  }
+  throw new Error(`${g.bp} cannot leave any way`);
+}
+const along = (p, v, m) => [p[0] + v[0] * m, 0, p[2] + v[2] * m];
+
+/** A pod (they are sealed: a shuttle like the arrival one is open at one end, and would vent when it flew off) and the middle of a floor tile in it. */
+function aPod(sim) {
+  const g = [...sim.grids.values()].find((x) => x.kind === 'pod'), w = g.world;
+  for (let i = 0; i < w.n; i++) if (w.kind[i] === KIND.FLOOR && !w.solid[i] && !w.doorAt.has(i)) return { g, x: (i % w.W) * TILE + 1, z: Math.floor(i / w.W) * TILE + 1 };
+  throw new Error('no floor in the pod');
+}
 
 section('shuttles are docked grids', () => {
   const { sim, a } = realRound();
@@ -420,7 +442,7 @@ section('the emergency shuttle comes and goes', () => {
   // it leaves: the grid goes, with everyone aboard
   late.length = 0;
   d.depart();
-  step(0.1);
+  step(40);
   ok(!sim.grids.has(eg.id) && !st.map.grids.has(eg.id) && st.world.neighbors.length === 9, 'departing removes it from the map');
   const evs = late.filter((m) => m.t === 'ev').flatMap((m) => m.list);
   const gone = evs.filter((e) => e.e === 'grid-');
@@ -428,6 +450,183 @@ section('the emergency shuttle comes and goes', () => {
   for (const ev of evs) rep.apply(ev);
   ok(!rep.grids.has(eg.id) && rep.station.world.neighbors.length === 9, 'the replica follows');
   ok(boarded.every((m) => m.evacuated) && sim.round.state === 'ending', 'the people aboard stay escaped and the round ends');
+  void A;
+});
+
+section('a grid that flies', () => {
+  const { sim, A, a, inbox, step } = realRound();
+  const st = sim.station, { g, x: px, z: pz } = aPod(sim);
+  const home = { p: [...g.home.p], q: [...g.home.q] };
+  const stNeighbors = st.world.neighbors.length, covered0 = st.world.covered.slice();
+  ok(g.docked && sim.physics.mass(g) > 1000 && sim.physics.mass(st) > 20 * sim.physics.mass(g), 'every grid is a body with mass (the station far more than a shuttle)');
+  // somebody stands in it, moving
+  a.grid = g; a.map = g.map; a.x = px; a.z = pz; a.vx = 1.2; a.vz = -0.3; a.yaw = 0.4;
+  const local = { x: a.x, z: a.z, vx: a.vx, vz: a.vz, yaw: a.yaw };
+  const w0 = sim.worldPos(a);
+  const away = awayOf(sim, g);
+  const to = { p: along(home.p, away, 60), q: [...home.q] };
+  sim.shuttles.fly(g, to);
+  step(0.1);
+  ok(!g.docked && sim.shuttles.flying(g) && st.world.neighbors.length === stNeighbors - 1 && g.world.neighbors.length === 0, 'it is let go: no longer docked, no longer against the station');
+  ok(st.world.covered.some((v, i) => v !== covered0[i]), 'and the station\'s space where it was is space again');
+  step(6);
+  ok(Math.hypot(g.vel[0], g.vel[2]) > 3 && Math.hypot(g.tf.p[0] - home.p[0], g.tf.p[2] - home.p[2]) > 5, 'its engines have taken it somewhere');
+  const sp = Math.hypot(g.vel[0], g.vel[2]);
+  ok(sp <= 14.2, `at no more than its cruise speed (${sp.toFixed(1)} m/s)`);
+  ok(a.x === local.x && a.z === local.z && a.vx === local.vx && a.vz === local.vz && a.yaw === local.yaw && a.grid === g, 'the person inside has not been moved at all: nothing of theirs changed, bit for bit');
+  const w1 = sim.worldPos(a);
+  ok(Math.hypot(w1[0] - w0[0], w1[2] - w0[2]) > 5, 'though where they are in the map has changed with the shuttle');
+  step(25);
+  ok(!sim.shuttles.flying(g) && Math.hypot(g.tf.p[0] - to.p[0], g.tf.p[2] - to.p[2]) < 0.1 && Math.hypot(g.vel[0], g.vel[2]) < 0.3, 'it comes to rest on its mark');
+  ok(a.x === local.x && a.vx === local.vx, 'the rider is still untouched');
+  // and back home, held there exactly
+  sim.shuttles.fly(g, home, { dock: true });
+  step(30);
+  ok(g.docked && !sim.shuttles.flying(g), 'sent home and docked, it is held');
+  ok(Math.abs(g.tf.p[0] - home.p[0]) < 1e-9 && Math.abs(g.tf.p[2] - home.p[2]) < 1e-9 && g.tf.q.every((v, i) => Math.abs(v - home.q[i]) < 1e-9) && !g.vel.some((v) => v), 'exactly on its mark, standing still');
+  ok(st.world.neighbors.length === stNeighbors && st.world.covered.every((v, i) => v === covered0[i]), 'and it lies against the station as before');
+  ok(a.x === local.x && a.z === local.z && a.vx === local.vx && a.grid === g, 'the whole trip never touched the rider');
+  void A; void inbox;
+});
+
+section('a grid that spins', () => {
+  const { sim, a, step } = realRound();
+  const { g, x: px, z: pz } = aPod(sim);
+  a.grid = g; a.map = g.map; a.x = px; a.z = pz; a.vx = 0.7; a.vz = 0; a.yaw = 1;
+  const local = { x: a.x, z: a.z, vx: a.vx, yaw: a.yaw };
+  const out = { p: along(g.home.p, awayOf(sim, g), 50), q: [...g.home.q] };
+  sim.shuttles.fly(g, out);
+  step(30);
+  sim.physics.setVel(g, [0, 0, 0], [0, 0.5, 0]);
+  const w0 = sim.worldPos(a);
+  const q0 = qToYaw(g.tf.q);
+  step(4);
+  const turned = Math.atan2(Math.sin(qToYaw(g.tf.q) - q0), Math.cos(qToYaw(g.tf.q) - q0));
+  ok(Math.abs(turned - 2) < 0.1, `it turns at the rate it was set (${turned.toFixed(2)} rad in 4 s)`);
+  ok(Math.abs(g.ang[1] - 0.5) < 0.01, 'and its angular velocity is read back');
+  ok(a.x === local.x && a.z === local.z && a.vx === local.vx && a.yaw === local.yaw, 'the rider in a spinning grid is not touched either');
+  const w1 = sim.worldPos(a);
+  ok(Math.hypot(w1[0] - w0[0], w1[2] - w0[2]) > 1, 'their place in the map swings round with it');
+  // the way the world position follows the grid: still what the pose says it is
+  const expect = tfPoint(g.tf, [a.x, 0, a.z]);
+  ok(near(w1[0], expect[0], 1e-9) && near(w1[2], expect[2], 1e-9), 'exactly where the grid\'s pose puts them');
+});
+
+section('a grid that hits another', () => {
+  const { sim, step } = realRound();
+  const st = sim.station, pod = [...sim.grids.values()].find((x) => x.kind === 'pod');
+  const hits = [];
+  const orig = sim.gridImpact.bind(sim);
+  sim.gridImpact = (x, y, f) => { hits.push([x?.bp, y?.bp, f]); orig(x, y, f); };
+  const away = awayOf(sim, pod), home = { p: [...pod.home.p], q: [...pod.home.q] };
+  sim.shuttles.fly(pod, { p: along(home.p, away, 40), q: [...home.q] });
+  step(25);
+  ok(Math.hypot(pod.tf.p[0] - home.p[0] - away[0] * 40, pod.tf.p[2] - home.p[2] - away[2] * 40) < 0.2, 'it flew out and stopped');
+  const hard0 = hits.filter(([, , f]) => f >= 30000).length;
+  // now flown at the station, with a mark well inside the hull: it gets up to speed and hits
+  sim.shuttles.fly(pod, { p: along(home.p, away, -15), q: [...home.q] });
+  step(20);
+  const dist = Math.hypot(pod.tf.p[0] - home.p[0], pod.tf.p[2] - home.p[2]);
+  ok(dist < 1 && Math.hypot(pod.tf.p[0] - (home.p[0] - away[0] * 15), pod.tf.p[2] - (home.p[2] - away[2] * 15)) > 10, `a grid flown into another is stopped by it, not through it (it ended ${dist.toFixed(1)} m from its dock, 15 short of its mark)`);
+  ok(hits.filter(([x, y, f]) => f >= 30000 && ((x === 'escape_pod_default' && y === 'station') || (y === 'escape_pod_default' && x === 'station'))).length > hard0, 'and the collision is reported, hard');
+  ok(pod.lastImpact !== undefined && st.lastImpact === pod.lastImpact, 'with both grids marked as hit');
+});
+
+section('flying grids reach the clients', () => {
+  const { sim, A, inbox, step } = realRound();
+  const { g } = aPod(sim);
+  const welcome = inbox.find((m) => m.t === 'welcome');
+  const rep = new Replica({ level: DATA.level, rects: DATA.rects }, { ...welcome, you: A.id });
+  const rg = rep.grids.get(g.id);
+  let clock = 0, snaps = 0, seen = [];
+  const feed = () => { for (const m of inbox.splice(0)) { if (m.t === 'ev') for (const ev of m.list) rep.apply(ev); else if (m.t === 'snap') { rep.applySnap(m, clock); snaps++; if (m.grids) seen.push(...m.grids.map((r) => r[0])); } } };
+  const run = (sec) => { for (let k = 0; k < sec / 0.05; k++) { sim.step(0.05); clock += 0.05; feed(); } };
+  run(1);
+  ok(!seen.includes(g.id), 'a docked grid is not in the snapshots');
+  const to = { p: along(g.home.p, awayOf(sim, g), 50), q: [...g.home.q] };
+  sim.shuttles.fly(g, to);
+  run(0.2);
+  ok(rg.docked === false && rep.station.world.neighbors.length === 8, 'the replica is told it is let go, and relinks');
+  run(5);
+  ok(seen.includes(g.id) && rg.buf.length > 0, 'while it moves its pose is in the snapshots');
+  // drawn between two snapshots, behind the newest
+  rep.updatePoses(clock - 0.13);
+  const dh = (q) => Math.hypot(q[0] - g.home.p[0], q[2] - g.home.p[2]);
+  ok(dh(rg.tf.p) < dh(g.tf.p) && dh(g.tf.p) - dh(rg.tf.p) < 3, `the client draws it where it was a moment ago (${dh(rg.tf.p).toFixed(2)} from home against ${dh(g.tf.p).toFixed(2)})`);
+  rep.updatePoses(clock + 1);
+  ok(Math.hypot(rg.tf.p[0] - g.tf.p[0], rg.tf.p[2] - g.tf.p[2]) < 0.5, 'and at the newest when it has caught up');
+  const rows = seen.length;
+  run(30);
+  ok(!sim.shuttles.flying(g), 'it arrives');
+  const before = seen.length;
+  run(2);
+  ok(seen.length === before, 'and nothing more is sent once it stands still');
+  sim.shuttles.fly(g, { p: [...g.home.p], q: [...g.home.q] }, { dock: true });
+  run(40);
+  ok(g.docked && rg.docked && rg.buf.length === 0 && near(rg.tf.p[0], g.home.p[0], 1e-9) && near(rg.tf.p[2], g.home.p[2], 1e-9), 'docking tells the client exactly where it is held');
+  ok(rep.station.world.neighbors.length === 9 && rg.world.neighbors.length === 1, 'and it lies against the station again, on both sides');
+  void rows;
+});
+
+section('the debug menu flies grids about', () => {
+  const { sim, A, a, inbox, step } = realRound(0, { debug: true });
+  const dbg = (op, extra = {}) => { sim.handle(A, { t: 'dbg', op, ...extra }); step(0.1); };
+  const evs = () => inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list);
+  inbox.length = 0;
+  dbg('grid', { what: 'list' });
+  const list = evs().find((e) => e.e === 'dbg' && e.k === 'grids');
+  ok(list && list.grids.length === 10 && list.grids.every((g) => g.docked) && list.grids.some((g) => g.kind === 'station'), 'the list has every grid of the map, all docked');
+  const pod = list.grids.find((g) => g.kind === 'pod'), g = sim.grids.get(pod.id);
+  const home = { p: [...g.home.p], q: [...g.home.q] };
+  dbg('grid', { what: 'out', id: g.id });
+  step(20);
+  ok(!g.docked && Math.hypot(g.tf.p[0] - home.p[0], g.tf.p[2] - home.p[2]) > 40, 'Out lets a shuttle go and flies it clear');
+  dbg('grid', { what: 'spin', id: g.id, w: 0.5 });
+  step(2);
+  ok(Math.abs(g.ang[1] - 0.5) < 0.02, 'Spin turns it');
+  dbg('grid', { what: 'stop', id: g.id });
+  step(0.5);
+  ok(Math.hypot(...g.vel) < 0.01 && Math.abs(g.ang[1]) < 0.01, 'Stop stops it, and its turning');
+  dbg('grid', { what: 'board', id: g.id });
+  ok(a.grid === g && g.world.kind[g.world.idx(Math.floor(a.x / TILE), Math.floor(a.z / TILE))] === KIND.FLOOR, 'Board puts you on its floor');
+  dbg('grid', { what: 'home', id: g.id });
+  step(1);
+  ok(sim.shuttles.flying(g), 'Home sets it flying back');
+  void inbox;
+});
+
+section('the emergency shuttle flies in and out', () => {
+  const { sim, A, inbox, step } = realRound(0);
+  const st = sim.station, d = sim.director;
+  inbox.length = 0;
+  ok(d.callShuttle('auto') && d.evacState === 'called' && !d.evacGrid, 'called, it is on its way but not there');
+  d.evacTimer = 26;
+  step(5);
+  ok(!d.evacGrid, 'not yet in sight');
+  step(2);
+  const eg = d.evacGrid;
+  ok(eg && !eg.docked && sim.shuttles.flying(eg) && d.evacState === 'called', 'twenty seconds out it appears, flying');
+  const dock = sim.docks.emergency;
+  const far = Math.hypot(eg.tf.p[0] - dock.p[0], eg.tf.p[2] - dock.p[2]);
+  ok(far > 100 && far < 160, `a good way off along the way it will come in (${far.toFixed(0)} m)`);
+  const appeared = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'grid+');
+  ok(appeared.length === 1 && appeared[0].docked === false && Math.abs(Math.hypot(appeared[0].tf.p[0] - dock.p[0], appeared[0].tf.p[2] - dock.p[2]) - far) < 15, 'everyone is told, with it where it is and not docked');
+  ok(Math.abs(d.approach[0]) + Math.abs(d.approach[2]) > 0.9 && st.world.neighbors.every((n) => n.grid !== eg), 'it comes in from outside, and is not against the station yet');
+  let t = 0;
+  while (d.evacState === 'called' && t < 40) { step(0.5); t += 0.5; }
+  ok(d.evacState === 'docked' && eg.docked && t < 25, `it arrives and docks (after ${t.toFixed(1)} s)`);
+  ok(near(eg.tf.p[0], dock.p[0], 1e-9) && near(eg.tf.p[2], dock.p[2], 1e-9) && eg.world.neighbors.length === 1 && st.world.neighbors.some((n) => n.grid === eg), 'exactly at its dock, against the station');
+  const evs = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list);
+  ok(evs.filter((e) => e.e === 'grid~' && e.g === eg.id && e.docked).length === 1, 'and the client is told it is held');
+  // it leaves again
+  inbox.length = 0;
+  d.depart();
+  step(1);
+  ok(!eg.docked && sim.shuttles.flying(eg) && st.world.neighbors.every((n) => n.grid !== eg), 'departing lets it go');
+  step(35);
+  ok(!sim.grids.has(eg.id), 'and it is gone, far out');
+  const gone = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'grid-');
+  ok(gone.length === 1 && gone[0].g === eg.id, 'with everybody told');
   void A;
 });
 

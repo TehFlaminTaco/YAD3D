@@ -3,6 +3,7 @@ import { Grid } from '../shared/grid.js';
 import { GameMap } from '../shared/gamemap.js';
 import { decodeGrid } from '../shared/leveldata.js';
 import { moveProp } from '../shared/propdata.js';
+import { qslerp } from '../shared/math3.js';
 import { setClosetState } from '../shared/closets.js';
 import { BuiltSet } from '../shared/built.js';
 
@@ -71,7 +72,7 @@ export class Replica {
   /** A grid exists: build it from its blueprint and bring it up to the state the server describes. */
   addGrid(gs, batch = false) {
     const decoded = decodeGrid(this.level, gs.bp);
-    const g = new GridReplica(decoded, this.rects, { id: gs.g, kind: gs.kind, name: gs.name, tf: gs.tf });
+    const g = new GridReplica(decoded, this.rects, { id: gs.g, kind: gs.kind, name: gs.name, tf: gs.tf, docked: gs.docked });
     this.grids.set(g.id, g);
     this.map.add(g);
     if (!this.station && g.kind === 'station') this.station = g;
@@ -176,6 +177,7 @@ export class Replica {
       case 'bs-': g?.built.remove(ev.id); break;
       case 'grid+': if (!this.grids.has(ev.g)) { const ng = this.addGrid(ev); this.emit('grid+', { ...ev, grid: ng }); } return;
       case 'grid-': { const old = this.removeGrid(ev.g); if (old) this.emit('grid-', { ...ev, grid: old }); return; }
+      case 'grid~': if (g) { g.docked = !!ev.docked; g.tf = { p: [...ev.tf.p], q: [...ev.tf.q] }; g.buf = []; this.relink(); this.emit('grid~', { ...ev, grid: g }); } return;
       default: break;
     }
     this.emit(ev.e, ev);
@@ -186,6 +188,12 @@ export class Replica {
   applySnap(snap, now) {
     this.you = snap.you;
     if (snap.env) this.env = snap.env;
+    for (const row of snap.grids || []) {                   // flying grids: [id, p (3), q (4), v (3), w (3)]
+      const g = this.grids.get(row[0]);
+      if (!g || g.docked) continue;
+      g.buf.push({ t: now, p: row.slice(1, 4), q: row.slice(4, 8), v: row.slice(8, 11), w: row.slice(11, 14) });
+      if (g.buf.length > 6) g.buf.shift();
+    }
     for (const row of snap.mobs) {
       const [id, gid, x, z, yaw, flags, speed] = row;
       const m = this.mobs.get(id);
@@ -194,6 +202,21 @@ export class Replica {
       m.buf.push({ t: now, g: gid, x, z, yaw });
       if (m.buf.length > 6) m.buf.shift();
       if (m.fresh) { m.fresh = false; m.g = gid; m.x = x; m.z = z; m.yaw = yaw; }
+    }
+  }
+
+  /** Put every flying grid where it was at render time `rt` (between the two snapshots either side of it). */
+  updatePoses(rt) {
+    for (const g of this.grids.values()) {
+      const b = g.buf;
+      if (g.docked || !b.length) continue;
+      let a = b[0], c = b[0], k = 0;
+      if (rt >= b[b.length - 1].t) a = c = b[b.length - 1];
+      else if (rt > b[0].t) {
+        for (let i = b.length - 2; i >= 0; i--) if (b[i].t <= rt) { a = b[i]; c = b[i + 1]; k = (rt - a.t) / Math.max(1e-4, c.t - a.t); break; }
+      }
+      g.tf = { p: [a.p[0] + (c.p[0] - a.p[0]) * k, a.p[1] + (c.p[1] - a.p[1]) * k, a.p[2] + (c.p[2] - a.p[2]) * k], q: k ? qslerp(a.q, c.q, k) : [...a.q] };
+      g.vel = c.v; g.ang = c.w;
     }
   }
 

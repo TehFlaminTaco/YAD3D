@@ -90,7 +90,7 @@ export class Debug {
       tp: this.tp, area: this.goArea, goto: this.goMob, bring: this.bring, who: this.who,
       // -- the station
       alert: this.alert, power: this.power, strike: this.strike, carp: this.carp, shuttle: this.shuttle, doors: this.doors,
-      repair: this.repair, round: this.round, skip: this.skip, gravity: this.gravity, space: this.space,
+      repair: this.repair, round: this.round, skip: this.skip, gravity: this.gravity, space: this.space, grid: this.gridOp,
       // -- what the network test uses
       kill: this.kill, finish: this.finish, tile: this.tile, noop() {},
     });
@@ -346,6 +346,45 @@ export class Debug {
     if (m.pulledBy) this.sim.people.release(m.pulledBy);
     m.x = x; m.z = z; m.vx = m.vz = 0; m.dirty = true;
     this.say(c, 'You are in open space.');
+  }
+
+  /**
+   * Fly the grids about (the debug menu's Grids tab). `what`: list | out (fly clear of whatever it sits against) | home (fly back and dock) | spin (`w`
+   * rad/s about the vertical) | stop | board (put you on it). A docked grid is let go first.
+   */
+  gridOp(c, msg) {
+    const sim = this.sim, what = String(msg.what);
+    if (what === 'list') {
+      const map = sim.mapOf(c.at);
+      const grids = [...sim.grids.values()].filter((g) => g.map === map).map((g) => ({ id: g.id, bp: g.bp, kind: g.kind, name: g.name, docked: g.docked, flying: sim.shuttles.flying(g), sp: +Math.hypot(g.vel[0], g.vel[2]).toFixed(1), spin: +g.ang[1].toFixed(2), x: Math.round(g.tf.p[0]), z: Math.round(g.tf.p[2]) }));
+      sim.emit({ e: 'dbg', k: 'grids', grids }, { to: c });
+      return;
+    }
+    const g = sim.grids.get(int(msg.id, 0, 1e6));
+    if (!g || g === sim.station) { this.say(c, 'No such grid.'); return; }
+    switch (what) {
+      case 'out': {
+        const d = sim.shuttles.clearDirection(g, 60);
+        if (!d) { this.say(c, `${g.name} has no clear way out.`); break; }
+        sim.shuttles.fly(g, { p: [g.tf.p[0] + d[0] * 60, g.tf.p[1], g.tf.p[2] + d[2] * 60], q: g.tf.q });
+        this.say(c, `${g.name} pulls away.`);
+        break;
+      }
+      case 'home': sim.shuttles.fly(g, g.home, { dock: true }); this.say(c, `${g.name} heads for its dock.`); break;
+      case 'spin': {
+        if (g.docked) sim.undock(g);
+        sim.physics.setVel(g, [...g.vel], [0, Math.max(-2, Math.min(2, num(msg.w, 0.5))), 0]);
+        this.say(c, `${g.name} spins.`);
+        break;
+      }
+      case 'stop': sim.shuttles.halt(g); this.say(c, `${g.name} stops.`); break;
+      case 'board': {
+        const w = g.world;
+        for (let i = 0; i < w.n; i++) if (w.kind[i] === KIND.FLOOR && !w.solid[i] && !w.doorAt.has(i)) { this.teleport(c, c.mob, g, (i % w.W) * TILE + 1, Math.floor(i / w.W) * TILE + 1); break; }
+        break;
+      }
+      default: break;
+    }
   }
 
   strike(c) {

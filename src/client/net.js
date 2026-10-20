@@ -23,6 +23,8 @@ export class LocalConnection {
 
   async start(name, look) {
     const { Sim } = await import('../sim/sim.js');
+    const { initPhysics } = await import('../shared/physics.js');
+    await initPhysics();
     const a = this.assets;
     this.sim = new Sim({ level: a.level, rects: a.rects, jobsJson: a.jobsJson, contents: a.contents, closets: a.closets, chars: a.chars }, {
       bots: this.opts.bots ?? 14, autostart: this.opts.autostart ?? 0, god: !!this.opts.god, debug: !!this.opts.debug,

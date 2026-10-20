@@ -263,6 +263,8 @@ export class WorldView {
       if (now >= this.beams[i].until) { this.scene.remove(this.beams[i].line); this.beams[i].line.geometry.dispose(); this.beams.splice(i, 1); }
     }
     this.stars.position.copy(cam);
+    const fq = frame.tf.q;
+    this.stars.quaternion.set(-fq[0], -fq[1], -fq[2], fq[3]);          // the stars are fixed in the map: in the frame of a grid that turns, they turn the other way
     this.mobB.flush();
   }
 }

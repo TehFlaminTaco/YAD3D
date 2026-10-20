@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSimData } from '../src/sim/load.js';
+import { initPhysics } from '../src/shared/physics.js';
 import { Sim } from '../src/sim/sim.js';
 import { SIM_DT } from '../src/shared/config.js';
 
@@ -9,6 +10,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const minutes = +(process.argv[2] || 3);
 const withPlayer = process.argv.includes('--player');
 const t0 = Date.now();
+await initPhysics();
 const sim = new Sim(loadSimData(root), { bots: 18 });
 console.log('sim built in', Date.now() - t0, 'ms;', sim.doors.length, 'doors,', sim.floor.size, 'floor items');
 

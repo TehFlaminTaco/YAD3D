@@ -784,6 +784,19 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                     stats['closet'] += 1
                     continue
 
+            # --- fans (survival_pod.dm): CanAtmosPass = ATMOS_PASS_NO, so air never goes through the tile they are on, whatever stands open beside them.
+            # BoxStation has three, behind the poddoors of the chapel, disposal and toxins launchers, which open on space. Flat on the floor, not standing up.
+            if p.startswith('/obj/structure/fans'):
+                icon, st = r.get('icon'), r.get('icon_state')
+                if isinstance(st, str) and icon_ok(icon, st):
+                    sp = spr.add([(icon, st, S, None, None)])
+                    if sp >= 0:
+                        props.append(dict(base, k='fan', s=sp, den=den, inv=1 if 'invisible' in p else 0, p=p.split('/', 2)[2]))
+                        stats['fan'] += 1
+                else:
+                    missing[p] += 1
+                continue
+
             # --- standing structures / machinery (computers get keyboard + screen overlays)
             if p.startswith(('/obj/structure', '/obj/machinery')):
                 icon, st = r.get('icon'), r.get('icon_state')

@@ -177,6 +177,7 @@ export class Game {
     rep.on('bs~', (ev) => { const v = gv(ev); if (v) v.updateBuilt(v.grid.built.get(ev.id)); });
     rep.on('bs-', (ev) => gv(ev)?.removeBuilt(ev.id));
     rep.on('grid+', (ev) => { this.view.addGrid(ev.grid); this.view.coverChanged(); });
+    rep.on('grid~', () => this.view.coverChanged());
     rep.on('grid-', (ev) => { this.view.removeGrid(ev.g); this.view.coverChanged(); });
     rep.on('pm', (ev) => { const v = gv(ev); if (v) v.propMoved(v.grid.props.interact[ev.i]); });
     rep.on('imv', (ev) => this.view.moveItem(ev.id));
@@ -754,6 +755,7 @@ export class Game {
     this.updateDragPreview();
     this.updateCursor();
 
+    rep.updatePoses(this.time - INTERP_DELAY);
     this.view.update(dt, this.time, this.time - INTERP_DELAY, cam.position, this.yaw, this.phase === 'playing' ? rep.you?.id : -1, this.pred.g);
     U.uCam.value.copy(cam.position);
     const dir = new THREE.Vector3(); cam.getWorldDirection(dir);

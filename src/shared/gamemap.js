@@ -34,8 +34,9 @@ export class GameMap {
    * (Grids are turned about the vertical axis only for now, so a position on the deck maps with a 2 by 2 matrix and an offset.)
    */
   relink() {
-    const gs = [...this.grids.values()];
-    for (const g of gs) g.world.neighbors = [];
+    const all = [...this.grids.values()];
+    for (const g of all) g.world.neighbors = [];
+    const gs = all.filter((g) => g.docked);                    // only grids that are held in place lie against each other: a flying one has no neighbours
     const changed = [];
     for (const a of gs) {
       const aw = a.world;
@@ -76,6 +77,10 @@ export class GameMap {
       }
       if (cov.some((v, i) => v !== aw.covered[i])) changed.push(a);
       aw.covered = cov;
+    }
+    for (const g of all) {
+      if (g.docked) continue;                                  // one that is not docked has nothing covering it
+      if (g.world.covered.some((v) => v)) { g.world.covered = new Uint8Array(g.world.n); changed.push(g); }
     }
     return changed;
   }

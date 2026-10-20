@@ -23,8 +23,11 @@ export class Grid {
     this.spawns = decoded.spawns;               // where jobs start: [{ job, x, y }] in tiles
     this.map = null;                            // set by GameMap.add
     this.tf = o.tf ? tfClone(o.tf) : tfIdentity();
+    this.home = tfClone(this.tf);               // where it is docked (or was put): where a flight home ends
+    this.docked = o.docked !== false;           // held in its place (the station, a docked shuttle): it lies against its neighbours (see GameMap.relink); false = flying free
     this.vel = [0, 0, 0];                       // m/s, in the map's coordinates
     this.ang = [0, 0, 0];                       // rad/s
+    this.buf = [];                              // (client) snapshots of its pose, to draw it between
     this.world = new World(decoded);
     this.world.grid = this;
     this.props = buildPropData(this.world, rects, decoded.props, decoded.level);

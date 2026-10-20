@@ -6,6 +6,8 @@ const STRIKE_TIMES = [75, 215, 380, 560];
 const POWER_FAIL_AT = 150;
 const AUTO_CALL_AT = 600;
 const DOCK_SECONDS = 95;
+const FLIGHT_LEAD = 20;                // seconds before it docks that the emergency shuttle appears, far out, and starts its approach
+const APPROACH = 150;                  // metres it flies in from (and out to)
 
 // real SS13 alert level texts
 const LEVEL_TEXT = {
@@ -35,7 +37,8 @@ export class Director {
     this.news = ['Station News: A meteor shower is forecast for this sector. Crew are advised to stay near airtight doors.'];
     this.stats = { patched: 0, carpKilled: 0 };
     this.windows = null;
-    this.evacGrid = null;             // the emergency shuttle, once it has arrived: a grid of its own, docked at the station
+    this.evacGrid = null;             // the emergency shuttle, from the moment it appears (flying in) until it is gone: a grid of its own
+    this.approach = null;             // the way out from the station along which it comes and goes: a unit vector in the map
     this.seams = [];                  // where it can be boarded: [{ door, tile: [c, r] on the station, at: [x, z] the door in the station's frame }]
     this.alerted = false;
   }
@@ -226,7 +229,8 @@ export class Director {
   updateEvac(dt) {
     if (this.evacState === 'called') {
       this.evacTimer -= dt;
-      if (this.evacTimer <= 0) this.dockShuttle();
+      if (!this.evacGrid && this.evacTimer <= FLIGHT_LEAD) this.startFlight();
+      if (!this.evacGrid && this.evacTimer <= 0) this.dockShuttle();
     } else if (this.evacState === 'docked') {
       this.evacTimer -= dt;
       this.boarding();
@@ -234,13 +238,50 @@ export class Director {
     }
   }
 
-  /** The emergency shuttle arrives: a grid of its own appears at the dock, with its doors a step from the station's. */
+  /**
+   * The emergency shuttle appears, far out along the way it will dock from, and flies in: a grid of its own, a rigid body, pushed by its engines and
+   * stopped on its mark. It is held there (docked) when it arrives, which is when the crew can board.
+   */
+  startFlight() {
+    const sim = this.sim, dock = sim.docks.emergency, to = { p: dock.p, q: dock.q };
+    const g = sim.addGrid(dock.bp, { kind: dock.kind, name: dock.name, tf: to, quiet: true, docked: false });
+    this.evacGrid = g;
+    this.seams = this.findSeams();
+    this.approach = this.awayFromStation(g);
+    sim.physics.place(g, { p: [dock.p[0] + this.approach[0] * APPROACH, dock.p[1], dock.p[2] + this.approach[2] * APPROACH], q: dock.q });
+    sim.relink(g.map);
+    g.emit({ e: 'grid+', ...sim.gridState(g) });
+    sim.shuttles.fly(g, to, { dock: true, done: () => this.arrived() });
+  }
+
+  /** The way out from the station at a shuttle's doors: from the station tile beside each to the door, on average, as a unit vector in the map. */
+  awayFromStation(eg) {
+    const st = this.grid;
+    let ax = 0, az = 0;
+    for (const s of this.seams) {
+      const d = eg.worldPoint(s.door.x, 0, s.door.z), t = st.worldPoint(s.tile[0] * TILE + TILE / 2, 0, s.tile[1] * TILE + TILE / 2);
+      ax += d[0] - t[0]; az += d[2] - t[2];
+    }
+    const l = Math.hypot(ax, az) || 1;
+    return [ax / l, 0, az / l];
+  }
+
+  /** At once: it is docked now (a debug command, and what the flight ends in). */
   dockShuttle() {
-    const sim = this.sim, dock = sim.docks.emergency;
+    const sim = this.sim, dock = sim.docks.emergency, to = { p: dock.p, q: dock.q };
+    if (this.evacGrid) { sim.shuttles.cancel(this.evacGrid); sim.dock(this.evacGrid, to); }
+    else {
+      this.evacGrid = sim.addGrid(dock.bp, { kind: dock.kind, name: dock.name, tf: to });
+      this.seams = this.findSeams();
+      this.approach = this.awayFromStation(this.evacGrid);
+    }
+    this.arrived();
+  }
+
+  arrived() {
+    const sim = this.sim;
     this.evacState = 'docked';
     this.evacTimer = DOCK_SECONDS;
-    this.evacGrid = sim.addGrid(dock.bp, { kind: dock.kind, name: dock.name, tf: { p: dock.p, q: dock.q } });
-    this.seams = this.findSeams();
     sim.chat.announce('Priority Announcement', `The Emergency Shuttle has docked with the station. You have ${this.fmtTime(DOCK_SECONDS)} to board the Emergency Shuttle.`);
     sim.emit({ e: 'snd', n: 'explosion_far', v: 0.6 });
     sim.emit({ e: 'shake', a: 0.4 });
@@ -287,7 +328,11 @@ export class Director {
     }
     for (const m of sim.mobs.values()) if (this.inShuttle(m)) m.evacuated = true;
     sim.chat.announce('Priority Announcement', 'The Emergency Shuttle has left the station. Estimate 4 minutes until the shuttle docks at Central Command.');
-    sim.removeGrid(this.evacGrid);                       // it pulls away: everyone aboard goes with it
+    // it pulls away, with everyone aboard, and is gone once it is far enough (it stays out there if somebody is still on it)
+    const dock = sim.docks.emergency, a = this.approach || [1, 0, 0];
+    sim.shuttles.fly(this.evacGrid, { p: [dock.p[0] + a[0] * APPROACH, dock.p[1], dock.p[2] + a[2] * APPROACH], q: dock.q }, {
+      done: (g) => { if (![...sim.clients.values()].some((c) => c.mob?.grid === g)) sim.removeGrid(g); },
+    });
     this.finish('shuttle');
   }
 

@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSimData } from '../src/sim/load.js';
+import { initPhysics } from '../src/shared/physics.js';
 import { Sim } from '../src/sim/sim.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
 import { CL } from '../src/shared/closets.js';
@@ -11,6 +12,7 @@ import { HIDE } from '../src/shared/looks.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = loadSimData(root);
+await initPhysics();
 let pass = 0, fail = 0;
 const ok = (cond, name) => { if (cond) pass++; else { fail++; console.log('  FAIL:', name); } };
 
@@ -1327,6 +1329,23 @@ section('windows and grilles', () => {
     tool('/obj/item/screwdriver'); click({ k: 'window', c: out.c, r: out.r }); step(3.4);
     ok(w.airBlock[out.i] === 1 && sim.director.stats.patched === patched0 + 1, 'screwing it back seals the hull again (and counts as a patch)');
   }
+});
+
+section('tiny fans seal against air', () => {
+  const { sim, step } = setup();
+  const st = sim.station, w = st.world;
+  const fans = st.props.statics.filter((x) => x.tag === 'fan');
+  const tiles = sim.level.grids.station.props.filter((q) => q.k === 'fan');
+  ok(tiles.length === 3, 'BoxStation has three tiny fans (the chapel, disposal and toxins launcher doors)');
+  ok(fans.length === 3 && fans.every((x) => x.mode === 3), 'each is drawn flat on the floor');
+  const stand = tiles.map((q) => q.y * w.W + q.x);
+  ok(stand.every((i) => w.airBlock[i] === 1 && !w.solid[i] && w.kind[i] === 1), 'a fan tile blocks air, and you can still walk on it');
+  // the plating beside the launcher door opens on space: without the fan it would empty the room behind it
+  const open = (i) => st.atmos.sinkCells.has(i) && !w.airBlock[i];
+  ok(stand.every((i) => !open(i)), 'so it is not a place the air escapes');
+  step(40);
+  const behind = stand.map((i) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dc, dr]) => w.idx((i % w.W) + dc, Math.floor(i / w.W) + dr)).find((j) => st.atmos.isCell[j] && !w.airBlock[j] && w.roof[j] === 1 && !st.atmos.sinkCells.has(j)));
+  ok(behind.every((j) => j !== undefined && st.atmos.pressureAt(j % w.W, Math.floor(j / w.W)) > 95), 'and the room behind it keeps its air');
 });
 
 section('walls and girders', () => {

@@ -75,6 +75,10 @@ export function buildPropData(world, rects, props, level, prev = null) {
       const rc = rects[p.s].avg;
       const tb = { c: p.x, r: p.y, h: TABLE_H, rgb: [rc[0] / 255, rc[1] / 255, rc[2] / 255], s: p.s };
       out.tables.push(tb); out.added.tables.push(tb);
+    } else if (p.k === 'fan') {
+      // a fan seals its tile against air (CanAtmosPass = ATMOS_PASS_NO); the big one is also in the way
+      world.airBlock[p.y * W + p.x] = 1;
+      if (p.den) world.solid[p.y * W + p.x] = 1;
     } else if (p.k === 'pane') {
       world.addEdge(p.x, p.y, p.d, true);
       const pn = { c: p.x, r: p.y, d: p.d, tag: p.t, hp: 25, dead: false };
@@ -99,6 +103,12 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const [dx, dz] = DV[p.d] || [0, 1];
         const sy = 0.7;
         sprite({ tag: 'wdoor', rect: p.s, mode: 1, x: cx + dx * (TILE / 2 - 0.12), y: 0, z: cz + dz * (TILE / 2 - 0.12), w: rc.w * PX, h: rc.h * PX * sy, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.fh - rc.oy - rc.h) * PX * sy, yaw: DIR_YAW[OPP[p.d]] ?? 0, lit: [cx, cz] });
+        break;
+      }
+      case 'fan': {
+        const rc = rects[p.s];
+        if (!rc || p.inv) break;                                           // the invisible air blocker has no picture
+        sprite({ tag: 'fan', rect: p.s, mode: 3, x: cx, y: 0.02, z: cz, w: rc.w * PX, h: rc.h * PX, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.oy + rc.h / 2 - rc.fh / 2) * PX, lit: [cx, cz] });
         break;
       }
       case 'table': {

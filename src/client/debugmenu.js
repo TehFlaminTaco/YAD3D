@@ -30,7 +30,7 @@ export class DebugMenu {
     root.querySelector('#db-x').onclick = () => this.close();
     root.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.target.blur?.(); this.close(); } });
     const tabs = root.querySelector('#db-tabs');
-    for (const [id, label] of [['items', 'Items'], ['mobs', 'Creatures'], ['me', 'Me'], ['go', 'Go'], ['world', 'Station']]) {
+    for (const [id, label] of [['items', 'Items'], ['mobs', 'Creatures'], ['me', 'Me'], ['go', 'Go'], ['world', 'Station'], ['grids', 'Grids']]) {
       const b = el('button', '', label);
       b.dataset.tab = id;
       b.onclick = () => { this.tab = id; this.render(); };
@@ -257,8 +257,39 @@ export class DebugMenu {
     grp('Round', this.button('Start now (lobby)', () => this.send('round', { what: 'start' })), this.button('End it', () => this.send('round', { what: 'end' })), this.button('Skip ahead a minute', () => this.send('skip', { sec: 60 })));
   }
 
+  // -- the grids: shuttles and pods, which can be let go, flown about and spun
+  tab_grids() {
+    const box = el('div', 'db-grids');
+    box.id = 'db-grids';
+    this.body.appendChild(box);
+    this.row(el('span', 'db-note', 'Let a shuttle go, send it out or home, spin it. Riders feel nothing. Board puts you on it.'));
+    this.drawGrids();
+    this.send('grid', { what: 'list' });
+    clearInterval(this.gridTimer);
+    this.gridTimer = setInterval(() => { if (this.open_ && this.tab === 'grids') this.send('grid', { what: 'list' }); else { clearInterval(this.gridTimer); this.gridTimer = null; } }, 1000);
+  }
+
+  drawGrids() {
+    const box = this.root.querySelector('#db-grids');
+    if (!box) return;
+    box.textContent = '';
+    for (const gr of this.grids || []) {
+      const row = el('div', 'db-person');
+      const state = gr.docked ? 'docked' : gr.flying ? `flying, ${gr.sp} m/s` : `adrift, ${gr.sp} m/s${gr.spin ? `, turning ${gr.spin}` : ''}`;
+      row.append(el('b', '', gr.name), el('i', '', `${gr.kind}, ${state}`));
+      const acts = el('span', 'db-acts');
+      const go = (what, extra = {}) => { this.send('grid', { what, id: gr.id, ...extra }); setTimeout(() => this.send('grid', { what: 'list' }), 150); };
+      if (gr.kind === 'station') { row.appendChild(acts); box.appendChild(row); continue; }
+      for (const [label, what, extra, title] of [['Out', 'out', {}, 'Fly it clear of the station'], ['Home', 'home', {}, 'Fly it back and dock it'], ['Spin', 'spin', { w: 0.5 }, 'Let it go and turn it'], ['Stop', 'stop', {}, 'Stop it where it is'], ['Board', 'board', {}, 'Put me on it']]) acts.appendChild(this.button(label, () => go(what, extra), title));
+      row.appendChild(acts);
+      box.appendChild(row);
+    }
+    if (!(this.grids || []).length) box.appendChild(el('div', 'db-more', 'Asking...'));
+  }
+
   /** An answer from the server. */
   reply(ev) {
+    if (ev.k === 'grids') { this.grids = ev.grids; if (this.open_ && this.tab === 'grids') this.drawGrids(); }
     if (ev.k === 'who') { this.who = ev.mobs; if (this.open_ && this.tab === 'mobs') this.drawWho(); }
   }
 }
