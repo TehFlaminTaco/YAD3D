@@ -21,7 +21,6 @@ export class Grid {
     this.name = o.name || decoded.bp;
     this.level = decoded.level;
     this.spawns = decoded.spawns;               // where jobs start: [{ job, x, y }] in tiles
-    this.evac = decoded.evac;                   // the emergency shuttle's overlay, until shuttles are grids of their own
     this.map = null;                            // set by GameMap.add
     this.tf = o.tf ? tfClone(o.tf) : tfIdentity();
     this.vel = [0, 0, 0];                       // m/s, in the map's coordinates
@@ -40,9 +39,16 @@ export class Grid {
     return d;
   }
 
-  /** Doors made from props added later (the evacuation overlay, for now); the numbering carries on. */
-  addDoors(protos) {
-    for (const p of protos) this.doors.push(this.makeDoor(p, this.doors.length));
+  /** The box of tiles that are not open space, [c0, r0, c1, r1] inclusive (cached: a grid does not grow beyond its array), or null for an empty grid. */
+  bounds() {
+    if (this._bounds !== undefined) return this._bounds;
+    const w = this.world;
+    let c0 = w.W, r0 = w.H, c1 = -1, r1 = -1;
+    for (let r = 0; r < w.H; r++) for (let c = 0; c < w.W; c++) {
+      if (w.kind[w.idx(c, r)] === 0) continue;
+      if (c < c0) c0 = c; if (c > c1) c1 = c; if (r < r0) r0 = r; if (r > r1) r1 = r;
+    }
+    return (this._bounds = c1 < 0 ? null : [c0, r0, c1, r1]);
   }
 
   get gravityOn() { return this.world.gravityOn; }

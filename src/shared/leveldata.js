@@ -25,7 +25,7 @@ export function decodeGrid(level, bp) {
   const ft = g.ft ? b64(g.ft) : new Uint8Array(n);          // what kind of floor (index + 1 into level.floorTypes)
   const lat = g.lat ? b64(g.lat) : new Uint8Array(n);       // lattice over space: 1 lattice, 2 catwalk
   if (kind.length !== n || area.length !== n) throw new Error(`grid "${bp}": arrays do not match its size`);
-  return { bp, level, w, h, levels: 1, kind, roof, area, floor, wall, ft, lat, props: g.props, spawns: g.spawns || [], evac: g.evac };
+  return { bp, level, w, h, levels: 1, kind, roof, area, floor, wall, ft, lat, props: g.props, spawns: g.spawns || [] };
 }
 
 export function makeRects(sprJson) {

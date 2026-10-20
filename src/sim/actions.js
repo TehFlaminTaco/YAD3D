@@ -184,7 +184,7 @@ export class Actions {
     const sim = this.sim, m = c.mob;
     if (!m || m.dead || m.body.crit || m.stunned > 0 || !m.humanoid || m.inside) return;
     if (m.cuffed) { sim.people.restrained(m); return; }
-    if (msg.yaw !== undefined) { m.yaw = msg.yaw; m.pitch = clamp(msg.pitch || 0, -1.5, 1.5); }
+    if (msg.yaw !== undefined) { m.yaw = sim.yawIn(m, msg.yaw, msg.yg); m.pitch = clamp(msg.pitch || 0, -1.5, 1.5); }
     if (m.busy) { this.cancelBusy(m, 'interrupt'); return; }
     if (m.cool > 0) return;
     const held = m.held;

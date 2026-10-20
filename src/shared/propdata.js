@@ -40,7 +40,7 @@ export const ITEM_SCALE = 0.5;               // SS13 item icons are drawn big fo
 /**
  * Derive every prop-related list from the level's prop records. Pure data (no rendering): the server
  * uses it for simulation, the client for building sprites. Also sets collision flags on the world.
- * Call with `prev` to append (shuttle overlay). Order is deterministic, so indexes agree on both sides.
+ * Call with `prev` to append to an existing set. Order is deterministic, so indexes agree on both sides.
  */
 export function buildPropData(world, rects, props, level, prev = null) {
   const W = world.W;

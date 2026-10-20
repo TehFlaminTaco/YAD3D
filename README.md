@@ -162,7 +162,7 @@ changing intent.
 ## How it is put together
 
 ```
-assets/        generated: level.json (shared art and item tables, the BoxStation grid, the map that places it), terrain/sprite atlases, sounds,
+assets/        generated: level.json (shared art and item tables, a grid for BoxStation and one for each shuttle, the map that docks them), terrain/sprite atlases, sounds,
                ui.png + ui.json (SS13 HUD icons), overlays/ (SS13 full-screen overlays); fonts/ (copied, see ATTRIBUTION.md)
 data/          generated: jobs.json (jobs, slots, access, outfits), contents.json
 tools/         Python data pipeline (DMI/DMM/DM readers), test harnesses, screenshot helper

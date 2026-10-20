@@ -482,8 +482,8 @@ section('structures', () => {
   const w = sim.world, W = w.W, TL = TILE;
   const clear = () => { inbox.a.length = 0; inbox.b.length = 0; };
   const free = (c, r) => w.inb(c, r) && w.kind[r * W + c] === 1 && !w.solid[r * W + c] && !w.dyn[r * W + c] && !w.edge[r * W + c];
-  // a closet with three free tiles in a row on one side of it (room to drag it along)
-  const lineOf = (it) => [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dc, dr]) => [1, 2, 3].every((k) => free(it.c + dc * k, it.r + dr * k)));
+  // a closet with six free tiles in a row on one side of it (room to drag it along, and to stand beside it afterwards)
+  const lineOf = (it) => [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dc, dr]) => [1, 2, 3, 4, 5, 6].every((k) => free(it.c + dc * k, it.r + dr * k)));
   const spot = (m, x, z) => { m.x = x; m.z = z; m.vx = m.vz = 0; m.cool = 0; m.stunned = 0; };
   const tileSpot = (m, c, r) => spot(m, c * TL + TL / 2, r * TL + TL / 2);
   const ctrlClick = (c, target) => { sim.handle(c, { t: 'click', target, ctrl: true }); step(0.1); };
@@ -1331,6 +1331,7 @@ section('windows and grilles', () => {
 
 section('walls and girders', () => {
   const { sim, A, a, inbox, step, evs, hand } = setup({ debug: true });
+  sim.director.strikes = 99; sim.director.carpTimer = 1e9;    // no meteor strikes and no carp this shift: where they land is not what this is about
   const w = sim.world, I = (c, r) => r * w.W + c, TERR = w.level.terrain;
   const tool = (path, extra = {}) => { const it = sim.newItem(path, extra); hand(a, it, 0); a.active = 0; a.cool = 0; return it; };
   const welder = () => { const it = tool('/obj/item/weldingtool'); it.lit = true; it.fuel = 20; return it; };

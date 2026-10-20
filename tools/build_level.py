@@ -359,7 +359,9 @@ GAME_ITEMS = [
 
 
 def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
-    """Classify tiles + props for one (possibly shuttle-stamped) grid. Registries are shared across calls."""
+    """Classify tiles + props for one grid. Registries (areas, wall variants, floor types, cells, sprites) are shared across calls.
+    `full` is the first call (the station): only it makes the things that belong to the game as a whole (the loot pool, the mob sets, the
+    tile table, the item definitions for jobs and closets); the others (shuttles) add the definitions for the items lying on them."""
     areas = shared['areas']
     area_idx = shared['area_idx']
     kind = bytearray(Wd * Ht)           # 0 space 1 floor 2 wall/window block 3 lattice-over-space
@@ -821,7 +823,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
 
     # loot pool sprites
     pool = []
-    for pth, tag in LOOT_POOL:
+    for pth, tag in (LOOT_POOL if full else []):
         r = resolve(pth)
         st, icon = r.get('icon_state'), r.get('icon')
         if isinstance(st, str) and icon_ok(icon, st):
@@ -831,9 +833,9 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
 
     # item definitions for the game systems: every path the jobs/outfits/containers refer to, plus the map's loot pool
     itemdefs = {}
-    want = list(GAME_ITEMS) + [q for q, _ in LOOT_POOL]
+    want = (list(GAME_ITEMS) + [q for q, _ in LOOT_POOL]) if full else []
     jobs_path = os.path.join(ROOT, 'data', 'jobs.json')
-    if os.path.exists(jobs_path):
+    if full and os.path.exists(jobs_path):
         for j in json.load(open(jobs_path))['jobs']:
             o = j['outfit']
             for k, v in o.items():
@@ -852,10 +854,10 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                     yield from flat_rows(sub)
             else:
                 yield row
-    for ct in sorted(shared.get('closet_types', ())):
+    for ct in (sorted(shared.get('closet_types', ())) if full else []):
         want += [row[0] for row in flat_rows(pop.rows(ct))]
     cpath = os.path.join(ROOT, 'data', 'contents.json')
-    if os.path.exists(cpath):
+    if full and os.path.exists(cpath):
         for k, v in json.load(open(cpath)).items():
             if k.startswith('/'):
                 want.append(k)
@@ -884,7 +886,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
         else:
             missing['ITEM ' + pth] += 1
 
-    mobs = build_mobs(spr)
+    mobs = build_mobs(spr) if full else {}
 
     # spawn landmarks
     spawns = []
@@ -910,8 +912,8 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
             descs[pth] = [clean_name(r.get('name', '')), dsc if isinstance(dsc, str) else '']
     # what each tile item turns a bit of plating into (turf_type): the floor type and the cell it is drawn with
     tiles = {}
-    for tp_ in ('/obj/item/stack/tile/plasteel', '/obj/item/stack/tile/wood', '/obj/item/stack/tile/carpet', '/obj/item/stack/tile/carpet/blue',
-                '/obj/item/stack/tile/grass', '/obj/item/stack/tile/circuit', '/obj/item/stack/tile/mineral/titanium', '/obj/item/stack/tile/mineral/plastitanium'):
+    for tp_ in (('/obj/item/stack/tile/plasteel', '/obj/item/stack/tile/wood', '/obj/item/stack/tile/carpet', '/obj/item/stack/tile/carpet/blue',
+                '/obj/item/stack/tile/grass', '/obj/item/stack/tile/circuit', '/obj/item/stack/tile/mineral/titanium', '/obj/item/stack/tile/mineral/plastitanium') if full else ()):
         turf = dm.lookup(tp_).get('turf_type')
         if isinstance(turf, str) and turf.strip().startswith('/turf/'):
             turf = turf.strip()
@@ -923,30 +925,10 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                 pool=pool, itemdefs=itemdefs, mobs=mobs, descs=descs)
 
 
-# --------------------------------------------------------------------------- shuttle stamping
+# --------------------------------------------------------------------------- shuttles: each is a grid of its own
 
-CCW = {N: W, W: S, S: E, E: N}
-
-
-def rotate_dir(d, k):
-    for _ in range(k % 4):
-        out = 0
-        for bit in (N, S, E, W):
-            if d & bit:
-                out |= CCW[bit]
-        d = out
-    return d
-
-
-def rot_vec(dx, dy, k):
-    for _ in range(k % 4):
-        dx, dy = -dy, dx
-    return dx, dy
-
-
-def stamp(grid, keys, template, sx, sy, tag, Wd, Ht):
-    """Overlay a shuttle template so its mobile-port tile sits on (sx, sy). Picks the rotation that
-    collides least with non-space tiles (same effect as SS13's dock transform)."""
+def load_template(template):
+    """A shuttle template's tiles (DMM coordinates), its atoms by key, and the tile its mobile docking port sits on."""
     tg, tk = dmm.parse(os.path.join(TREE, '_maps/shuttles', template + '.dmm'))
     port = None
     for pos, key in tg.items():
@@ -955,16 +937,49 @@ def stamp(grid, keys, template, sx, sy, tag, Wd, Ht):
                 port = pos
     if port is None:
         raise SystemExit('no mobile port in ' + template)
+    return tg, tk, port
 
-    def turf_of(atoms):
-        for p, v in atoms:
-            if p.startswith('/turf'):
-                return p
-        return None
 
+def turf_of(atoms):
+    for p, v in atoms:
+        if p.startswith('/turf'):
+            return p
+    return None
+
+
+def template_grid(tg, tk, port):
+    """A shuttle template as a grid of its own, ready for process(): its tiles in a box of their own (the `template_noop` tiles are open space), without
+    the docking port and the template's area. Returns the grid, its keys, its width and height, and the tile the port is on in the grid's own
+    (col, row), which is where the grid is held to the dock."""
+    live = {pos for pos, key in tg.items() if turf_of(tk[key]) not in (None, '/turf/template_noop')}
+    xs, ys = [x for x, _ in live], [y for _, y in live]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    pad = 1                                     # a tile of open space all round: a body in a doorway reaches past the hull, and that must not be "off the grid"
+    grid2, keys2 = {}, {}
+    for y in range(y0 - pad, y1 + pad + 1):
+        for x in range(x0 - pad, x1 + pad + 1):
+            if (x, y) in live:
+                atoms = [(p, v) for p, v in tk[tg[(x, y)]] if not (p.startswith('/obj/docking_port') or p.startswith('/area/template'))]
+            else:
+                atoms = [('/turf/open/space/basic', {}), ('/area/space', {})]
+            nk = 'T%d_%d' % (x, y)
+            keys2[nk] = atoms
+            grid2[(x - x0 + pad + 1, y - y0 + pad + 1)] = nk
+    return grid2, keys2, x1 - x0 + 1 + 2 * pad, y1 - y0 + 1 + 2 * pad, (port[0] - x0 + pad, y1 - port[1] + pad)
+
+
+def rot_vec(dx, dy, k):
+    for _ in range(k % 4):
+        dx, dy = -dy, dx
+    return dx, dy
+
+
+def dock_rotation(grid, keys, tg, tk, port, sx, sy, Wd, Ht):
+    """How many quarter turns (counter-clockwise, seen from above) put this shuttle at the dock (sx, sy) (DMM coordinates) so that it overlaps the
+    station's own tiles least: the same choice SS13's dock transform makes."""
     best = None
     for rot in range(4):
-        conflicts, placed = 0, []
+        conflicts = 0
         for (x, y), key in tg.items():
             tp = turf_of(tk[key])
             if tp is None or tp == '/turf/template_noop':
@@ -977,39 +992,21 @@ def stamp(grid, keys, template, sx, sy, tag, Wd, Ht):
             tgt = turf_of(keys[grid[(tx, ty)]])
             if tgt and not tgt.startswith('/turf/open/space'):
                 conflicts += 1
-            placed.append((tx, ty, key))
         if best is None or conflicts < best[0]:
-            best = (conflicts, rot, placed)
-    conflicts, rot, placed = best
-    for tx, ty, key in placed:
-        atoms = []
-        for p, v in tk[key]:
-            if p.startswith('/obj/docking_port') or p.startswith('/area/template'):
-                continue
-            v = dict(v)
-            if rot and p.startswith('/obj'):
-                d = 2
-                if 'dir' in v:
-                    try:
-                        d = int(v['dir'])
-                    except ValueError:
-                        d = 2
-                v['dir'] = str(rotate_dir(d, rot))
-                for pk, other in (('pixel_x', 'pixel_y'), ('pixel_y', 'pixel_x')):
-                    pass
-                px = int(v['pixel_x']) if v.get('pixel_x', '').lstrip('-').isdigit() else 0
-                py = int(v['pixel_y']) if v.get('pixel_y', '').lstrip('-').isdigit() else 0
-                if px or py:
-                    nx, ny = rot_vec(px, py, rot)
-                    v['pixel_x'], v['pixel_y'] = str(nx), str(ny)
-            atoms.append((p, v))
-        has_area = any(p.startswith('/area') for p, _ in atoms)
-        if not has_area:
-            atoms.extend((p, v) for p, v in keys[grid[(tx, ty)]] if p.startswith('/area'))
-        nk = '%s_%d_%d' % (tag, tx, ty)
-        keys[nk] = atoms
-        grid[(tx, ty)] = nk
-    print('  stamped %-20s at (%3d,%3d) rot %3d conflicts %d tiles %d' % (template, sx, sy, rot * 90, conflicts, len(placed)))
+            best = (conflicts, rot)
+    return best[1], best[0]
+
+
+def dock_pose(rot, port_cr, dock_cr):
+    """Where a grid whose port tile is (col, row) `port_cr` in its own frame must be put, and turned `rot` quarter turns, so that this tile lies on the
+    tile `dock_cr` of the station: [x, y, z] metres and a rotation about the vertical axis as a quaternion [x, y, z, w] (a positive turn is counter-clockwise from above)."""
+    import math
+    th = rot * math.pi / 2
+    c, s_ = round(math.cos(th)), round(math.sin(th))
+    lx, lz = port_cr[0] * 2 + 1, port_cr[1] * 2 + 1                  # the port tile's middle, in the grid's frame
+    rx, rz = lx * c + lz * s_, -lx * s_ + lz * c                      # turned
+    px, pz = dock_cr[0] * 2 + 1 - rx, dock_cr[1] * 2 + 1 - rz         # so that it lands on the dock tile's middle
+    return [px, 0, pz], [0, math.sin(th / 2), 0, math.cos(th / 2)]
 
 
 # (template, dock tile in DMM coordinates) for shuttles that sit at their docks when the round starts
@@ -1028,29 +1025,37 @@ def build(mapname):
     Wd, Ht = dmm.dims(grid)
     print('  grid', Wd, Ht, 'keys', len(keys), 'access defs', len(ACCESS_NUM))
     H = Ht
-    # the dock tiles above are listed (x, y-from-top); convert to DMM y (from bottom)
-    for n, (tpl, sx, sy_top) in enumerate(ROUNDSTART_DOCKS):
-        stamp(grid, keys, tpl, sx, H - sy_top, 'RS%d' % n, Wd, Ht)
-
     cells = Cells()
     spr = Sprites()
     shared = {'areas': [], 'area_idx': {}, 'wall_variants': [], 'wall_variant_idx': {}, 'floor_types': [], 'floor_type_idx': {}}
-    base = process(grid, keys, cells, spr, shared, Wd, Ht)
+    base = process(grid, keys, cells, spr, shared, Wd, Ht)            # the station alone: no shuttle is stamped into it
 
-    # emergency shuttle: processed on a copy, stored as an overlay applied when it docks
-    grid_e, keys_e = dict(grid), dict(keys)
+    # each shuttle is a grid of its own, built once per template; the docks (listed as (x, y-from-top)) place it
+    blueprints, bases, placements, docks = {}, {}, [], {}
+    itemdefs, descs = dict(base['itemdefs']), dict(base['descs'])
+
+    def shuttle(template, sx, sy_top, kind, name):
+        if template not in blueprints:
+            tg, tk, port = load_template(template)
+            g2, k2, w2, h2, port_cr = template_grid(tg, tk, port)
+            print('  shuttle', template, w2, 'x', h2)
+            res = process(g2, k2, cells, spr, shared, w2, h2, full=False)
+            blueprints[template] = res
+            bases[template] = (tg, tk, port, port_cr, w2, h2)
+            itemdefs.update(res['itemdefs'])
+            descs.update(res['descs'])
+        tg, tk, port, port_cr, w2, h2 = bases[template]
+        sy = H - sy_top
+        rot, conflicts = dock_rotation(grid, keys, tg, tk, port, sx, sy, Wd, Ht)
+        p, q = dock_pose(rot, port_cr, (sx - 1, sy_top))
+        print('  dock %-20s at (%3d,%3d) turned %3d, conflicts %d' % (template, sx, sy_top, rot * 90, conflicts))
+        return {'bp': template, 'kind': kind, 'name': name, 'p': p, 'q': q}
+
+    for template, sx, sy_top in ROUNDSTART_DOCKS:
+        pod = template.startswith('escape_pod')
+        placements.append(shuttle(template, sx, sy_top, 'pod' if pod else 'shuttle', 'Escape Pod' if pod else ' '.join(w.capitalize() for w in template.split('_')[:-1]) + ' Shuttle'))
     tpl, sx, sy_top = EMERGENCY_DOCK
-    stamp(grid_e, keys_e, tpl, sx, H - sy_top, 'EM', Wd, Ht)
-    emerg = process(grid_e, keys_e, cells, spr, shared, Wd, Ht, full=False)
-    changed = [i for i in range(Wd * Ht)
-               if (emerg['kind'][i], emerg['floor'][i], emerg['wall'][i], emerg['area'][i], emerg['roof'][i]) !=
-               (base['kind'][i], base['floor'][i], base['wall'][i], base['area'][i], base['roof'][i])]
-    cset = set(changed)
-    overlay = {
-        'tiles': [[i, emerg['kind'][i], emerg['floor'][i], emerg['wall'][i], emerg['area'][i], emerg['roof'][i]] for i in changed],
-        'props': [p for p in emerg['props'] if p['y'] * Wd + p['x'] in cset],
-    }
-    print('  emergency overlay: %d tiles, %d props' % (len(changed), len(overlay['props'])))
+    docks['emergency'] = shuttle(tpl, sx, sy_top, 'shuttle', 'Emergency Shuttle')
 
     areas, wall_variants = shared['areas'], shared['wall_variants']
     ceiling_cell = cells.add(sl.compose([('icons/turf/floors.dmi', 'plating', S, '#8a8f99', None)], (32, 32)))
@@ -1090,8 +1095,6 @@ def build(mapname):
     def b64u16(a):
         return base64.b64encode(struct.pack('<%dH' % len(a), *a)).decode()
 
-    descs = dict(base['descs'])
-    descs.update(emerg['descs'])
     # What every grid shares (the art tables, areas, item definitions) sits at the top; each grid's own map (its arrays, props, spawn points)
     # is a "blueprint" under `grids`, and a `maps` entry says which blueprints float in it and where (a map is a space of grids).
     station = {
@@ -1099,20 +1102,29 @@ def build(mapname):
         'ft': b64u8(base['ft']), 'lat': b64u8(base['lat']),
         'kind': b64u8(base['kind']), 'roof': b64u8(base['roof']),
         'area': b64u16(base['area']), 'floor': b64u16(base['floor']), 'wall': b64u16(base['wall']),
-        'props': base['props'], 'spawns': base['spawns'], 'evac': overlay,
+        'props': base['props'], 'spawns': base['spawns'],
     }
+    grids = {'station': station}
+    for template, res in blueprints.items():
+        w2, h2 = bases[template][4], bases[template][5]
+        grids[template] = {
+            'w': w2, 'h': h2, 'ft': b64u8(res['ft']), 'lat': b64u8(res['lat']), 'kind': b64u8(res['kind']), 'roof': b64u8(res['roof']),
+            'area': b64u16(res['area']), 'floor': b64u16(res['floor']), 'wall': b64u16(res['wall']),
+            'props': res['props'], 'spawns': res['spawns'],
+        }
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
         'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
-        'itemdefs': base['itemdefs'], 'mobs': base['mobs'], 'descs': descs,
-        'grids': {'station': station},
-        'maps': {'station': {'name': mapname, 'grids': [{'bp': 'station', 'kind': 'station', 'p': [0, 0, 0], 'q': [0, 0, 0, 1]}]}},
+        'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
+        'grids': grids,
+        'maps': {'station': {'name': mapname, 'grids': [{'bp': 'station', 'kind': 'station', 'name': mapname, 'p': [0, 0, 0], 'q': [0, 0, 0, 1]}] + placements,
+                             'docks': docks}},
         'map': 'station',
     }
     # what each closet type holds (sim only): rows [item, count, chance %, stack amount] or {'pick': [[weight, rows]]}
-    defs, pop = base['itemdefs'], populate()
+    defs, pop = itemdefs, populate()
 
     def prune(rows):
         out = []
@@ -1125,7 +1137,7 @@ def build(mapname):
     closet_data = {ct: prune(pop.rows(ct)) for ct in sorted(shared.get('closet_types', ()))}
     with open(os.path.join(ROOT, 'data', 'closets.json'), 'w') as f:
         json.dump({'_comment': 'Built by tools/build_level.py from the DM PopulateContents() of each closet type on the map.', **closet_data}, f, separators=(',', ':'))
-    build_chars.build(base['itemdefs'], resolve, dm, OUT)
+    build_chars.build(itemdefs, resolve, dm, OUT)
     print('  closets: %d types, %d with contents' % (len(closet_data), sum(1 for v in closet_data.values() if v)))
     with open(os.path.join(OUT, 'level.json'), 'w') as f:
         json.dump(level, f, separators=(',', ':'))

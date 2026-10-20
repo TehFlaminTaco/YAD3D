@@ -7,7 +7,8 @@ import { Sim } from '../src/sim/sim.js';
 import { Replica } from '../src/client/state.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
 import { place } from '../src/sim/inventory.js';
-import { qYaw, tfPoint } from '../src/shared/math3.js';
+import { qYaw, qToYaw, tfPoint } from '../src/shared/math3.js';
+import { KIND } from '../src/shared/config.js';
 import { makeBlueprint, withGrids } from './gridkit.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -231,6 +232,203 @@ section('the client replica', () => {
   const rep2 = new Replica({ level: data.level, rects: data.rects }, { ...w2, you: C.id });
   ok(rep2.grids.get(room.id).world.kind[room.world.idx(2, 2)] === 2 && rep2.grids.get(room.id).doors[0].state !== 'closed', 'someone who joins later gets each grid as it is now');
   ok(Object.keys(rep.compat).length === 0, 'the replica never fell back on a station shortcut');
+});
+
+// ---------------------------------------------------------------------------------------------------- the real level: shuttles docked at the station
+/** A real round: the level's own map (the station and every shuttle docked at it), one player (an engineer) and `bots` NPCs. */
+function realRound(bots = 0) {
+  const sim = new Sim(DATA, { bots });
+  const inbox = [];
+  const A = sim.addClient('Alice', (m) => inbox.push(m));
+  sim.handle(A, { t: 'lobby', op: 'job', id: 'station_engineer' });
+  sim.handle(A, { t: 'lobby', op: 'ready', v: true });
+  sim.handle(A, { t: 'lobby', op: 'start' });
+  const step = (sec) => { for (let k = 0; k < sec / SIM_DT; k++) sim.step(SIM_DT); };
+  return { sim, A, a: A.mob, inbox, step };
+}
+
+/** Each door of a shuttle that opens onto the station: { grid, door, tile: the station tile beside it, back: the station tile behind that (to start a walk from), at: the door in the map }. */
+function seamsOf(sim) {
+  const st = sim.station, w = st.world, out = [];
+  for (const g of sim.grids.values()) {
+    if (g === st) continue;
+    for (const door of g.doors) {
+      const p = g.worldPoint(door.x, 0, door.z), c0 = Math.floor(p[0] / TILE), r0 = Math.floor(p[2] / TILE);
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const c = c0 + dc, r = r0 + dr, bc = c + dc, br = r + dr;
+        if (w.kindAt(c, r) === KIND.FLOOR && w.kindAt(bc, br) === KIND.FLOOR && !w.solid[w.idx(bc, br)] && !w.dyn[w.idx(bc, br)] && !w.edge[w.idx(bc, br)]) { out.push({ grid: g, door, tile: [c, r], back: [bc, br], at: p }); break; }
+      }
+    }
+  }
+  return out;
+}
+
+const degrees = (g) => Math.round(qToYaw(g.tf.q) * 180 / Math.PI);
+
+section('shuttles are docked grids', () => {
+  const { sim, a } = realRound();
+  const st = sim.station;
+  const shuttles = [...sim.grids.values()].filter((g) => g !== st);
+  ok(shuttles.length === 9 && shuttles.filter((g) => g.kind === 'pod').length === 4, 'the level docks five shuttles and four pods, each a grid of its own');
+  ok(shuttles.every((g) => g.map === st.map && g.world.W < 20 && g.world.gravityOn), 'in the station\'s map, small, each with its own gravity');
+  const turned = new Set(shuttles.map(degrees));
+  ok(turned.has(0) && turned.has(90) && (turned.has(-90) || turned.has(270)), 'some are turned a quarter turn either way, as the dock needs');
+  ok(st.world.neighbors.length === 9 && shuttles.every((g) => g.world.neighbors.length === 1 && g.world.neighbors[0].grid === st), 'each lies against the station and the station against each');
+  const cov = (g) => { let n1 = 0, n2 = 0; for (const v of g.world.covered) { if (v === 1) n1++; else if (v === 2) n2++; } return [n1, n2]; };
+  const [floorCov, wallCov] = cov(st);
+  ok(floorCov > 50 && wallCov > 100, 'the station\'s space under them is covered: floor and wall');
+  ok(shuttles.every((g) => cov(g)[0] > 0), 'and so is each one\'s space where the station is');
+  const p = shuttles[0].worldPoint(15, 0, 15);
+  ok(st.world.isOpenSpace(0, 0) && !st.world.isOpenSpace(Math.floor(p[0] / TILE), Math.floor(p[2] / TILE)), 'covered space is not open space');
+  ok(a.grid === st && a.map === st.map, 'the player starts on the station');
+  ok(shuttles.every((g) => { let best = 0; for (let i = 0; i < g.world.n; i++) if (g.atmos.isCell[i]) best = Math.max(best, g.atmos.pressureAt(i % g.world.W, Math.floor(i / g.world.W))); return best > 90; }), 'each has its own air');
+});
+
+section('the air does not leak at a docking seam', () => {
+  const { sim, step } = realRound();
+  const st = sim.station, seams = seamsOf(sim);
+  ok(seams.length >= 8, `found the docking doors (${seams.length})`);
+  const sm = seams.find((s) => s.grid.bp === 'arrival_box');
+  const press = (g, c, r) => g.atmos.pressureAt(c, r);
+  // open both doors of a seam and wait: the station corridor and the shuttle keep their air (nothing vents into the space between)
+  const sDoor = st.world.doorAt.get(st.world.idx(...sm.tile));
+  sim.openDoor(sDoor, null, true); sim.openDoor(sm.door, null, true);
+  step(20);
+  ok(press(st, ...sm.back) > 95, 'the station corridor beside it stays pressurized');
+  const dc = Math.floor(sm.door.x / TILE), dr = Math.floor(sm.door.z / TILE);
+  ok(press(sm.grid, dc, dr) > 95, 'and so does the shuttle with its door open');
+  ok(!st.world.ventTiles().length && !sm.grid.world.ventTiles().length, 'neither has a hull breach');
+  // a shuttle that empties does not pull the station's air after it
+  sm.grid.atmos.o2.fill(0); sm.grid.atmos.n2.fill(0);
+  step(5);
+  ok(press(st, ...sm.back) > 90, 'the station\'s air stays when the shuttle\'s is gone');
+});
+
+section('walking on and off a docked shuttle', () => {
+  const { sim, A, a, step } = realRound();
+  const st = sim.station, seams = seamsOf(sim);
+  const done = new Set(); let seq = 0;
+  a.access = new Set(Array.from({ length: 300 }, (_, i) => i));                      // the docks of cargo and mining are not for engineers
+  for (const sm of seams) {
+    // one walk per shuttle (and per kind of turn), straight at the shuttle's door from two tiles back
+    const key = sm.grid.bp + degrees(sm.grid);
+    if (done.has(key)) continue;
+    done.add(key);
+    a.grid = st; a.map = st.map; a.x = sm.back[0] * TILE + 1; a.z = sm.back[1] * TILE + 1; a.vx = a.vz = 0; a.dirty = true;
+    const yawWorld = Math.atan2(-(sm.at[0] - a.x), -(sm.at[2] - a.z));
+    const worldYaw = () => a.yaw + qToYaw(a.grid.tf.q);
+    let last = sim.worldPos(a), jump = 0;
+    const speeds = [];
+    let yawSeen = null, yawDrift = 0;
+    for (let q = 0; q < 280 && a.grid !== sm.grid; q++) {                             // up to 14 seconds of walking, one input a tick, always facing the same way in the world
+      sim.handle(A, { t: 'input', list: [{ seq: ++seq, dt: 0.05, f: 1, b: 0, l: 0, r: 0, run: 0, yaw: yawWorld - qToYaw(a.grid.tf.q), pitch: 0, g: a.grid.id }] });
+      step(0.05);
+      const w = sim.worldPos(a);
+      jump = Math.max(jump, Math.hypot(w[0] - last[0], w[2] - last[2]));
+      last = w;
+      speeds.push(Math.hypot(a.vx, a.vz));
+      const wy = worldYaw();
+      yawSeen ??= wy;
+      yawDrift = Math.max(yawDrift, Math.abs(Math.atan2(Math.sin(wy - yawSeen), Math.cos(wy - yawSeen))));
+    }
+    const tag = `${sm.grid.bp} (turned ${degrees(sm.grid)})`;
+    ok(a.grid === sm.grid, `${tag}: walking through its door puts you on it`);
+    ok(jump < 0.25, `${tag}: your place in the map never jumps (largest step ${jump.toFixed(3)} m: a walking pace is 0.17)`);
+    ok(Math.hypot(a.vx, a.vz) > 2 && Math.max(...speeds) < 4.2, `${tag}: and you keep your speed`);
+    ok(yawDrift < 0.05, `${tag}: and face the same way in the map (${yawDrift.toFixed(3)} rad off)`);
+    const c = Math.floor(a.x / TILE), r = Math.floor(a.z / TILE), gw = sm.grid.world;
+    ok(gw.inb(c, r) && gw.kind[gw.idx(c, r)] === KIND.FLOOR, `${tag}: onto its floor`);
+    // and back out again
+    for (let q = 0; q < 280 && a.grid !== st; q++) {
+      sim.handle(A, { t: 'input', list: [{ seq: ++seq, dt: 0.05, f: 1, b: 0, l: 0, r: 0, run: 0, yaw: yawWorld + Math.PI - qToYaw(a.grid.tf.q), pitch: 0, g: a.grid.id }] });
+      step(0.05);
+    }
+    ok(a.grid === st, `${tag}: and turning round, back out onto the station`);
+  }
+  ok(done.size >= 6, `walked through ${done.size} different docks`);
+});
+
+section('an input made in the old frame, just after a handover', () => {
+  const { sim, A, a, step } = realRound();
+  const st = sim.station, sm = seamsOf(sim).find((s) => s.grid.bp === 'mining_large');     // turned a quarter
+  a.grid = sm.grid; a.map = st.map; a.x = 9; a.z = 9; a.vx = a.vz = 0;
+  // the client made this facing in the station's frame (north); the server has already moved the player to the shuttle's, which is turned
+  const yawStation = 0, expect = yawStation + sim.frameYaw(st, sm.grid);
+  sim.handle(A, { t: 'input', list: [{ seq: 1, dt: 0.05, f: 0, b: 0, l: 0, r: 0, run: 0, yaw: yawStation, pitch: 0, g: st.id }] });
+  step(0.1);
+  ok(Math.abs(Math.atan2(Math.sin(a.yaw - expect), Math.cos(a.yaw - expect))) < 1e-9, 'it is turned into the frame the player is in now');
+  sim.handle(A, { t: 'input', list: [{ seq: 2, dt: 0.05, f: 0, b: 0, l: 0, r: 0, run: 0, yaw: 0.7, pitch: 0, g: sm.grid.id }] });
+  step(0.1);
+  ok(near(a.yaw, 0.7, 1e-9), 'one made in this frame is taken as it is');
+});
+
+section('a docked hull is solid from the station\'s side too', () => {
+  const { sim } = realRound();
+  const st = sim.station, w = st.world;
+  const mid = (c, r) => [c * TILE + 1, r * TILE + 1];
+  let wallT = null, floorT = null, openT = null;
+  for (let r = 0; r < w.H; r++) for (let c = 0; c < w.W; c++) {
+    const i = w.idx(c, r);
+    if (w.kind[i] !== KIND.SPACE) continue;
+    if (w.covered[i] === 2 && !wallT) wallT = [c, r];
+    if (w.covered[i] === 1 && !floorT) {
+      const nb = w.neighbors.find((n) => { const [x, z] = mid(c, r); const q = n.world; const bc = Math.floor((n.a * x + n.b * z + n.tx) / TILE), br = Math.floor((n.c * x + n.d * z + n.tz) / TILE); return q.inb(bc, br) && q.kind[q.idx(bc, br)] === KIND.FLOOR; });
+      const [x, z] = mid(c, r);
+      if (nb && !nb.world.collidesTiles(nb.a * x + nb.b * z + nb.tx, nb.c * x + nb.d * z + nb.tz, 0.3, null, false)) floorT = [c, r];
+    }
+    if (!w.covered[i] && !openT) openT = [c, r];
+  }
+  ok(wallT && floorT && openT, 'found space under a docked wall, under a docked floor, and open');
+  ok(w.collides(...mid(...wallT), 0.3), 'the space under a docked wall blocks you');
+  ok(!w.collides(...mid(...floorT), 0.3), 'under a docked floor (nothing in the way) it does not');
+  ok(!w.collides(...mid(...openT), 0.3), 'open space is not solid');
+  // the station's own tiles still block as before, and the edge of the map is a wall
+  ok(w.collides(-0.1, 100, 0.3), 'and the edge of the array is a wall');
+});
+
+section('the emergency shuttle comes and goes', () => {
+  const { sim, A, inbox, step } = realRound(10);
+  const st = sim.station, d = sim.director;
+  const before = sim.grids.size;
+  ok(!d.evacGrid && sim.docks.emergency?.bp === 'emergency_box', 'it is not there until it arrives, and the map says where it docks');
+  inbox.length = 0;
+  d.dockShuttle();
+  step(0.1);
+  const eg = d.evacGrid;
+  ok(eg && sim.grids.size === before + 1 && eg.map === st.map && eg.kind === 'shuttle', 'docking adds it as a grid of the map');
+  const added = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'grid+');
+  ok(added.length === 1 && added[0].g === eg.id && added[0].bp === 'emergency_box' && added[0].tf.p.length === 3, 'everyone is told, with its blueprint and pose');
+  ok(st.world.neighbors.some((n) => n.grid === eg) && eg.world.neighbors.length === 1, 'it lies against the station');
+  ok(d.seams.length >= 2 && d.seams.every((s) => st.world.kindAt(...s.tile) === KIND.FLOOR), 'and its doors open onto station floor');
+  // a client that joins now is told about it too, and builds it
+  const late = []; const C = sim.addClient('Cara', (m) => late.push(m));
+  const w2 = late.find((m) => m.t === 'welcome');
+  ok(w2.grids.some((g) => g.g === eg.id), 'a later joiner\'s welcome lists it');
+  const rep = new Replica({ level: DATA.level, rects: DATA.rects }, { ...w2, you: C.id });
+  ok(rep.grids.has(eg.id) && rep.station.world.neighbors.length === st.world.neighbors.length, 'and the replica has it, linked like the server');
+  // the crew run for it (NPCs), and whoever is aboard has escaped
+  // one of them is standing two tiles from a door: she walks to it, through it and is aboard
+  const npc = [...sim.mobs.values()].find((m) => m.kind === 'human' && !m.client && !m.dead);
+  const seam = d.seams[0], back = [seam.tile[0] + (seam.tile[0] - Math.floor(seam.at[0] / TILE)), seam.tile[1] + (seam.tile[1] - Math.floor(seam.at[1] / TILE))];
+  npc.grid = st; npc.x = back[0] * TILE + 1; npc.z = back[1] * TILE + 1; npc.path = null; npc.evacOrdered = false; npc.boardTo = null;
+  npc.access = new Set(Array.from({ length: 300 }, (_, i) => i));
+  step(25);
+  ok(npc.evacuated && npc.grid === eg, 'an NPC beside a door of it walks through and boards');
+  step(60);
+  const boarded = [...sim.mobs.values()].filter((m) => m.kind === 'human' && !m.client && m.evacuated);
+  ok(boarded.length >= 2 && boarded.every((m) => m.grid === eg), `and others make their way there (${boarded.length} aboard)`);
+  // it leaves: the grid goes, with everyone aboard
+  late.length = 0;
+  d.depart();
+  step(0.1);
+  ok(!sim.grids.has(eg.id) && !st.map.grids.has(eg.id) && st.world.neighbors.length === 9, 'departing removes it from the map');
+  const evs = late.filter((m) => m.t === 'ev').flatMap((m) => m.list);
+  const gone = evs.filter((e) => e.e === 'grid-');
+  ok(gone.length === 1 && gone[0].g === eg.id, 'and everyone is told');
+  for (const ev of evs) rep.apply(ev);
+  ok(!rep.grids.has(eg.id) && rep.station.world.neighbors.length === 9, 'the replica follows');
+  ok(boarded.every((m) => m.evacuated) && sim.round.state === 'ending', 'the people aboard stay escaped and the round ends');
+  void A;
 });
 
 section('no single-grid assumptions are left in the source', () => {

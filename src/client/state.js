@@ -1,8 +1,8 @@
-import { TILE, KIND } from '../shared/config.js';
+import { TILE } from '../shared/config.js';
 import { Grid } from '../shared/grid.js';
 import { GameMap } from '../shared/gamemap.js';
 import { decodeGrid } from '../shared/leveldata.js';
-import { buildPropData, moveProp } from '../shared/propdata.js';
+import { moveProp } from '../shared/propdata.js';
 import { setClosetState } from '../shared/closets.js';
 import { BuiltSet } from '../shared/built.js';
 
@@ -17,9 +17,6 @@ export class GridReplica extends Grid {
     const na = world.areas.length;
     this.power = { state: 'normal', battery: 1, areaOn: new Uint8Array(na).fill(1), areaLights: new Uint8Array(na).fill(1) };
     this.built = new BuiltSet(world);        // girders and the like that players have built (shared/built.js)
-    this.evacApplied = false;
-    this.pendingEvac = null;
-    this.evacTiles = null;
   }
 }
 
@@ -66,12 +63,13 @@ export class Replica {
 
   // ------------------------------------------------------------------ initial state
   applyWelcome(w) {
-    for (const gs of w.grids) this.addGrid(gs);
+    for (const gs of w.grids) this.addGrid(gs, true);
+    this.relink();
     for (const [id, s, n, x, y, z, g] of w.items) this.items.set(id, { id, s, n, x, y, z, g });
   }
 
   /** A grid exists: build it from its blueprint and bring it up to the state the server describes. */
-  addGrid(gs) {
+  addGrid(gs, batch = false) {
     const decoded = decodeGrid(this.level, gs.bp);
     const g = new GridReplica(decoded, this.rects, { id: gs.g, kind: gs.kind, name: gs.name, tf: gs.tf });
     this.grids.set(g.id, g);
@@ -86,11 +84,25 @@ export class Replica {
     for (const [c, r, d] of gs.panes) this.killPane(g, c, r, d);
     for (const [i, cs, gone] of gs.closets || []) this.setCloset(g, i, cs, !!gone);
     for (const [i, x, z, d] of gs.moved || []) this.moveProp(g, i, x, z, d);
-    if (gs.evac) this.applyEvac(g, true);
     gs.doors.forEach((st, i) => { if (st !== 'closed') g.doors[i]?.setState(st); });
     gs.fdoors.forEach((c, i) => { if (c && g.fdoors[i]) this.setFdoor(g, g.fdoors[i], true); });
+    if (!batch) this.relink();
     return g;
   }
+
+  /** A grid has gone (a shuttle departed): everything on it goes with it. */
+  removeGrid(id) {
+    const g = this.grids.get(id);
+    if (!g) return null;
+    for (const [iid, it] of [...this.items]) if (it.g === id) this.items.delete(iid);
+    this.map.remove(g);
+    this.grids.delete(id);
+    this.relink();
+    return g;
+  }
+
+  /** Which grids lie over which (see GameMap.relink): needed for walking onto a docked shuttle and bumping into its hull. */
+  relink() { this.map.relink(); }
 
   // ------------------------------------------------------------------ helpers
   setTile(g, ev) {
@@ -125,28 +137,6 @@ export class Replica {
     const d = world.doorAt.get(f.i);
     if (closed) { world.solid[f.i] = 1; world.airBlock[f.i] = 1; }
     else { world.solid[f.i] = d && !d.passable ? 1 : 0; world.airBlock[f.i] = d && !d.isOpen ? 1 : 0; }
-  }
-
-  /** The emergency shuttle docks: stamp its tiles and props into the grid (same code path as the server). */
-  applyEvac(g, initial = false) {
-    if (g.evacApplied) return;
-    g.evacApplied = true;
-    const w = g.world, ov = g.evac;
-    const tiles = [];
-    for (const [i, kind, floor, wall, area, roof] of ov.tiles) {
-      w.kind[i] = kind; w.floorCell[i] = floor; w.wallVar[i] = wall; w.areaIdx[i] = area; w.roof[i] = roof;
-      w.glass[i] = 0; w.solid[i] = 0; w.airBlock[i] = 0;
-      if (kind === KIND.WALL) {
-        w.solid[i] = 1; w.airBlock[i] = 1;
-        if (wall !== 0xffff && w.variants[wall].glass) w.glass[i] = 1;
-      }
-      tiles.push([i % w.W, Math.floor(i / w.W)]);
-    }
-    buildPropData(w, this.rects, ov.props, this.level, g.props);
-    g.addDoors(g.props.added.doors);
-    g.evacTiles = tiles;
-    if (!initial) this.emit('evac', { g, tiles, added: g.props.added });
-    else g.pendingEvac = { tiles, added: g.props.added };
   }
 
   // ------------------------------------------------------------------ per-frame
@@ -184,7 +174,8 @@ export class Replica {
       case 'bs+': g?.built.add({ id: ev.id, k: ev.k, c: ev.c, r: ev.r, st: ev.st, grid: g }); break;
       case 'bs~': { const b = g?.built.get(ev.id); if (b) b.st = ev.st; break; }
       case 'bs-': g?.built.remove(ev.id); break;
-      case 'evac': if (g) this.applyEvac(g); return;
+      case 'grid+': if (!this.grids.has(ev.g)) { const ng = this.addGrid(ev); this.emit('grid+', { ...ev, grid: ng }); } return;
+      case 'grid-': { const old = this.removeGrid(ev.g); if (old) this.emit('grid-', { ...ev, grid: old }); return; }
       default: break;
     }
     this.emit(ev.e, ev);

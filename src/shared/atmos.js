@@ -66,7 +66,7 @@ export class Atmos {
       if (!world.inb(nc, nr)) continue;
       const j = world.idx(nc, nr);
       const k = world.kind[j];
-      if (k === KIND.SPACE || k === KIND.LATTICE || (world.breached.has(j) && world.ventsToSpace(j))) { this.sinkCells.add(i); return; }
+      if (world.isOpenSpace(nc, nr) || k === KIND.LATTICE || (world.breached.has(j) && world.ventsToSpace(j))) { this.sinkCells.add(i); return; }
     }
   }
 
@@ -94,7 +94,7 @@ export class Atmos {
       if (!world.inb(cc, rr)) return this.pressureAt(c, r);
       const i = world.idx(cc, rr);
       const k = world.kind[i];
-      if (k === KIND.SPACE || k === KIND.LATTICE) return world.airBlock[i] ? this.pressureAt(c, r) : 0;
+      if (world.isOpenSpace(cc, rr) || k === KIND.LATTICE) return world.airBlock[i] ? this.pressureAt(c, r) : 0;
       if (!this.isCell[i] || world.airBlock[i]) return this.pressureAt(c, r);
       return this.o2[i] + this.n2[i] + this.tox[i];
     };

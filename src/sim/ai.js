@@ -113,6 +113,7 @@ export class AI {
   // -------------------------------------------------------------- crew & pets
   thinkCivil(m, dt) {
     const sim = this.sim;
+    if (m.boardTo) { this.board(m, dt); return; }
     // run from anything hostile
     let near = null, nd = 9;
     for (const o of sim.mobs.values()) if (!o.dead && o.hostile && o.grid === m.grid) { const d = Math.hypot(o.x - m.x, o.z - m.z); if (d < nd) { nd = d; near = o; } }
@@ -147,6 +148,13 @@ export class AI {
       else sim.chat.npcSay(m, line);
     }
     this.wander(m, dt, m.pet ? 7 : 16, m.speed * (m.pet ? 0.7 : 0.8));
+  }
+
+  /** Through the shuttle's door and onto it (the director has put you at the station tile beside it): the door opens, and stepping onto the shuttle makes it your grid. */
+  board(m, dt) {
+    const sim = this.sim, seam = m.boardTo, door = seam.door;
+    if (!door.passable && sim.dist(m, door) < 2.6) sim.openDoor(door, m, true);
+    this.steer(m, seam.at[0], seam.at[1], m.speed * 1.2, dt);
   }
 
   wander(m, dt, radius, speed) {
@@ -200,6 +208,7 @@ export class AI {
     }
     m.speedNow = Math.hypot(pos.x - m.x, pos.z - m.z) / Math.max(dt, 1e-4);
     m.x = pos.x; m.z = pos.z;
+    sim.settleMob(m);
     return blocked;
   }
 }

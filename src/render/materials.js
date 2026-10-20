@@ -107,7 +107,10 @@ void main() {
   vec3 up = vec3(0.0, 1.0, 0.0);
   vec3 world;
   if (mode < 0.5) {
-    vec3 r = normalize(vec3(uCamRight.x, 0.0, uCamRight.z));
+    // the camera's right, in the frame the sprites are placed in (their grid's: the batch's matrix takes them into the scene)
+    mat3 R = mat3(modelMatrix);
+    vec3 rl = vec3(dot(R[0], uCamRight), dot(R[1], uCamRight), dot(R[2], uCamRight));
+    vec3 r = normalize(vec3(rl.x, 0.0, rl.z));
     world = iA.xyz + r * (iB.z + cn.x * iB.x) + up * (iB.w + cn.y * iB.y);
   } else if (mode < 1.5) {
     vec3 n = vec3(sin(iD.x), 0.0, cos(iD.x));
@@ -116,6 +119,7 @@ void main() {
   } else {
     world = iA.xyz + vec3(iB.z + cn.x * iB.x, 0.0, iB.w - (cn.y - 0.5) * iB.y);
   }
+  world = (modelMatrix * vec4(world, 1.0)).xyz;
   vUv = vec2(mix(iUV.x, iUV.z, cn.x + 0.5), mix(iUV.w, iUV.y, cn.y));
   vTint = iC.rgb;
   vAlpha = iC.a;

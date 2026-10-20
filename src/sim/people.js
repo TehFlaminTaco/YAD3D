@@ -1,5 +1,6 @@
 import { HIDE } from '../shared/looks.js';
 import { moveProp } from '../shared/propdata.js';
+import { between } from '../shared/frames.js';
 import { fitsSlot } from '../shared/items.js';
 import { detach, place, recalc, shiftItem } from './inventory.js';
 import { timeText } from './closets.js';
@@ -217,14 +218,17 @@ export class People {
       if (m.hauling) this.haul(m);
       const o = m.pulling;
       if (!o) continue;
-      if (m.dead || m.stunned > 0 || m.cuffed || m.inside || o.inside || o.evacuated || !sim.mobs.has(o.id) || m.grid !== o.grid) { this.release(m); continue; }
-      const d = Math.hypot(m.x - o.x, m.z - o.z);
+      if (m.dead || m.stunned > 0 || m.cuffed || m.inside || o.inside || o.evacuated || !sim.mobs.has(o.id) || !m.grid || !o.grid || sim.mapOf(m) !== sim.mapOf(o)) { this.release(m); continue; }
+      // the person you hold trails you, in their own grid's frame (you may be on another one: through a docking door), and hands over to yours when they cross
+      const [mx, mz] = m.grid === o.grid ? [m.x, m.z] : between(m.grid, o.grid, m.x, m.z);
+      const d = Math.hypot(mx - o.x, mz - o.z);
       if (d > DRAG) {
         const k = (d - DRAG) / d, pos = { x: o.x, z: o.z };
-        m.grid.world.move(pos, (m.x - o.x) * k, (m.z - o.z) * k, 0.28);
+        o.grid.world.move(pos, (mx - o.x) * k, (mz - o.z) * k, 0.28);
         o.x = pos.x; o.z = pos.z;
+        sim.settleMob(o);
       }
-      if (Math.hypot(m.x - o.x, m.z - o.z) > 3.4) this.release(m);       // they could not keep up
+      if (sim.dist(m, o) > 3.4) this.release(m);       // they could not keep up
     }
     for (const c of sim.clients.values()) {
       if (!c.strip) continue;

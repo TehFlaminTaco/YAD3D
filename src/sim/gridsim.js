@@ -24,7 +24,6 @@ export class GridSim extends Grid {
     this.built = new BuiltSet(w);
     this.tileLog = [];                         // tile events since the round began, for late joiners
     this.deadPanes = [];                       // thin windows smashed or taken apart: [c, r, d]
-    this.evacApplied = false;                  // the emergency shuttle's overlay is stamped in (until shuttles are grids of their own)
   }
 
   /** Tell the sim an event happened on this grid (its events carry the grid's id). */

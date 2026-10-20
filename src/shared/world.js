@@ -65,20 +65,25 @@ export class World {
       }
       // open space is not solid: you can float out into it (the edge of the map is the wall, see collides)
     }
-    this.gravityOn = true;                   // the station's gravity generator (debug menu / generator machine)
+    this.gravityOn = true;                   // this grid's gravity generator (debug menu / generator machine)
+    this.neighbors = [];                     // other grids of the map that lie over this one's open space (see GameMap.relink): what the body can also bump into, and walk onto
+    this.covered = new Uint8Array(n);        // open-space tiles another grid lies over: not space while it is docked (nothing leaks, the shuttle is there)
   }
 
-  /**
-   * SS13 has_gravity(): none over open space or lattice, always on a shuttle (its area carries its own), otherwise whatever the
-   * station's generator is doing.
-   */
+  /** SS13 has_gravity(): none over open space or lattice, otherwise whatever this grid's generator is doing (a shuttle is a grid with its own). */
   hasGravity(x, z) {
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
     if (!this.inb(c, r)) return false;
-    const i = this.idx(c, r), k = this.kind[i];
+    const k = this.kind[this.idx(c, r)];
     if (k === KIND.SPACE || k === KIND.LATTICE) return false;
-    if (this.areas[this.areaIdx[i]]?.c === 'shuttle') return true;
     return this.gravityOn;
+  }
+
+  /** Is tile (c, r) open space: a space tile that no docked grid lies over (and anything off the edge of the array)? */
+  isOpenSpace(c, r) {
+    if (!this.inb(c, r)) return true;
+    const i = this.idx(c, r);
+    return this.kind[i] === KIND.SPACE && !this.covered[i];
   }
 
   /** Something to push off from (Process_Spacemove's "backup"): lattice within a tile, or a wall / locker / window frame within arm's reach. */
@@ -266,12 +271,12 @@ export class World {
     return true;
   }
 
-  /** True if tile `i` touches space (or lattice over space) directly: air leaves through it. */
+  /** True if tile `i` touches space (or lattice over space) directly: air leaves through it. A shuttle docked there is not space. */
   ventsToSpace(i) {
     const c = i % this.W, r = (i - c) / this.W;
     for (const d of [N, S, E, W]) {
-      const k = this.kindAt(c + DV[d][0], r + DV[d][1]);
-      if (k === KIND.SPACE || k === KIND.LATTICE) return true;
+      const cc = c + DV[d][0], rr = r + DV[d][1];
+      if (this.isOpenSpace(cc, rr) || this.kindAt(cc, rr) === KIND.LATTICE) return true;
     }
     return false;
   }
@@ -389,14 +394,28 @@ export class World {
     }
   }
 
-  /** Axis-aligned box (half-size `h`) vs tiles + thin edges + free-standing boxes (not `ignore`, which is the one being moved). */
+  /**
+   * Axis-aligned box (half-size `h`) vs tiles + thin edges + free-standing boxes (not `ignore`, which is the one being moved), and the same
+   * in each grid that lies over this one's open space and might be in the way (a docked shuttle's hull is solid from the station's side too).
+   */
   collides(x, z, h, ignore = null) {
+    if (this.collidesTiles(x, z, h, ignore, true)) return true;
+    for (const nb of this.neighbors) {
+      const [x0, z0, x1, z1] = nb.rect;
+      if (x + h <= x0 || x - h >= x1 || z + h <= z0 || z - h >= z1) continue;      // nowhere near that grid
+      if (nb.world.collidesTiles(nb.a * x + nb.b * z + nb.tx, nb.c * x + nb.d * z + nb.tz, h, ignore, false)) return true;
+    }
+    return false;
+  }
+
+  /** This grid's own tiles only. Off the edge of the array is a wall when `edgeSolid` (your own grid), and nothing at all otherwise (it is another grid's business). */
+  collidesTiles(x, z, h, ignore, edgeSolid) {
     const c0 = Math.floor((x - h) / TILE), c1 = Math.floor((x + h) / TILE);
     const r0 = Math.floor((z - h) / TILE), r1 = Math.floor((z + h) / TILE);
     const T = TILE, th = 0.07;
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
-        if (!this.inb(c, r)) return true;
+        if (!this.inb(c, r)) { if (edgeSolid) return true; continue; }
         const i = this.idx(c, r);
         if (this.solid[i]) return true;
         if (this.bcount[i]) {

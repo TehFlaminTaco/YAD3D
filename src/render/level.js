@@ -193,9 +193,10 @@ export class LevelMesh {
       const [dc, dr] = DV[d];
       const nc = c + dc, nr = r + dr;
       if (!world.inb(nc, nr)) continue;
-      const nk = world.kind[world.idx(nc, nr)];
+      const ni = world.idx(nc, nr), nk = world.kind[ni];
+      if (nk === KIND.SPACE && world.covered[ni] === 2) continue;                     // another grid's wall is there (a docked shuttle's): it draws that face, and two would shimmer
       if (glass) { if (nk !== KIND.WALL) open.push(d); }
-      else if (nk !== KIND.WALL || world.glass[world.idx(nc, nr)]) open.push(d);       // including space: you can float out and look back at the hull
+      else if (nk !== KIND.WALL || world.glass[ni]) open.push(d);                     // including space: you can float out and look back at the hull
     }
     const conn = (cc, rr) => (glass ? world.kind[world.idx(cc, rr)] === KIND.WALL && world.inb(cc, rr)
       : world.inb(cc, rr) && world.opaque(cc, rr));

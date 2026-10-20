@@ -2,9 +2,9 @@ import { TILE, KIND, SIM_DT, SNAP_EVERY, INTEREST } from '../shared/config.js';
 import { decodeGrid } from '../shared/leveldata.js';
 import { GameMap } from '../shared/gamemap.js';
 import { tfPoint, tfClone } from '../shared/math3.js';
+import { settle, frameYaw } from '../shared/frames.js';
 import { ItemDB, makeItemData } from '../shared/items.js';
 import { Jobs } from '../shared/jobs.js';
-import { buildPropData } from '../shared/propdata.js';
 import { stepMovement, floatState } from '../shared/movement.js';
 import { clamp, rng } from '../shared/util.js';
 import { Mob } from './mob.js';
@@ -109,7 +109,9 @@ export class Sim {
     const def = data.level.maps[mapId];
     const map = this.addMap(mapId, def.name);
     this.defaultMap = map;
-    for (const pl of def.grids) this.addGrid(pl.bp, { map, kind: pl.kind, name: pl.name, tf: { p: pl.p, q: pl.q } });
+    for (const pl of def.grids) this.addGrid(pl.bp, { map, kind: pl.kind, name: pl.name, tf: { p: pl.p, q: pl.q }, quiet: true });
+    this.relink(map);
+    this.docks = def.docks || {};        // where a shuttle that arrives later (the emergency shuttle) is held: { name: { bp, kind, name, p, q } }
   }
 
   // ------------------------------------------------------------------ maps and grids
@@ -132,7 +134,42 @@ export class Sim {
       place(this, item, g, it.x, it.z, it.y);
     }
     this.closets.initGrid(g);
+    if (!o.quiet) {
+      this.relink(map);
+      g.emit({ e: 'grid+', ...this.gridState(g) });            // everyone in the map is told (a client that is just joining gets it in its welcome too)
+    }
     return g;
+  }
+
+  /**
+   * A grid leaves its map (a shuttle departs). Whatever lay on its floor goes with it; people on it are the caller's business (they have already
+   * been taken off, or counted as escaped). The grid object stays alive for anything that still refers to it.
+   */
+  removeGrid(g) {
+    const map = g.map;
+    for (const [id, rec] of [...this.floor]) if (rec.grid === g) { this.floor.delete(id); this.items.delete(id); }
+    g.emit({ e: 'grid-' });
+    map.remove(g);
+    this.grids.delete(g.id);
+    this.relink(map);
+  }
+
+  /** Work out again which grids of a map lie over which (they moved, came or went), and redo the air of any whose space is not space any more. */
+  relink(map) {
+    for (const g of map.relink()) g.atmos.buildTopology(false);
+  }
+
+  /** How much to turn a facing given in grid `from`'s frame to have it in grid `to`'s. */
+  frameYaw(from, to) { return frameYaw(from, to); }
+
+  /** After a body has moved: if it has walked onto another grid (through a docking door, say), it belongs to that grid now. */
+  settleMob(m) {
+    if (!m.grid) return false;
+    const r = settle(m.grid, m);
+    if (!r) return false;
+    m.grid = r.grid;
+    m.dirty = true;
+    return true;
   }
 
   // The station's parts, for code that has not yet been told which grid it is about (the tests, and what is still being moved over).
@@ -261,7 +298,7 @@ export class Sim {
       power: { state: g.power.state, battery: g.power.battery },
       areaOn: [...g.power.areaOn], areaLights: [...g.power.areaLights],
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
-      tiles: g.tileLog, panes: g.deadPanes, evac: g.evacApplied, closets: this.closets.changed(g), moved: this.people.moved(g),
+      tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
       gravity: g.world.gravityOn, built: [...g.built].map((b) => [b.id, b.k, b.c, b.r, b.st]),
     };
   }
@@ -315,13 +352,15 @@ export class Sim {
       if (!m) { if (c.state !== 'ghost' && c.state !== 'lobby') c.inputs.length = 0; continue; }      // observers and ghosts have no body: updateGhosts moves them
       let moved = false;
       while (c.inputs.length) {
-        const inp = c.inputs.shift();
+        let inp = c.inputs.shift();
         c.lastSeq = inp.seq;
         let d = clamp(inp.dt || 0.016, 0.001, 0.06);
         if (d > c.budget) d = c.budget;
         if (d <= 0) continue;
         c.budget -= d;
-        m.yaw = inp.yaw; m.pitch = clamp(inp.pitch || 0, -1.5, 1.5);
+        const yaw = this.yawIn(m, inp.yaw, inp.g);
+        inp = { ...inp, yaw };
+        m.yaw = yaw; m.pitch = clamp(inp.pitch || 0, -1.5, 1.5);
         m.input = inp;
         if (m.inside) { m.vx = m.vz = 0; if (inp.f || inp.b || inp.l || inp.r) this.closets.relaymove(m); continue; }
         if (m.downed || (m.pulledBy && m.pulledBy.grab >= 1)) { this.limp(m, d); if (inp.f || inp.b || inp.l || inp.r) this.people.resistGrab(m); continue; }
@@ -330,10 +369,17 @@ export class Sim {
         const ctx = this.moveCtx(m);
         m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw }, m.grid.world, d, ctx);
         if (m.jetOn && (inp.f || inp.b || inp.l || inp.r) && floatState(m.grid.world, m, { ...ctx, jet: false }).floating) this.burnJetpack(m, d);
+        this.settleMob(m);
         moved = true;
       }
       void moved;
     }
+  }
+
+  /** A facing the client made in grid `g`'s frame (it names it as `inp.g`) in the frame of the grid `m` is on now (they differ for the instant after a handover). */
+  yawIn(m, yaw, g) {
+    const from = g !== undefined && g !== m.grid?.id ? this.grids.get(g) : null;
+    return from && m.grid && from.map === m.grid.map ? yaw + this.frameYaw(from, m.grid) : yaw;
   }
 
   /** How much slower (or, in debug, faster) than normal this body moves: its suit, what it drags, the debug speed. */
@@ -356,6 +402,7 @@ export class Sim {
   limp(m, d) {
     if (m.grid.world.hasGravity(m.x, m.z)) { m.vx = m.vz = 0; return; }
     m.speedNow = stepMovement(m, { yaw: m.yaw }, m.grid.world, d, { ...this.moveCtx(m), limp: true });
+    this.settleMob(m);
   }
 
   updateGhosts(dt) {
@@ -566,33 +613,6 @@ export class Sim {
     if (on !== undefined) g.power.areaOn[a] = on ? 1 : 0;
     if (lights !== undefined) g.power.areaLights[a] = lights ? 1 : 0;
     g.emit({ e: 'area', a, on: g.power.areaOn[a], lights: g.power.areaLights[a] });
-  }
-
-  /** The emergency shuttle docks: stamp its tiles into the grid (and tell clients to do the same). */
-  applyEvac(g = this.station) {
-    if (g.evacApplied) return;
-    g.evacApplied = true;
-    const w = g.world, ov = g.evac;
-    const changed = new Set();
-    for (const [i, kind, floor, wall, area, roof] of ov.tiles) {
-      w.kind[i] = kind; w.floorCell[i] = floor; w.wallVar[i] = wall; w.areaIdx[i] = area; w.roof[i] = roof;
-      w.glass[i] = 0; w.solid[i] = 0; w.airBlock[i] = 0;
-      if (kind === KIND.WALL) {
-        w.solid[i] = 1; w.airBlock[i] = 1;
-        if (wall !== 0xffff && w.variants[wall].glass) w.glass[i] = 1;
-        w.hp.set(i, 600);
-      }
-      changed.add(i);
-    }
-    buildPropData(w, this.rects, ov.props, this.level, g.props);
-    g.addDoors(g.props.added.doors);
-    g.atmos.buildTopology(false, changed);
-    for (const it of g.props.added.items) {
-      const item = this.newItem(it.path || '/obj/item', { name: it.name, sprite: it.sprite });
-      place(this, item, g, it.x, it.z, it.y);
-    }
-    g.emit({ e: 'evac' });
-    return changed;
   }
 
   // ------------------------------------------------------------------ spawning

@@ -32,13 +32,14 @@ export function makeBlueprint(level, rows, o = {}) {
 }
 
 /**
- * `data` (what loadSimData returns) with extra blueprints, and the map `mapId` (default: the level's own) listing `placements`
- * [{ bp, kind, p, q }] in addition to what it already holds. `maps` adds whole new maps: { id: { name, grids: [placements] } }.
+ * `data` (what loadSimData returns) with extra blueprints, and the level's own map holding the station and `placements` [{ bp, kind, p, q }]
+ * (not the shuttles the real level docks, unless `keepShuttles`: a test of grids wants the grids it made). `maps` adds whole new maps:
+ * { id: { name, grids: [placements] } }.
  */
-export function withGrids(data, blueprints, placements = [], maps = {}) {
+export function withGrids(data, blueprints, placements = [], maps = {}, keepShuttles = false) {
   const level = { ...data.level, grids: { ...data.level.grids, ...blueprints }, maps: { ...data.level.maps } };
   const base = level.maps[level.map];
-  level.maps[level.map] = { ...base, grids: [...base.grids, ...placements] };
+  level.maps[level.map] = { ...base, grids: [...base.grids.filter((g) => keepShuttles || g.kind === 'station'), ...placements] };
   for (const [id, m] of Object.entries(maps)) level.maps[id] = m;
   return { ...data, level };
 }

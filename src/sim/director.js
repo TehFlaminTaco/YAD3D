@@ -1,11 +1,11 @@
 import { TILE, KIND } from '../shared/config.js';
 import { rng } from '../shared/util.js';
+import { between } from '../shared/frames.js';
 
 const STRIKE_TIMES = [75, 215, 380, 560];
 const POWER_FAIL_AT = 150;
 const AUTO_CALL_AT = 600;
 const DOCK_SECONDS = 95;
-const SHUTTLE_AREA = 'Emergency Shuttle';
 
 // real SS13 alert level texts
 const LEVEL_TEXT = {
@@ -35,7 +35,8 @@ export class Director {
     this.news = ['Station News: A meteor shower is forecast for this sector. Crew are advised to stay near airtight doors.'];
     this.stats = { patched: 0, carpKilled: 0 };
     this.windows = null;
-    this.dockTile = null;
+    this.evacGrid = null;             // the emergency shuttle, once it has arrived: a grid of its own, docked at the station
+    this.seams = [];                  // where it can be boarded: [{ door, tile: [c, r] on the station, at: [x, z] the door in the station's frame }]
     this.alerted = false;
   }
 
@@ -58,7 +59,7 @@ export class Director {
       let space = false, floor = false;
       for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const k = w.kindAt(c + dc, r + dr);
-        if (k === KIND.SPACE) space = true;
+        if (w.isOpenSpace(c + dc, r + dr)) space = true;
         if (k === KIND.FLOOR && w.roof[w.idx(c + dc, r + dr)]) floor = true;
       }
       if (space && floor) out.push(i);
@@ -233,39 +234,47 @@ export class Director {
     }
   }
 
+  /** The emergency shuttle arrives: a grid of its own appears at the dock, with its doors a step from the station's. */
   dockShuttle() {
-    const sim = this.sim;
+    const sim = this.sim, dock = sim.docks.emergency;
     this.evacState = 'docked';
     this.evacTimer = DOCK_SECONDS;
-    sim.applyEvac();
-    // somewhere for the crew to run to
-    let best = null, bd = 1e9;
-    const w = this.grid.world;
-    for (let i = 0; i < w.n; i++) {
-      if (w.areas[w.areaIdx[i]].n !== SHUTTLE_AREA || w.solid[i] || w.kind[i] !== KIND.FLOOR) continue;
-      const c = i % w.W, r = Math.floor(i / w.W);
-      const d = Math.abs(c - 200) + Math.abs(r - 118);
-      if (d < bd) { bd = d; best = [c, r]; }
-    }
-    this.dockTile = best;
+    this.evacGrid = sim.addGrid(dock.bp, { kind: dock.kind, name: dock.name, tf: { p: dock.p, q: dock.q } });
+    this.seams = this.findSeams();
     sim.chat.announce('Priority Announcement', `The Emergency Shuttle has docked with the station. You have ${this.fmtTime(DOCK_SECONDS)} to board the Emergency Shuttle.`);
     sim.emit({ e: 'snd', n: 'explosion_far', v: 0.6 });
     sim.emit({ e: 'shake', a: 0.4 });
   }
 
-  inShuttle(m) { return m.grid?.world.areaAt(...m.tile)?.n === SHUTTLE_AREA; }
+  /** Each of the shuttle's doors that opens onto a floor tile of the station: where the crew can get on. */
+  findSeams() {
+    const g = this.grid, eg = this.evacGrid, w = g.world, out = [];
+    for (const door of eg.doors) {
+      const [x, z] = between(eg, g, door.x, door.z);
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const c = Math.floor(x / TILE) + dc, r = Math.floor(z / TILE) + dr;
+        if (w.inb(c, r) && w.kind[w.idx(c, r)] === KIND.FLOOR) { out.push({ door, tile: [c, r], at: [x, z] }); break; }
+      }
+    }
+    return out;
+  }
 
+  inShuttle(m) { return !!this.evacGrid && m.grid === this.evacGrid; }
+
+  /** NPCs run for the shuttle: to the station tile at its nearest door, then in through it. Whoever is aboard has escaped. */
   boarding() {
     const sim = this.sim;
-    const dock = this.dockTile;
     for (const m of sim.mobs.values()) {
       if (m.dead || m.kind !== 'human' || m.evacuated || m.client) continue;
-      if (dock && !m.evacOrdered) {
+      if (this.inShuttle(m)) { m.evacuated = true; m.boardTo = null; continue; }
+      if (m.grid !== this.grid || !this.seams.length) continue;
+      if (!m.evacOrdered) {
         m.evacOrdered = true;
-        const path = m.grid === this.grid ? m.grid.nav.path(m.tile[0], m.tile[1], dock[0], dock[1], m, 6000) : null;
-        if (path) { m.path = path; m.pathIdx = 0; m.state = 'walk'; }
+        const seam = this.seams.reduce((a, b) => (Math.hypot(b.at[0] - m.x, b.at[1] - m.z) < Math.hypot(a.at[0] - m.x, a.at[1] - m.z) ? b : a));
+        const path = m.grid.nav.path(m.tile[0], m.tile[1], seam.tile[0], seam.tile[1], m, 6000);
+        if (path) { m.path = path; m.pathIdx = 0; m.state = 'walk'; m.seam = seam; }
       }
-      if (this.inShuttle(m)) m.evacuated = true;
+      if (m.seam && !m.path && !m.boardTo && Math.hypot(m.x - m.seam.at[0], m.z - m.seam.at[1]) < 3.4) m.boardTo = m.seam;       // at the door: through it
     }
   }
 
@@ -276,7 +285,9 @@ export class Director {
       const m = c.mob;
       if (m && !m.dead && this.inShuttle(m)) { m.evacuated = true; c.escaped = true; sim.tellClient(c, 'notice', 'The shuttle doors seal.'); }
     }
+    for (const m of sim.mobs.values()) if (this.inShuttle(m)) m.evacuated = true;
     sim.chat.announce('Priority Announcement', 'The Emergency Shuttle has left the station. Estimate 4 minutes until the shuttle docks at Central Command.');
+    sim.removeGrid(this.evacGrid);                       // it pulls away: everyone aboard goes with it
     this.finish('shuttle');
   }
 
