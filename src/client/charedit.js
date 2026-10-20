@@ -1,7 +1,7 @@
 import { HAIR_COLORS, EYE_COLORS } from '../shared/looks.js';
 
 // The sheet's directions are S, N, E, W (0..3); the turn buttons go round the way a compass does: N, E, S, W.
-const COMPASS = [1, 2, 0, 3];
+const COMPASS = [1, 3, 0, 2];
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
