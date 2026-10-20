@@ -251,9 +251,9 @@ export class DebugMenu {
     grp('Power', this.button('Normal', () => this.send('power', { state: 'normal' })), this.button('Battery', () => this.send('power', { state: 'battery' })), this.button('Out', () => this.send('power', { state: 'out' })));
     grp('Gravity', this.button('On', () => this.send('gravity', { on: true })), this.button('Off', () => this.send('gravity', { on: false })), this.button('Take me out into space', () => this.send('space')));
     grp('Trouble', this.button('Meteor strike', () => this.send('strike')), this.button('3 carp where I look', () => this.send('carp', { n: 3, ...this.place() })));
-    grp('Shuttle', this.button('Call', () => this.send('shuttle', { what: 'call' })), this.button('Dock now', () => this.send('shuttle', { what: 'dock' })), this.button('Depart (ends the round)', () => this.send('shuttle', { what: 'depart' })));
+    grp('Shuttle', this.button('Call', () => this.send('shuttle', { what: 'call' })), this.button('Dock now', () => this.send('shuttle', { what: 'dock' })), this.button('Depart', () => this.send('shuttle', { what: 'depart' })), this.button('Skip to the next leg', () => this.send('shuttle', { what: 'jump' }), 'Out, the jump to bluespace, the jump to Central Command, docked there (the round ends two minutes after)'));
     grp('Doors', this.button('Open all', () => this.send('doors', { what: 'open' })), this.button('Close all', () => this.send('doors', { what: 'close' })));
-    grp('Other maps', this.button('To an away mission', () => this.send('map', { what: 'away' })), this.button('Back to the station', () => this.send('map', { what: 'home' })));
+    grp('Other maps', this.button('To an away mission', () => this.send('map', { what: 'away' })), this.button('To Central Command', () => this.send('map', { what: 'centcom' })), this.button('Back to the station', () => this.send('map', { what: 'home' })));
     grp('Fix', this.button('Seal the hull, restore power', () => this.send('repair')));
     grp('Round', this.button('Start now (lobby)', () => this.send('round', { what: 'start' })), this.button('End it', () => this.send('round', { what: 'end' })), this.button('Skip ahead a minute', () => this.send('skip', { sec: 60 })));
   }

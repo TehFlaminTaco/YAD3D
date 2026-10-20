@@ -41,6 +41,13 @@ MAPS = {
     'BoxStation': '_maps/map_files/BoxStation/BoxStation.dmm',
 }
 
+# Central Command is a map of its own (a separate space of grids). Only the main complex is kept, not the thunderdome, the Syndicate base or the holodecks:
+# CENTCOM_PART is (x0, x1, y0, y1) of what is kept, in the .dmm's own coordinates (y up), and the emergency shuttle docks at its `emergency_away` port, on the east side
+# of the complex. Its doors want Central Command access, which nobody carries: the crew are guests there, so every door is opened to all.
+CENTCOM = '_maps/map_files/generic/CentCom.dmm'
+CENTCOM_PART = (130, 236, 36, 122)
+CENTCOM_DOCK = ('emergency_box', 206, 85)
+
 N, S, E, W = 1, 2, 4, 8
 OPP = {N: S, S: N, E: W, W: E}
 DVEC = {N: (0, 1), S: (0, -1), E: (1, 0), W: (-1, 0)}      # in DMM coordinates (y up)
@@ -358,10 +365,12 @@ GAME_ITEMS = [
 # --------------------------------------------------------------------------- build
 
 
-def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
+def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
     """Classify tiles + props for one grid. Registries (areas, wall variants, floor types, cells, sprites) are shared across calls.
     `full` is the first call (the station): only it makes the things that belong to the game as a whole (the loot pool, the mob sets, the
-    tile table, the item definitions for jobs and closets); the others (shuttles) add the definitions for the items lying on them."""
+    tile table, the item definitions for jobs and closets); the others (shuttles) add the definitions for the items lying on them.
+    `docks`: the shutters that close a shuttle's dock until it arrives (`poddoor/shuttledock`) are doors here (shut: they keep the air in; the director opens them on docking);
+    elsewhere every poddoor is skipped, as they are opened by buttons that do not exist yet."""
     areas = shared['areas']
     area_idx = shared['area_idx']
     kind = bytearray(Wd * Ht)           # 0 space 1 floor 2 wall/window block 3 lattice-over-space
@@ -677,6 +686,18 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                 if icon_ok(icon, 'door_closed'):
                     props.append(dict(base, k='fdoor', s=spr.add([(icon, 'door_closed', S, None, None)])))
                     stats['fdoor'] += 1
+                continue
+            if docks and p.startswith('/obj/machinery/door/poddoor/shuttledock'):
+                icon = r.get('icon')
+                if icon_ok(icon, 'closed'):
+                    dmi = sl.get_dmi(icon)
+                    frames = [spr.add([(icon, 'closed', S, None, None)])]
+                    if dmi.has('opening'):
+                        for f in range(dmi.states['opening'].frames):
+                            frames.append(spr.add([(icon, 'opening', S, None, None, f)]))
+                    frames.append(spr.add([(icon, 'open', S, None, None)]))
+                    props.append(dict(base, k='door', fr=frames, a=[], o=[], glass=0, t='poddoor', n='shuttle dock shutters'))
+                    stats['door'] += 1
                 continue
             if p.startswith('/obj/machinery/door/'):
                 continue
@@ -1032,6 +1053,15 @@ ROUNDSTART_DOCKS = [
 EMERGENCY_DOCK = ('emergency_box', 200, 118)
 
 
+def crop(grid, x0, x1, y0, y1):
+    """A rectangle of a map as a grid of its own: (x, y) in the part -> (x - x0 + 1, y - y0 + 1), coordinates from 1 as ever. Returns it with its width and height."""
+    out = {}
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            out[(x - x0 + 1, y - y0 + 1)] = grid[(x, y)]
+    return out, x1 - x0 + 1, y1 - y0 + 1
+
+
 def build(mapname):
     print('parsing', mapname)
     grid, keys = dmm.parse(os.path.join(TREE, MAPS[mapname]))
@@ -1069,6 +1099,27 @@ def build(mapname):
         placements.append(shuttle(template, sx, sy_top, 'pod' if pod else 'shuttle', 'Escape Pod' if pod else ' '.join(w.capitalize() for w in template.split('_')[:-1]) + ' Shuttle'))
     tpl, sx, sy_top = EMERGENCY_DOCK
     docks['emergency'] = shuttle(tpl, sx, sy_top, 'shuttle', 'Emergency Shuttle')
+
+    # Central Command: one blueprint, a map of its own, and the dock the emergency shuttle comes to
+    cgrid, ckeys = dmm.parse(os.path.join(TREE, CENTCOM))
+    cx0, cx1, cy0, cy1 = CENTCOM_PART
+    part, cw, ch = crop(cgrid, cx0, cx1, cy0, cy1)
+    print('  centcom', cw, 'x', ch)
+    centcom = process(part, ckeys, cells, spr, shared, cw, ch, full=False, docks=True)
+    itemdefs.update(centcom['itemdefs'])
+    descs.update(centcom['descs'])
+    for p in centcom['props']:
+        if p.get('k') == 'door':
+            p['a'], p['o'] = [], []
+    tpl, dx, dy = CENTCOM_DOCK
+    if tpl not in bases:
+        raise SystemExit('the emergency shuttle template was not built')
+    tg, tk, port, port_cr, w2, h2 = bases[tpl]
+    sx, sy = dx - cx0 + 1, dy - cy0 + 1
+    rot, conflicts = dock_rotation(part, ckeys, tg, tk, port, sx, sy, cw, ch)
+    p, q = dock_pose(rot, port_cr, (sx - 1, ch - sy))
+    print('  dock %-20s at centcom (%3d,%3d) turned %3d, conflicts %d' % (tpl, dx, dy, rot * 90, conflicts))
+    centcom_docks = {'emergency': {'bp': tpl, 'kind': 'shuttle', 'name': 'Emergency Shuttle', 'p': p, 'q': q}}
 
     areas, wall_variants = shared['areas'], shared['wall_variants']
     ceiling_cell = cells.add(sl.compose([('icons/turf/floors.dmi', 'plating', S, '#8a8f99', None)], (32, 32)))
@@ -1125,6 +1176,11 @@ def build(mapname):
             'area': b64u16(res['area']), 'floor': b64u16(res['floor']), 'wall': b64u16(res['wall']),
             'props': res['props'], 'spawns': res['spawns'],
         }
+    grids['centcom'] = {
+        'w': cw, 'h': ch, 'ft': b64u8(centcom['ft']), 'lat': b64u8(centcom['lat']), 'kind': b64u8(centcom['kind']), 'roof': b64u8(centcom['roof']),
+        'area': b64u16(centcom['area']), 'floor': b64u16(centcom['floor']), 'wall': b64u16(centcom['wall']),
+        'props': centcom['props'], 'spawns': [],
+    }
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
@@ -1133,7 +1189,9 @@ def build(mapname):
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,
         'maps': {'station': {'name': mapname, 'grids': [{'bp': 'station', 'kind': 'station', 'name': mapname, 'p': [0, 0, 0], 'q': [0, 0, 0, 1]}] + placements,
-                             'docks': docks}},
+                             'docks': docks},
+                 'centcom': {'name': 'Central Command', 'grids': [{'bp': 'centcom', 'kind': 'centcom', 'name': 'Central Command', 'p': [0, 0, 0], 'q': [0, 0, 0, 1]}],
+                             'docks': centcom_docks}},
         'map': 'station',
     }
     # what each closet type holds (sim only): rows [item, count, chance %, stack amount] or {'pick': [[weight, rows]]}

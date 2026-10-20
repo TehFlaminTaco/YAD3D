@@ -39,6 +39,7 @@ button, input { font-family: inherit; }
 #fx-visor { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
 #fx-vac { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 38%, rgba(170,215,255,.65) 100%); mix-blend-mode: screen; }
 #fx-flash { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(255,40,20,.35) 20%, rgba(200,0,0,.95) 100%); }
+#fx-flash.bluespace { background: radial-gradient(ellipse at center, rgba(235,245,255,.95) 10%, rgba(70,130,255,.9) 70%, rgba(20,50,200,.95) 100%); }
 
 /* ---------- first-person hands ---------- */
 #hands { position: fixed; inset: 0; pointer-events: none; z-index: 7; display: none; }

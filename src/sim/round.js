@@ -159,10 +159,10 @@ export class Round {
     const sim = this.sim, d = sim.director;
     const lines = [];
     const crew = [...sim.mobs.values()].filter((m) => m.kind === 'human');
-    const escaped = crew.filter((m) => m.evacuated);
+    const escaped = crew.filter((m) => d.escaped(m));
     const dead = crew.filter((m) => m.dead && !m.evacuated);
-    const left = crew.filter((m) => !m.dead && !m.evacuated);
-    lines.push(kind === 'shuttle' ? 'The emergency shuttle has left the station.' : kind === 'wipe' ? 'Everyone aboard is dead or gone.' : 'The round has ended.');
+    const left = crew.filter((m) => !m.dead && !d.escaped(m));
+    lines.push(kind === 'shuttle' ? 'The emergency shuttle has docked with Central Command.' : kind === 'wipe' ? 'Everyone aboard is dead or gone.' : 'The round has ended.');
     lines.push(`Round length: ${Math.floor(this.time / 60)} minutes ${Math.floor(this.time % 60)} seconds.`);
     lines.push('');
     lines.push('Station status');

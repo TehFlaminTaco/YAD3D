@@ -431,28 +431,32 @@ section('the emergency shuttle comes and goes', () => {
   ok(w2.grids.some((g) => g.g === eg.id), 'a later joiner\'s welcome lists it');
   const rep = new Replica({ level: DATA.level, rects: DATA.rects }, { ...w2, you: C.id });
   ok(rep.grids.has(eg.id) && rep.station.world.neighbors.length === st.world.neighbors.length, 'and the replica has it, linked like the server');
-  // the crew run for it (NPCs), and whoever is aboard has escaped
+  // the crew run for it (NPCs), and whoever is aboard goes with it
   // one of them is standing two tiles from a door: she walks to it, through it and is aboard
   const npc = [...sim.mobs.values()].find((m) => m.kind === 'human' && !m.client && !m.dead);
   const seam = d.seams[0], back = [seam.tile[0] + (seam.tile[0] - Math.floor(seam.at[0] / TILE)), seam.tile[1] + (seam.tile[1] - Math.floor(seam.at[1] / TILE))];
   npc.grid = st; npc.x = back[0] * TILE + 1; npc.z = back[1] * TILE + 1; npc.path = null; npc.evacOrdered = false; npc.boardTo = null;
   npc.access = new Set(Array.from({ length: 300 }, (_, i) => i));
   step(25);
-  ok(npc.evacuated && npc.grid === eg, 'an NPC beside a door of it walks through and boards');
+  ok(npc.boarded && npc.grid === eg && !npc.evacuated, 'an NPC beside a door of it walks through and boards (and is still there, to be seen)');
   step(60);
-  const boarded = [...sim.mobs.values()].filter((m) => m.kind === 'human' && !m.client && m.evacuated);
+  const boarded = [...sim.mobs.values()].filter((m) => m.kind === 'human' && !m.client && m.boarded);
   ok(boarded.length >= 2 && boarded.every((m) => m.grid === eg), `and others make their way there (${boarded.length} aboard)`);
-  // it leaves: the grid goes, with everyone aboard
+  // it leaves: sealed, out, and the jump to bluespace takes it out of the station's map, with everyone aboard
   late.length = 0;
   d.depart();
-  step(40);
-  ok(!sim.grids.has(eg.id) && !st.map.grids.has(eg.id) && st.world.neighbors.length === 9, 'departing removes it from the map');
+  step(1);
+  step(3);
+  ok(d.evacState === 'departed' && eg.doors.every((x) => x.bolted && (x.state === 'closed' || x.state === 'closing' || sim.occupied(x))), 'departing seals its doors (one with somebody standing in it waits)');
+  let tj = 0;
+  while (eg.map === st.map && tj < 60) { step(1); tj++; }
+  ok(eg.map.id === 'hyperspace' && !st.map.grids.has(eg.id) && st.world.neighbors.length === 9, `it flies out and jumps to bluespace (after ${tj} s), and is not in the station's map any more`);
   const evs = late.filter((m) => m.t === 'ev').flatMap((m) => m.list);
   const gone = evs.filter((e) => e.e === 'grid-');
-  ok(gone.length === 1 && gone[0].g === eg.id, 'and everyone is told');
+  ok(gone.length === 1 && gone[0].g === eg.id, 'and everyone at the station is told');
   for (const ev of evs) rep.apply(ev);
   ok(!rep.grids.has(eg.id) && rep.station.world.neighbors.length === 9, 'the replica follows');
-  ok(boarded.every((m) => m.evacuated) && sim.round.state === 'ending', 'the people aboard stay escaped and the round ends');
+  ok(boarded.every((m) => m.grid === eg && !m.evacuated) && sim.round.state === 'playing', 'the people aboard are still aboard, and the round goes on');
   void A;
 });
 
@@ -626,8 +630,9 @@ section('the emergency shuttle flies in and out', () => {
   d.depart();
   step(1);
   ok(!eg.docked && sim.shuttles.flying(eg) && st.world.neighbors.every((n) => n.grid !== eg), 'departing lets it go');
-  step(35);
-  ok(!sim.grids.has(eg.id), 'and it is gone, far out');
+  let tj = 0;
+  while (eg.map === st.map && tj < 60) { step(1); tj++; }
+  ok(eg.map.id === 'hyperspace', 'and it jumps to bluespace, far out');
   const gone = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'grid-');
   ok(gone.length === 1 && gone[0].g === eg.id, 'with everybody told');
   void A;
@@ -1097,7 +1102,7 @@ section('several maps', () => {
     inbox.length = 0;
     d.depart();
     step(1);
-    ok(a.evacuated && A.escaped, 'it leaves with her aboard');
+    ok(!a.evacuated && a.grid === eg && d.evacState === 'departed', 'it leaves with her aboard');
     let t = 0;
     while (eg.map.id !== 'hyperspace' && t < 60) { step(1); t++; }
     const h = inbox.find((m) => m.t === 'map');
@@ -1106,6 +1111,69 @@ section('several maps', () => {
     step(1);
     const snap = inbox.filter((m) => m.t === 'snap').pop();
     ok(snap && snap.you.g === eg.id, 'and her snapshots are of it');
+  }
+});
+
+section('Central Command', () => {
+  const { sim, A, a, inbox, step } = realRound(0);
+  const d = sim.director, st = sim.station;
+  ok(!sim.maps.has('centcom') && sim.level.maps.centcom?.docks.emergency?.bp === 'emergency_box', 'Central Command is a map of the level that is not made until it is wanted, with its own dock for the shuttle');
+  d.dockShuttle();
+  const eg = d.evacGrid;
+  const w = eg.world;
+  for (let i = 0; i < w.n; i++) if (w.kind[i] === KIND.FLOOR && !w.solid[i] && !w.doorAt.has(i)) { a.grid = eg; a.map = eg.map; a.x = (i % w.W) * TILE + 1; a.z = Math.floor(i / w.W) * TILE + 1; a.vx = a.vz = 0; a.dirty = true; break; }
+  d.depart();
+  const cc = sim.maps.get('centcom');
+  ok(cc && cc.id === 'centcom' && cc.solids.length === 1 && cc.solids[0].kind === 'centcom' && cc.void, 'it is made as the shuttle leaves: a grid of its own and a void, nobody in it');
+  ok(![...sim.clients.values()].some((c) => c.map === cc) && cc.solids[0].world.W === 107, 'and it is the cropped complex of the real map');
+  let t = 0;
+  while (d.leg !== 'transit' && t < 60) { step(1); t++; }
+  const jumps = () => inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'jump').length;
+  ok(eg.map.id === 'hyperspace' && jumps() === 1, 'out at the far mark it jumps (she is told: a flash), and spends its time in bluespace');
+  ok(Math.abs(d.legTimer - 60) < 2, 'about a minute');
+  step(40);
+  ok(eg.map.id === 'hyperspace' && sim.round.state === 'playing', 'and the round goes on while it does');
+  let t2 = 0;
+  while (d.leg === 'transit' && t2 < 40) { step(1); t2++; }
+  ok(eg.map === cc && jumps() === 2 && d.leg === 'in' && eg.world.neighbors.length === 0, 'it jumps again, into Central Command\'s map, not yet against it');
+  const dock = sim.mapDocks.get('centcom').emergency;
+  const far = Math.hypot(eg.tf.p[0] - dock.p[0], eg.tf.p[2] - dock.p[2]);
+  ok(far > 100 && far < 160 && sim.shuttles.flying(eg), `a good way off its dock, flying in (${far.toFixed(0)} m)`);
+  const mapMsg = inbox.filter((m) => m.t === 'map' && m.map === 'centcom').pop();
+  ok(mapMsg && mapMsg.grids.length === 3 && mapMsg.grids.some((g) => g.bp === 'centcom') && mapMsg.items.length > 100, 'she is sent that map whole: the complex, the shuttle and the void');
+  step(1);
+  const rep = new Replica({ level: DATA.level, rects: DATA.rects }, { ...inbox.find((m) => m.t === 'welcome'), ...mapMsg, you: A.id });
+  ok(rep.grids.size === 3 && [...rep.grids.values()].some((g) => g.kind === 'centcom' && g.world.W === 107), 'and the replica builds it');
+  let t3 = 0;
+  while (d.evacState === 'departed' && t3 < 60) { step(0.5); t3 += 0.5; }
+  ok(d.evacState === 'centcom' && eg.docked && near(eg.tf.p[0], dock.p[0], 1e-9) && near(eg.tf.p[2], dock.p[2], 1e-9), `it docks (after ${t3.toFixed(1)} s)`);
+  const ccg = cc.solids.find((g) => g.kind === 'centcom');
+  ok(eg.world.neighbors.some((n) => n.grid === ccg) && ccg.world.neighbors.some((n) => n.grid === eg), 'against Central Command');
+  ok(d.seams.length >= 1 && eg.doors.every((x) => !x.bolted) && d.seams.every((s) => s.door.state === 'open' || s.door.state === 'opening'), 'its doors are free again, and the ones onto Central Command are open');
+  ok(Math.abs(d.evacTimer - 120) < 1 && sim.round.state === 'playing', 'and the round has two minutes left');
+  // she walks off the shuttle, into Central Command
+  const seam = d.seams[0], door = seam.door;
+  const dp = eg.worldPoint(door.x, 0, door.z), tp = ccg.worldPoint(seam.tile[0] * TILE + 1, 0, seam.tile[1] * TILE + 1);
+  ok(near(eg.tf.q[0], 0, 1e-9) && near(eg.tf.q[2], 0, 1e-9) && near(ccg.tf.q[3], 1, 1e-9), 'the shuttle lies level against it');
+  a.grid = eg; a.map = eg.map; a.x = door.x; a.z = door.z; a.vx = a.vz = 0; a.dirty = true;
+  const yaw = Math.atan2(-(tp[0] - dp[0]), -(tp[2] - dp[2])) - 2 * Math.atan2(eg.tf.q[1], eg.tf.q[3]);
+  let seq = 1;
+  for (let k = 0; k < 40; k++) { sim.handle(A, { t: 'input', list: [{ seq: seq++, dt: 0.05, f: 1, b: 0, l: 0, r: 0, run: 0, yaw, pitch: 0, g: eg.id }] }); step(0.05); }
+  ok(a.grid === ccg && sim.mapOf(a) === cc && !a.dead, 'she walks out through the door into Central Command');
+  ok(ccg.atmos.pressureAt(...a.tile) > 90, 'where there is air');
+  // the stay: two minutes at Central Command, then the round ends, and the report counts her as escaped
+  step(100);
+  ok(sim.round.state === 'playing', 'a minute and a half in, the round is still on');
+  step(22);
+  ok(sim.round.state === 'ending', 'and after two minutes it ends');
+  const rep2 = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).find((e) => e.e === 'report');
+  ok(rep2 && rep2.kind === 'shuttle' && rep2.lines.some((l) => /docked with Central Command/.test(l)) && rep2.lines.some((l) => /Alice.*escaped/.test(l)), 'the report says so, and that she escaped');
+  void st;
+  {
+    const r = realRound(0, { debug: true });
+    r.sim.handle(r.A, { t: 'dbg', op: 'map', what: 'centcom' });
+    r.step(0.3);
+    ok(r.a.grid.kind === 'centcom' && r.sim.mapOf(r.a).id === 'centcom' && r.a.grid.world.areaAt(...r.a.tile).n.length > 0, 'the debug menu can take you there directly');
   }
 });
 

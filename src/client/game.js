@@ -216,6 +216,7 @@ export class Game {
     rep.on('report', (ev) => this.screens.showReport(ev));
     rep.on('ghost', (ev) => this.hud.onGhost(ev));
     rep.on('shake', (ev) => this.shake(ev.a));
+    rep.on('jump', () => { this.fx.flash(1.6, true); this.shake(0.7); });                       // (the shuttle jumps through bluespace)
     rep.on('hurt', (ev) => { this.fx.flash(Math.min(1, 0.4 + ev.a / 20)); this.shake(Math.min(0.5, ev.a / 25)); });
     rep.on('bubble', (ev) => this.hud.addBubble(ev.id, ev.text));
     rep.on('toss', (ev) => this.view.addToss(ev.g, ev.id, ev.a, ev.b, this.time, ev.l | 0));

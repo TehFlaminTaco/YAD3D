@@ -18,7 +18,11 @@ export class ScreenFX {
     this.visorKind = '';
   }
 
-  flash(v = 0.8) { this.flashV = Math.max(this.flashV, v); }
+  /** A flash of the screen: red (a blow), or `blue` (a jump through bluespace). */
+  flash(v = 0.8, blue = false) {
+    this.flashV = Math.max(this.flashV, v);
+    if (this.blue !== blue) { this.blue = blue; this.el.flash.classList.toggle('bluespace', blue); }
+  }
 
   setImg(key, el, url) {
     if (this.cur[key] === url) return;
@@ -72,8 +76,9 @@ export class ScreenFX {
   update(dt) {
     const g = this.game, s = g.self, ov = g.ui.art.overlays;
     const playing = g.phase === 'playing' && s;
-    this.flashV = Math.max(0, this.flashV - dt * 3);
-    this.setOp('flash', this.el.flash, this.flashV * 0.55);
+    this.flashV = Math.max(0, this.flashV - dt * (this.blue ? 1.2 : 3));
+    this.setOp('flash', this.el.flash, this.flashV * (this.blue ? 0.95 : 0.55));
+    if (this.flashV <= 0 && this.blue) this.flash(0);
     if (!playing) {
       for (const k of ['oxy', 'brute', 'crit']) this.setImg(k, this.el[k], null);
       this.setOp('vac', this.el.vac, 0);

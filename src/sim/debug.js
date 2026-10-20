@@ -430,7 +430,7 @@ export class Debug {
     this.say(c, 'You are on the deck test grid: the stair climbs east, out of a hole in the upper floor.');
   }
 
-  /** Go to another map: `away` (made on the first visit: a copy of a shuttle, alone in a map of its own) or back `home` to where the crew arrive. A watcher goes too. */
+  /** Go to another map: `away` (made on the first visit: a copy of a shuttle, alone in a map of its own), `centcom` (Central Command) or back `home` to where the crew arrive. A watcher goes too. */
   mapOp(c, msg) {
     const sim = this.sim, what = String(msg.what);
     let g, x, z;
@@ -444,12 +444,16 @@ export class Debug {
       g = map.solids[0];
       const w = g.world;
       for (let i = 0; i < w.n; i++) if (w.kind[i] === KIND.FLOOR && !w.solid[i] && !w.doorAt.has(i)) { x = (i % w.W) * TILE + 1; z = Math.floor(i / w.W) * TILE + 1; break; }
+    } else if (what === 'centcom') {
+      const map = sim.loadMap('centcom'), dock = sim.mapDocks.get('centcom').emergency;
+      g = map.solids[0];
+      x = dock.p[0] + 3 - 12; z = dock.p[2] + 27;                                              // a few tiles inside, level with the emergency shuttle's dock (its port tile is 3 m and 27 m along from its origin)
     } else if (what === 'home') {
       const sp = sim.spawnPoints().find((s) => s.job === 'latejoin') || sim.spawnPoints()[0];
       g = sp.grid; x = sp.x * TILE + 1; z = sp.y * TILE + 1;
     } else return;
     this.teleport(c, c.mob, g, x, z);
-    this.say(c, what === 'away' ? 'You are somewhere else.' : 'You are home.');
+    this.say(c, what === 'away' ? 'You are somewhere else.' : what === 'centcom' ? 'You are at Central Command.' : 'You are home.');
   }
 
   strike(c) {
@@ -471,8 +475,9 @@ export class Debug {
     const d = this.sim.director;
     switch (msg.what) {
       case 'call': this.say(c, d.callShuttle('auto')); break;
-      case 'dock': if (d.evacState !== 'docked' && d.evacState !== 'departed') d.dockShuttle(); break;
+      case 'dock': if (d.evacState === 'idle' || d.evacState === 'called') d.dockShuttle(); break;
       case 'depart': if (d.evacState === 'docked') d.depart(); break;
+      case 'jump': d.skipLeg(); break;
       default: break;
     }
   }

@@ -120,6 +120,7 @@ export class Sim {
     this.relink(map);
     this.physics.warm();
     this.docks = def.docks || {};        // where a shuttle that arrives later (the emergency shuttle) is held: { name: { bp, kind, name, p, q } }
+    this.mapDocks = new Map([[mapId, this.docks]]);          // the same for every map that has been made (`loadMap`)
   }
 
   // ------------------------------------------------------------------ maps and grids
@@ -128,6 +129,24 @@ export class Sim {
     const map = new GameMap(id, name);
     this.maps.set(id, map);
     if (o.void !== false) this.ensureVoid(map);
+    return map;
+  }
+
+  /**
+   * A map of the level data that is not the round's own (Central Command), made the first time it is wanted: its grids at their places, its void, its docks. Nobody is in it
+   * until something is carried there (`moveGrid`), so nothing is announced.
+   */
+  loadMap(id) {
+    const have = this.maps.get(id);
+    if (have) return have;
+    const def = this.level.maps[id];
+    if (!def) throw new Error(`no map "${id}" in the level data`);
+    const map = this.addMap(id, def.name, { void: false });
+    for (const pl of def.grids) this.addGrid(pl.bp, { map, kind: pl.kind, name: pl.name, tf: { p: pl.p, q: pl.q }, quiet: true });
+    this.ensureVoid(map);
+    this.relink(map);
+    this.physics.warm();                 // (a world's first step is the slow one)
+    this.mapDocks.set(id, def.docks || {});
     return map;
   }
 

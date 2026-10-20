@@ -193,7 +193,7 @@ export class Terminals {
     const can = d.canCallShuttle();
     return {
       title: 'Communications Console', live: true,
-      html: `<span class="h">CENTRAL COMMAND COMMUNICATIONS</span>\n\nEmergency shuttle   ${d.evacState === 'idle' ? '<span class="d">not called</span>' : d.evacState === 'called' ? `<span class="w">en route, ETA ${Math.max(0, Math.ceil(d.evacTimer))} s</span>` : d.evacState === 'docked' ? `<span class="c">docked, departs in ${Math.max(0, Math.ceil(d.evacTimer))} s</span>` : '<span class="d">departed</span>'}\n\n${can.ok ? '<span class="c">Evacuation authorized.</span>' : `<span class="d">${esc(can.why)}</span>`}`,
+      html: `<span class="h">CENTRAL COMMAND COMMUNICATIONS</span>\n\nEmergency shuttle   ${d.evacState === 'idle' ? '<span class="d">not called</span>' : d.evacState === 'called' ? `<span class="w">en route, ETA ${Math.max(0, Math.ceil(d.evacTimer))} s</span>` : d.evacState === 'docked' ? `<span class="c">docked, departs in ${Math.max(0, Math.ceil(d.evacTimer))} s</span>` : d.evacState === 'centcom' ? `<span class="c">docked at Central Command</span>` : '<span class="d">departed</span>'}\n\n${can.ok ? '<span class="c">Evacuation authorized.</span>' : `<span class="d">${esc(can.why)}</span>`}`,
       buttons: [
         { label: 'Call emergency shuttle', disabled: !can.ok || d.evacState !== 'idle', fn: () => this.setMsg(c, d.callShuttle('crew', c)) },
       ],
@@ -204,7 +204,7 @@ export class Terminals {
     const d = this.sim.director;
     return {
       title: 'Emergency Shuttle Console', live: true,
-      html: `<span class="h">SHUTTLE STATUS</span>\n\n${d.evacState === 'idle' ? 'The emergency shuttle has not been called.' : d.evacState === 'called' ? `Shuttle inbound. ETA <span class="w">${Math.ceil(d.evacTimer)} s</span>` : d.evacState === 'docked' ? `Shuttle docked. Departure in <span class="c">${Math.ceil(d.evacTimer)} s</span>.` : 'The shuttle has departed.'}`,
+      html: `<span class="h">SHUTTLE STATUS</span>\n\n${d.evacState === 'idle' ? 'The emergency shuttle has not been called.' : d.evacState === 'called' ? `Shuttle inbound. ETA <span class="w">${Math.ceil(d.evacTimer)} s</span>` : d.evacState === 'docked' ? `Shuttle docked. Departure in <span class="c">${Math.ceil(d.evacTimer)} s</span>.` : d.evacState === 'centcom' ? 'The shuttle has docked at Central Command.' : 'The shuttle has departed.'}`,
       buttons: [],
     };
   }

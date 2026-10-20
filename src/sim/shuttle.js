@@ -1,4 +1,4 @@
-import { vlen, vsub, vscale, tfClone } from '../shared/math3.js';
+import { vlen, vsub, vscale, tfClone, tfPoint } from '../shared/math3.js';
 import { TILE, KIND } from '../shared/config.js';
 
 const VMAX = 14;                    // m/s: how fast a shuttle cruises
@@ -31,11 +31,12 @@ export class Shuttles {
 
   /**
    * A direction (a unit vector in the map, along an axis) in which `g` can move `dist` metres without any of its walls or floors meeting another grid's,
-   * or null. (Lattice and open space are not in the way. Not every shuttle can leave every way: some sit in a notch of the station.)
+   * or null. (Lattice and open space are not in the way. Not every shuttle can leave every way: some sit in a notch of the station.) `at` ({map, tf}) asks it of
+   * another place than where the grid is: if it stood at `tf` in `map`.
    */
-  clearDirection(g, dist = 60) {
-    const w = g.world, tiles = [], others = g.map.solids.filter((o) => o !== g);
-    for (let r = 0; r < w.H; r++) for (let c = 0; c < w.W; c++) if (w.kind[w.idx(c, r)] !== KIND.SPACE) tiles.push(g.worldPoint(c * TILE + 1, 0, r * TILE + 1));
+  clearDirection(g, dist = 60, at = null) {
+    const w = g.world, tiles = [], map = at?.map || g.map, tf = at?.tf || g.tf, others = map.solids.filter((o) => o !== g);
+    for (let r = 0; r < w.H; r++) for (let c = 0; c < w.W; c++) if (w.kind[w.idx(c, r)] !== KIND.SPACE) tiles.push(tfPoint(tf, [c * TILE + 1, 0, r * TILE + 1]));
     for (const d of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
       let clear = true;
       for (let m = 1; m <= dist && clear; m++) {
