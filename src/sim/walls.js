@@ -1,6 +1,6 @@
 import { TILE } from '../shared/config.js';
 import { RW, GIRDER, WALLS, girderLook, GIRDER_DESC, T } from '../shared/walls.js';
-import { place, consume } from './inventory.js';
+import { consume } from './inventory.js';
 import { toolJob } from './tooljob.js';
 
 const isMetal = (it) => !!it?.path?.startsWith('/obj/item/stack/sheet/metal');
@@ -125,8 +125,7 @@ export class Walls {
   /** dismantle_wall(): the sheets, then the girder, on bare plating. */
   dismantle(th) {
     const sim = this.sim, w = sim.world;
-    const sheet = sim.newItem(th.info.sheet, { amount: th.info.amount });
-    place(sim, sheet, th.x + (sim.rand() - 0.5) * 0.8, th.z + (sim.rand() - 0.5) * 0.8);
+    sim.stacks.spawn(th.info.sheet, th.info.amount, th.x + (sim.rand() - 0.5) * 0.8, th.z + (sim.rand() - 0.5) * 0.8);
     w.dismantleWall(th.c, th.r, w.level.terrain.plating);
     sim.tileChanged(th.c, th.r);
     sim.addBuilt('girder', th.c, th.r, th.info.girder);
@@ -239,7 +238,7 @@ export class Walls {
 
   spill(rec, path, amount) {
     const sim = this.sim;
-    place(sim, sim.newItem(path, { amount }), rec.c * TILE + 1 + (sim.rand() - 0.5) * 0.6, rec.r * TILE + 1 + (sim.rand() - 0.5) * 0.6);
+    sim.stacks.spawn(path, amount, rec.c * TILE + 1 + (sim.rand() - 0.5) * 0.6, rec.r * TILE + 1 + (sim.rand() - 0.5) * 0.6);
   }
 
   // ------------------------------------------------------------------ examine

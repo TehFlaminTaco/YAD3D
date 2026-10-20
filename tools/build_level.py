@@ -349,6 +349,7 @@ GAME_ITEMS = [
     '/obj/item/clothing/under/color/grey', '/obj/item/clothing/shoes/sneakers/black', '/obj/item/storage/backpack',
     # what windows and grilles drop and are rebuilt from (window.dm spawnDebris, grille.dm deconstruct)
     '/obj/item/stack/rods', '/obj/item/stack/sheet/rglass', '/obj/item/stack/sheet/plasmaglass', '/obj/item/stack/sheet/plasmarglass', '/obj/item/shard',
+    '/obj/item/stack/tile/plasteel',               # what a metal sheet makes (the "floor tile" recipe) and a floor leaves when it is pried up
 ]
 
 

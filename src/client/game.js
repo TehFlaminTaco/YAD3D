@@ -18,6 +18,7 @@ import { InvHud } from './invhud.js';
 import { PDA } from './pda.js';
 import { ScreenFX } from './effects.js';
 import { DragDrop } from './dnd.js';
+import { StackWindow } from './stackui.js';
 import { TermUI } from './terminalui.js';
 import { Lobby } from './lobby.js';
 import { Screens } from './screens.js';
@@ -104,6 +105,7 @@ export class Game {
     this.screens = new Screens(this);
     this.charedit = new CharEditor(this);
     this.strip = new StripWindow(this);
+    this.stackwin = new StackWindow(this);
     this.debugMenu = new DebugMenu(this);
     this.dnd = new DragDrop(this);
     this.hands.show(false);
@@ -177,6 +179,7 @@ export class Game {
     rep.on('mob-', (ev) => this.view.removeMob(ev.id));
     rep.on('look', (ev) => { this.view.refreshMob(ev.id); if (ev.id === rep.you?.id) this.ownLookChanged(); });
     rep.on('strip', (ev) => this.strip.show(ev));
+    rep.on('stack', (ev) => this.stackwin.show(ev));
     rep.on('dbg', (ev) => this.debugMenu.reply(ev));
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('power', () => this.view.rebuildLights());
@@ -204,6 +207,7 @@ export class Game {
   onSelf(s) {
     this.access = new Set(s.access);
     this.debugMenu.sync();
+    this.stackwin.check();
     this.invIndex.clear();
     if (s.inv) {
       const walk = (it, where) => {
@@ -300,7 +304,7 @@ export class Game {
     else this.input.lock();
   }
 
-  get panelOpen() { return this.pda.open || this.term.open || this.screens.reportOpen || this.screens.helpOpen || this.charedit.open || this.strip.open || this.debugMenu.open; }
+  get panelOpen() { return this.pda.open || this.term.open || this.screens.reportOpen || this.screens.helpOpen || this.charedit.open || this.strip.open || this.stackwin.open || this.debugMenu.open; }
 
   /** A panel closed: if it was the reason we freed the pointer, capture it again. */
   panelsChanged() {
@@ -312,6 +316,7 @@ export class Game {
     if (this.charedit.open) return this.charedit.close();
     if (this.debugMenu.open) return this.debugMenu.close();
     if (this.strip.open) return this.strip.close();
+    if (this.stackwin.open) return this.stackwin.close();
     if (this.term.open) return this.term.close();
     if (this.screens.helpOpen) return this.screens.toggleHelp();
     if (this.pda.open) return this.pda.close();

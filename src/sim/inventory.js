@@ -1,5 +1,6 @@
 import { SLOTS, TILE } from '../shared/config.js';
 import { describeState, storageReason, fitsSlot, EQUIP_ORDER } from '../shared/items.js';
+import { stackKey, stackInfo, plural } from '../shared/stacks.js';
 
 const MAGBOOT_SLOW = 0.65;
 
@@ -104,11 +105,33 @@ export function allItems(mob) {
 // ---------------------------------------------------------------- operations
 const NOTICE = (sim, mob, text, k = 'warning') => sim.tell(mob, k, text);
 
-/** Pick a floor item up into the active hand (or the other one if the active hand is busy). */
+/** stack.dm merge(): move as much of `from` into `into` as there is room for (the same kind of stack); `from` goes when it is empty. Returns how many moved. */
+export function mergeStack(sim, from, into) {
+  const info = stackInfo(into.path);
+  if (!info || from === into || stackKey(from.path) !== stackKey(into.path)) return 0;
+  const move = Math.min(from.amount ?? 1, info.max - (into.amount ?? 1));
+  if (move <= 0) return 0;
+  from.amount = (from.amount ?? 1) - move;
+  into.amount = (into.amount ?? 1) + move;
+  if (from.amount <= 0) consume(sim, from);
+  return move;
+}
+
+/** "Your metal stack now contains 12 metal sheets." */
+export function stackNote(sim, mob, into) {
+  sim.tell(mob, 'notice', `Your ${into.name} stack now contains ${plural(into.amount, stackInfo(into.path).one)}.`);
+}
+
+/** Pick a floor item up into the active hand (or the other one if the active hand is busy). A stack joins the one you already hold (put_in_hands). */
 export function pickup(sim, mob, rec) {
+  const it = rec.item;
+  if (stackInfo(it.path)) {
+    const active = mob.hands[mob.active], inactive = mob.hands[1 - mob.active];
+    const into = active && stackKey(active.path) === stackKey(it.path) ? active : (!(active && stackKey(active.path) === stackKey(it.path)) && inactive && stackKey(inactive.path) === stackKey(it.path) ? inactive : null);
+    if (into && mergeStack(sim, it, into)) { stackNote(sim, mob, into); sim.sound('pickup', mob.x, mob.z, 0.7); return true; }
+  }
   const free = mob.hands[mob.active] ? (mob.hands[1 - mob.active] ? -1 : 1 - mob.active) : mob.active;
   if (free < 0) { NOTICE(sim, mob, 'Your hands are full.'); return false; }
-  const it = rec.item;
   detach(sim, it);
   attach(sim, it, { t: 'hand', mob, i: free });
   sim.sound('pickup', mob.x, mob.z, 0.7);

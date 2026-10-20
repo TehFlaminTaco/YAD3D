@@ -181,8 +181,7 @@ export class Windows {
       this.job(m, th, held, th.ws(), {
         label: 'taking the window apart', ds: DECON_SPEED, sfx: 'wrench', start: `You begin to disassemble ${the}...`,
         done: () => {
-          const sheets = sim.newItem(th.info.sheet, { amount: th.amount });
-          place(sim, sheets, m.x, m.z);
+          sim.stacks.spawn(th.info.sheet, th.amount, m.x, m.z);
           sim.sound('pickup', m.x, m.z, 0.6);
           th.remove();
           sim.tell(m, 'notice', `You successfully disassemble ${the}.`);
@@ -214,7 +213,7 @@ export class Windows {
       sim.sound('wirecutter', x, z, 0.9);
       w.removeGrille(t.c, t.r);
       sim.tileChanged(t.c, t.r);
-      place(sim, sim.newItem('/obj/item/stack/rods', { amount: 2 }), x, z);
+      sim.stacks.spawn('/obj/item/stack/rods', 2, x, z);
       return true;
     }
     if (grille && tool === 'screwdriver') {
@@ -260,7 +259,7 @@ export class Windows {
     const sim = this.sim, info = WINDOWS[key] || WINDOWS.window;
     const at = () => [x + (sim.rand() - 0.5) * 0.9, z + (sim.rand() - 0.5) * 0.9];
     for (let n = fulltile ? 2 : 1; n > 0; n--) place(sim, sim.newItem('/obj/item/shard'), ...at());
-    if (info.reinf) place(sim, sim.newItem('/obj/item/stack/rods', { amount: fulltile ? 2 : 1 }), ...at());
+    if (info.reinf) sim.stacks.spawn('/obj/item/stack/rods', fulltile ? 2 : 1, ...at());
   }
 
   // ------------------------------------------------------------------ examine

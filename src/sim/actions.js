@@ -1,10 +1,11 @@
 import { TILE, KIND, INTENTS, EYE, THROW_KICK } from '../shared/config.js';
 import { floatState } from '../shared/movement.js';
+import { stackKey, stackInfo, plural } from '../shared/stacks.js';
 import { clamp } from '../shared/util.js';
 import { storageReason, fitsSlot, describeState } from '../shared/items.js';
 import {
   attach, detach, place, pickup, dropFromHand, swapHands, quickEquip, equipTo, storeIn, takeToHand, moveItem, carried,
-  recalc, internalsSource, allItems, consume,
+  recalc, internalsSource, allItems, consume, mergeStack, stackNote,
 } from './inventory.js';
 
 const REACH = 3.2;
@@ -121,6 +122,7 @@ export class Actions {
     const it = m.held;
     if (!it) { sim.tell(m, 'notice', 'You have nothing in your hand.'); return; }
     const d = it.def;
+    if (stackInfo(it.path)) return sim.stacks.open(m, it);               // a stack: what it can make, and taking some out
     if (d.light) return this.toggleLight(m);
     if (d.tool === 'welder') {
       if (it.fuel <= 0) { sim.tell(m, 'warning', 'The welding tool is out of fuel.'); return; }
@@ -207,6 +209,11 @@ export class Actions {
 
   clickItem(m, rec, held) {
     const sim = this.sim;
+    // a stack in your hand and another of its kind on the floor: the floor one joins yours (stack.dm attackby)
+    if (held && stackInfo(held.path) && stackKey(held.path) === stackKey(rec.item.path)) {
+      if (mergeStack(sim, rec.item, held)) { stackNote(sim, m, held); sim.sound('pickup', m.x, m.z, 0.5); }
+      return;
+    }
     // a held container takes the item in
     if (held?.def.storage && m.intent === 'help') {
       const why = storageReason(held, rec.item);
@@ -744,8 +751,9 @@ export class Actions {
     const info = db.info(it.path);
     if (info.d) out.push(info.d);
     out.push(`It is ${a(db.sizeName(it.w))} item.`);
-    const st = describeState(it);
-    if (st) out.push(`(${st})`);
+    const stack = stackInfo(it.path);
+    if (stack) out.push((it.amount ?? 1) > 1 ? `There are ${plural(it.amount, stack.one)} in the stack.` : `There is ${plural(1, stack.one)} in the stack.`);
+    else { const st = describeState(it); if (st) out.push(`(${st})`); }
     return out;
   }
 

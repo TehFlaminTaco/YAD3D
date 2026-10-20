@@ -6,6 +6,7 @@ import { Sim } from '../src/sim/sim.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
 import { CL } from '../src/shared/closets.js';
 import { recalc, place, attach, detach } from '../src/sim/inventory.js';
+import { menuFor } from '../src/shared/stacks.js';
 import { HIDE } from '../src/shared/looks.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1518,6 +1519,147 @@ section('walls and girders', () => {
   const C = sim.addClient('Cara', () => {});
   const ws = sim.worldState(C);
   ok(ws.built.length === sim.built.size && ws.tiles.some((e) => e.i === plain.i), 'a later joiner gets the girders and the changed tiles');
+});
+
+section('stacks', () => {
+  const { sim, A, a, inbox, step, evs, hand } = setup({ debug: true });
+  const w = sim.world, I = (c, r) => r * w.W + c;
+  const click = (target) => { a.cool = 0; sim.handle(A, { t: 'click', target }); step(0.06); };
+  const said = (from) => inbox.a.slice(from).filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((x) => x.e === 'msg').map((x) => x.text);
+  const floorAt = (x, z, path) => [...sim.floor.values()].filter((f) => f.item.path === path && Math.abs(f.x - x) < 0.6 && Math.abs(f.z - z) < 0.6);
+  const hold = (path, amount, i = 0) => { const it = sim.newItem(path, { amount }); hand(a, it, i); a.active = i; a.cool = 0; return it; };
+  const clear = () => { for (const i of [0, 1]) if (a.hands[i]) { sim.items.delete(a.hands[i].id); a.hands[i] = null; } };
+  const METAL = '/obj/item/stack/sheet/metal';
+  // a floor tile with free floor in front of it (yaw 0 faces north)
+  let spot = null;
+  for (let i = 0; i < w.W * w.H && !spot; i++) {
+    const c = i % w.W, r = Math.floor(i / w.W);
+    if (r < 4 || w.kind[i] !== 1 || w.solid[i] || w.areas[w.areaIdx[i]].c !== 'hallway') continue;
+    const f = I(c, r - 1);
+    if (w.kind[f] === 1 && !w.solid[f] && !w.dyn[f] && !w.doorAt.has(f) && !sim.built.at(c, r - 1)) spot = { c, r, f: [c, r - 1] };
+  }
+  ok(!!spot, 'found open floor with open floor in front of it');
+  const stand = () => { a.x = spot.c * TILE + 1; a.z = spot.r * TILE + 1.4; a.vx = a.vz = 0; a.yaw = 0; a.pitch = 0; a.busy = null; a.stunned = 0; };
+  stand(); clear();
+
+  // ---- what the menu offers (stack.dm ui_interact)
+  const menu = (n) => menuFor(METAL, n, 'metal sheet');
+  ok(JSON.stringify(menu(12).map((r) => r.mults)) === '[[1,5],[1,5,10,12],[1]]', 'at 12 sheets: floor tiles 1x and 5x (the 20 tile cap), rods 1x 5x 10x 12x, girders once');
+  ok(menu(1)[2].can === false && menu(1)[0].can === true, 'girders need two sheets');
+  ok(menu(3)[0].label === '4x floor tiles (1 metal sheet)' && menu(3)[1].label === '2x metal rods (1 metal sheet)' && menu(3)[2].label === 'wall girders (2 metal sheets)', 'the labels are the DM\'s');
+
+  // ---- merging: picking one up joins the one you hold (put_in_hands), up to 50
+  const mine = hold(METAL, 10);
+  const pile = sim.newItem(METAL, { amount: 5 }); place(sim, pile, a.x, a.z - 0.3);
+  let mark = inbox.a.length;
+  click({ k: 'item', id: pile.id });
+  ok(mine.amount === 15 && !sim.floor.has(pile.id), 'clicking a stack with one in your hand joins them');
+  ok(said(mark).includes('Your metal stack now contains 15 metal sheets.'), 'with the DM\'s message');
+  clear();
+  const nearlyFull = hold(METAL, 48);
+  const more = sim.newItem(METAL, { amount: 5 }); place(sim, more, a.x, a.z - 0.3);
+  click({ k: 'item', id: more.id });
+  ok(nearlyFull.amount === 50 && more.amount === 3 && sim.floor.has(more.id), 'a stack holds 50: the rest stays on the floor');
+  clear();
+  const lone = sim.newItem('/obj/item/stack/rods', { amount: 2 }); place(sim, lone, a.x, a.z - 0.3);
+  mark = inbox.a.length;
+  const metalHeld = hold(METAL, 4, 1); a.active = 0;                  // metal in the other hand
+  click({ k: 'item', id: lone.id });
+  ok(a.hands[0] === lone && metalHeld.amount === 4, 'a different kind of stack is just picked up');
+  const metal2 = sim.newItem(METAL, { amount: 3 }); place(sim, metal2, a.x, a.z - 0.3);
+  mark = inbox.a.length;
+  click({ k: 'item', id: metal2.id });
+  ok(metalHeld.amount === 7 && !sim.floor.has(metal2.id) && a.hands[0] === lone, "rods in the active hand, metal in the other: picking up metal joins the other hand's stack (put_in_hands)");
+  ok(said(mark).includes('Your metal stack now contains 7 metal sheets.'), 'and says so');
+  clear();
+
+  // ---- floor stacks drop onto each other (Initialize merges with what lies there)
+  const [sx, sz] = [spot.c * TILE + 1, spot.r * TILE + 1];
+  const sweep = () => { for (const f of [...sim.floor.values()]) if (f.c === spot.c && f.r === spot.r) { sim.floor.delete(f.item.id); sim.items.delete(f.item.id); } };
+  sweep();
+  sim.stacks.spawn(METAL, 20, sx, sz);
+  sim.stacks.spawn(METAL, 20, sx, sz);
+  sim.stacks.spawn(METAL, 20, sx, sz);
+  ok(floorAt(sx, sz, METAL).map((f) => f.item.amount).sort((p, q) => p - q).join() === '10,50', '60 sheets on one tile make a stack of 50 and one of 10');
+  for (const f of floorAt(sx, sz, METAL)) { sim.floor.delete(f.item.id); sim.items.delete(f.item.id); }
+
+  // ---- Z opens the menu
+  stand(); clear();
+  const sheets = hold(METAL, 12);
+  inbox.a.length = 0;
+  sim.handle(A, { t: 'key', k: 'activate' }); step(0.1);
+  const open = evs(inbox.a, 'stack').at(-1);
+  ok(open && open.id === sheets.id && open.amount === 12 && open.one === 'metal sheet' && open.recipes.length === 3, 'Z on a stack sends its menu');
+  // making things: floor tiles come out in your free hand, 4 for a sheet
+  sim.handle(A, { t: 'stack', op: 'make', item: sheets.id, i: 0, mult: 1 }); step(0.1);
+  const tiles = a.hands[1];
+  ok(sheets.amount === 11 && tiles && tiles.path === '/obj/item/stack/tile/plasteel' && tiles.amount === 4, 'one sheet makes four floor tiles, into your other hand');
+  sim.handle(A, { t: 'stack', op: 'make', item: sheets.id, i: 0, mult: 5 }); step(0.1);
+  ok(sheets.amount === 6, 'five at a time uses five sheets');
+  ok(floorAt(a.x - Math.sin(a.yaw) * 0.6, a.z - Math.cos(a.yaw) * 0.6, '/obj/item/stack/tile/plasteel').reduce((s, f) => s + f.item.amount, 0) === 20, 'with both hands busy the twenty tiles land at your feet');
+  sim.handle(A, { t: 'stack', op: 'make', item: sheets.id, i: 0, mult: 6 }); step(0.1);
+  ok(sheets.amount === 6, 'a multiplier above the cap is refused');
+  sim.handle(A, { t: 'stack', op: 'make', item: sheets.id, i: 1, mult: 2 }); step(0.1);
+  ok(sheets.amount === 4, 'metal rods');
+  clear();
+
+  // ---- wall girders: two sheets, 4 s, one per tile, on a floor, put up in front of you
+  stand();
+  const g = hold(METAL, 5);
+  mark = inbox.a.length;
+  sim.handle(A, { t: 'stack', op: 'make', item: g.id, i: 2, mult: 1 }); step(0.1);
+  ok(said(mark).includes('You start building a wall girders...'), 'the DM\'s words, grammar and all');
+  step(3.3);
+  ok(!sim.built.at(...spot.f), 'it takes 4 s');
+  step(0.9);
+  const gb = sim.built.at(...spot.f);
+  ok(gb && gb.k === 'girder' && gb.st === 0 && g.amount === 3, 'a girder stands in front of you and two sheets are gone');
+  mark = inbox.a.length;
+  sim.handle(A, { t: 'stack', op: 'make', item: g.id, i: 2, mult: 1 }); step(0.1);
+  ok(said(mark).includes('There is another wall girders here!'), 'not twice on one tile');
+  sim.removeBuilt(gb);
+  a.yaw = Math.PI; stand(); a.yaw = Math.PI;                      // face the other way
+  const wallAhead = (() => { for (let i = 0; i < w.W * w.H; i++) { const c = i % w.W, r = Math.floor(i / w.W); if (w.kind[i] === 1 && !w.solid[i] && w.kind[I(c, r - 1)] === 2) return { c, r }; } return null; })();
+  ok(!!wallAhead, 'found a spot facing a wall');
+  if (wallAhead) {
+    a.x = wallAhead.c * TILE + 1; a.z = wallAhead.r * TILE + 1.4; a.yaw = 0;
+    mark = inbox.a.length;
+    sim.handle(A, { t: 'stack', op: 'make', item: g.id, i: 2, mult: 1 }); step(0.1);
+    ok(said(mark).includes('The wall girders must be constructed on the floor!'), 'and not on a wall');
+  }
+  stand(); g.amount = 1;
+  mark = inbox.a.length;
+  sim.handle(A, { t: 'stack', op: 'make', item: g.id, i: 2, mult: 1 }); step(0.1);
+  ok(said(mark).some((t) => /You haven't got enough the metal to build the 2 wall girderss!/.test(t)), 'one sheet is not enough (the DM\'s plural and all)');
+  // walking off stops it
+  g.amount = 5; stand();
+  sim.handle(A, { t: 'stack', op: 'make', item: g.id, i: 2, mult: 1 }); step(1);
+  ok(!!a.busy, 'building in progress');
+  a.x += 30; step(0.3);
+  ok(!a.busy && !sim.built.at(...spot.f) && g.amount === 5, 'walking away stops it and costs nothing');
+  clear();
+
+  // ---- taking some out (alt-click in the DM)
+  stand();
+  const big = hold(METAL, 10);
+  mark = inbox.a.length;
+  sim.handle(A, { t: 'stack', op: 'take', item: big.id, n: 3 }); step(0.1);
+  ok(big.amount === 7 && a.hands[1] && a.hands[1].amount === 3 && a.hands[1].path === METAL, 'three sheets go to the other hand');
+  ok(said(mark).includes('You take 3 sheets out of the stack.'), 'DM\'s message');
+  sim.handle(A, { t: 'stack', op: 'take', item: big.id, n: 99 }); step(0.1);
+  ok(!sim.items.has(big.id) || big.amount <= 0 || a.hands[0] !== big, 'taking more than there is takes what there is');
+  clear();
+
+  // ---- examine
+  const ex = sim.newItem(METAL, { amount: 12 });
+  ok(sim.actions.itemText(ex).includes('There are 12 metal sheets in the stack.'), 'examining a stack');
+  ok(sim.actions.itemText(sim.newItem(METAL, { amount: 1 })).includes('There is 1 metal sheet in the stack.'), 'and one sheet');
+
+  // ---- what window and wall drops do: they join the pile on the tile
+  sweep();
+  const pre = floorAt(sx, sz, METAL).length;
+  sim.stacks.spawn(METAL, 2, sx, sz); sim.stacks.spawn(METAL, 2, sx, sz);
+  ok(floorAt(sx, sz, METAL).length - pre <= 1 && floorAt(sx, sz, METAL).some((f) => f.item.amount === 4), 'two drops of two sheets are one stack of four');
 });
 
 console.log(`${pass} passed, ${fail} failed`);

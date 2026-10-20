@@ -15,7 +15,7 @@ browser. It works end to end. **Not everything is committed or pushed** (below).
 * **Git state (2026-10-20):** committed and pushed; PR #1 has everything. `99cef4d` is one commit holding the work of two sessions that ran side by side (the debug menu 13, the inventory HUD 14,
   the observer and rune fixes, zero gravity 15, windows and grilles 17, door angles and wall mounts 18, the TG notes and `tools/tg*.py` 16): their edits share files (`sim.js`, `world.js`,
   `movement.js`, `hud.js`, `simtest2.mjs`) and could not be split. Check `git status -sb` for anything newer.
-* **Tests (all pass now):** `node tools/simtest2.mjs` 404/404, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
+* **Tests (all pass now):** `node tools/simtest2.mjs` 436/436, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
   (191 assertions, about 4 min) and `node tools/nettest.mjs` (29) were last run before the window work, were **edited for the new HUD but never run** (they hard-code a Playwright path that
   only exists in the Linux container, see section 3), and could not be run in the Windows sessions since: re-run both before you say "all green". The multiplayer suite is the one most worth
   running (tile, `look`, `pm`, `imv`, `strip` and `grav` events and the debug flag are all new since it last ran).
@@ -73,7 +73,7 @@ The user is casual and direct ("Get that shit goin'"). Their actual feedback so 
 ```sh
 git clone https://github.com/TehFlaminTaco/YAD3D && cd YAD3D && git checkout claude/yad3d-game
 npm install                        # three (vendored copy is what the page loads), ws
-node tools/simtest2.mjs            # sanity: 404 passed
+node tools/simtest2.mjs            # sanity: 436 passed
 python3 tools/serve.py 8123 &      # static server; needed by uitest.mjs and shot.mjs
 npm start                          # or the multiplayer server on :8080
 ```
@@ -195,7 +195,7 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 
 | What | Command | Notes |
 | --- | --- | --- |
-| Sim logic (no browser) | `node tools/simtest2.mjs` | 404 assertions, seconds. Add a `section()` for any new server rule. Sections: spawn, inventory, combat, doors, breaches, closets, characters, people, structures, observers, debug menu, door angles and wall mounts, zero gravity, windows and grilles, chat, consoles, drag and drop, death. |
+| Sim logic (no browser) | `node tools/simtest2.mjs` | 436 assertions, seconds. Add a `section()` for any new server rule. Sections: spawn, inventory, combat, doors, breaches, closets, characters, people, structures, observers, debug menu, door angles and wall mounts, zero gravity, windows and grilles, chat, consoles, drag and drop, death. |
 | Long soak | `node tools/simtest.mjs 12 --player` | a 12-minute simulated shift, ~4 s |
 | Browser UI (local round) | `node tools/uitest.mjs` | needs :8123 static server; ~4 min; `BASE=`, `SHOTS=` env; drives the real mouse/keyboard |
 | Closets, people (in simtest2) | `node tools/simtest2.mjs` | the `closets` section: DM contents, locks, welding, breakout, personal lockers; the `people` section: handcuffs, strip window, pockets, grabs, examine, stuffing |
@@ -480,4 +480,15 @@ Read from `walls.dm`, `reinf_walls.dm`, `girders.dm` (all delays and messages ar
 * `src/sim/tooljob.js` (`toolJob`) is the timed tool step both the windows and the walls use; reuse it for anything that is "work for N ds, still there, still holding it, still close".
 * Wall mounts (an APC, buttons) on a wall that is taken down stay drawn where the wall was (the DM leaves such objects on the tile too).
 * Build: `structs` (girder sprites) and `terrain.plating|floor|engine` are in `level.json`. Test: the `walls and girders` section of `tools/simtest2.mjs`.
+
+### Stage 2: stacks (`src/shared/stacks.js`, `src/sim/stacks.js`, `src/client/stackui.js`)
+From `stack.dm` and `sheet_types.dm`. `STACKS` lists what stacks (max_amount, singular_name; two items merge when they match the same entry, like merge_type) and `RECIPES` what the menu makes; the DM's metal list has
+dozens of entries (chairs, frames, airlock assemblies, wall frames...), only the three the game can build are in (floor tile 1 -> 4, metal rod 1 -> 2, wall girders 2 sheets 40 ds), so adding a recipe is one line once its result exists.
+* **Merging** (`mergeStack`, `stackNote` in `inventory.js`): picking a stack up joins the one in your active hand, else the other (put_in_hands), and clicking a floor stack with one in hand joins it into yours; a stack holds `max`, the
+  rest stays on the floor. "Your metal stack now contains N metal sheets." `Stacks.spawn(path, amount, x, z)` makes stacks of at most max and joins them to what lies on the tile (every window / wall / girder drop uses it).
+* **The menu**: `Z` on a stack sends `{e:'stack', id, name, amount, recipes}`; `StackWindow` shows "Amount Left", a take-out row (stack.dm's Alt+click prompt) and one row per recipe with the 5x / 10x / 25x / max buttons the DM offers.
+  Messages from the client: `{t:'stack', op:'make', item, i, mult}` (the stack must be in your active hand) and `{op:'take', item, n}`. The server answers with a fresh `stack` event, or `{close:1}` when the stack is gone.
+* **Building**: a structure goes on the tile **in front of you** (the DM builds under your feet; here you would stand inside it, so `moveOut` also nudges you back if you overlap). Checks and messages are `building_checks`' ("There is another wall girders here!",
+  "The wall girders must be constructed on the floor!", "You haven't got enough the metal to build the 2 wall girderss!": the DM's own grammar). It stops if you walk away or put the stack down.
+* Items: `/obj/item/stack/tile/plasteel` (the floor tile) is in `GAME_ITEMS`. Test: the `stacks` section of `tools/simtest2.mjs` (436 assertions in all).
 

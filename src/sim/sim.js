@@ -21,6 +21,7 @@ import { Closets } from './closets.js';
 import { People } from './people.js';
 import { Windows } from './windows.js';
 import { Walls } from './walls.js';
+import { Stacks } from './stacks.js';
 import { BuiltSet } from '../shared/built.js';
 import { GIRDER } from '../shared/walls.js';
 import { Debug } from './debug.js';
@@ -110,6 +111,7 @@ export class Sim {
     this.people = new People(this);
     this.windows = new Windows(this);
     this.walls = new Walls(this);
+    this.stacks = new Stacks(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // after the floor items: closed closets swallow what lies on them
   }
@@ -638,6 +640,7 @@ export class Sim {
         break;
       case 'mirror': this.actions.mirror(c, msg); break;
       case 'strip': this.people.handle(c, msg); break;
+      case 'stack': this.stacks.handle(c, msg); break;
       case 'stuff': { const it = this.props.interact[msg.idx]; if (c.mob && it?.kind === 'closet') this.closets.stuff(c.mob, it, this.mobs.get(msg.id)); break; }
       case 'input':
         for (const inp of msg.list || [msg]) { if (c.inputs.length < 60) c.inputs.push(inp); }
