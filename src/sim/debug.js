@@ -1,6 +1,7 @@
 import { TILE, KIND, SLOTS } from '../shared/config.js';
 import { attach, detach, place, recalc } from './inventory.js';
 import { stackInfo } from '../shared/stacks.js';
+import { qmul, qFromAxisAngle, qYaw, qTwistY, tfClone } from '../shared/math3.js';
 
 const MAX_ITEMS = 25;             // most things one spawn makes (a stack counts as one thing with that many in it)
 const MAX_STACK = 50;
@@ -356,7 +357,7 @@ export class Debug {
     const sim = this.sim, what = String(msg.what);
     if (what === 'list') {
       const map = sim.mapOf(c.at);
-      const grids = map.solids.map((g) => ({ id: g.id, bp: g.bp, kind: g.kind, name: g.name, docked: g.docked, flying: sim.shuttles.flying(g), sp: +Math.hypot(g.vel[0], g.vel[2]).toFixed(1), spin: +g.ang[1].toFixed(2), x: Math.round(g.tf.p[0]), z: Math.round(g.tf.p[2]) }));
+      const grids = map.solids.map((g) => ({ id: g.id, bp: g.bp, kind: g.kind, name: g.name, docked: g.docked, tilted: g.tilted, flying: sim.shuttles.flying(g), sp: +Math.hypot(g.vel[0], g.vel[2]).toFixed(1), spin: +g.ang[1].toFixed(2), x: Math.round(g.tf.p[0]), z: Math.round(g.tf.p[2]) }));
       sim.emit({ e: 'dbg', k: 'grids', grids }, { to: c });
       return;
     }
@@ -378,6 +379,25 @@ export class Debug {
         break;
       }
       case 'stop': sim.shuttles.halt(g); this.say(c, `${g.name} stops.`); break;
+      case 'tilt': {                                                                          // turn it up on its side (about the east-west axis) by `deg` degrees: a grid across the others
+        if (g.docked) sim.undock(g);
+        sim.physics.setFree3d(g, true);
+        const deg = Math.max(-180, Math.min(180, num(msg.deg, 90)));
+        sim.physics.place(g, { p: [...g.tf.p], q: qmul(qFromAxisAngle([1, 0, 0], deg * Math.PI / 180), g.tf.q) });
+        sim.relink(g.map);
+        g.emit({ e: 'grid~', docked: false, tf: tfClone(g.tf) });
+        this.say(c, `${g.name} tips over.`);
+        break;
+      }
+      case 'level': {
+        sim.physics.setVel(g, [0, 0, 0], [0, 0, 0]);
+        sim.physics.place(g, { p: [g.tf.p[0], 0, g.tf.p[2]], q: qYaw(qTwistY(g.tf.q)) });
+        sim.physics.setFree3d(g, false);
+        sim.relink(g.map);
+        g.emit({ e: 'grid~', docked: false, tf: tfClone(g.tf) });
+        this.say(c, `${g.name} rights itself.`);
+        break;
+      }
       case 'board': {
         const w = g.world;
         for (let i = 0; i < w.n; i++) if (w.kind[i] === KIND.FLOOR && !w.solid[i] && !w.doorAt.has(i)) { this.teleport(c, c.mob, g, (i % w.W) * TILE + 1, Math.floor(i / w.W) * TILE + 1); break; }

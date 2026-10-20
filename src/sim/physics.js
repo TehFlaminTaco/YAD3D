@@ -64,7 +64,7 @@ export class GridPhysics {
 
   add(g) {
     const w = this.world(g.map);
-    w.addBody(g.id, { type: g.docked ? 'fixed' : 'dynamic', p: g.tf.p, q: g.tf.q, v: g.vel, w: g.ang, lock: { y: true, rx: true, rz: true } });
+    w.addBody(g.id, { type: g.docked ? 'fixed' : 'dynamic', p: g.tf.p, q: g.tf.q, v: g.vel, w: g.ang, lock: g.free3d ? null : { y: true, rx: true, rz: true } });
     this.setShape(g);
   }
 
@@ -95,6 +95,12 @@ export class GridPhysics {
     if (pose) { g.tf = tfClone(pose); g.vel = [0, 0, 0]; g.ang = [0, 0, 0]; }
     w.setType(g.id, on ? 'fixed' : 'dynamic');
     if (on || pose) w.setPose(g.id, g.tf.p, g.tf.q, true);
+  }
+
+  /** Let a grid tip over and move in all three directions (`on`), or hold it level in its plane again: only the turn about the vertical is free by default. */
+  setFree3d(g, on) {
+    g.free3d = !!on;
+    this.world(g.map).setLocks(g.id, on ? {} : { y: true, rx: true, rz: true });
   }
 
   /** Put it somewhere, standing still. */

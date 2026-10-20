@@ -52,6 +52,27 @@ export function qToYaw(q) {
   return Math.atan2(-f[0], -f[2]);
 }
 
+/**
+ * q = tilt * Ry(twist): `qTwistY` is how far q turns about its own vertical axis (its heading), `qTilt` what is left when that turn is taken out (what tips it
+ * off level). A grid that only turns about the vertical has no tilt (the identity) and a twist equal to its `qToYaw`.
+ */
+export const qTwistY = (q) => 2 * Math.atan2(q[1], q[3]);
+export const qTilt = (q) => qnorm(qmul(q, qYaw(-qTwistY(q))));
+/** Does q only turn about the vertical axis? */
+export const qLevel = (q, eps = 1e-6) => Math.abs(q[0]) < eps && Math.abs(q[2]) < eps;
+
+/** The direction (unit) a body that faces `yaw` and looks up `pitch` is looking along, in its own frame: yaw 0, pitch 0 is north (-z). */
+export const lookDir = (yaw, pitch = 0) => { const c = Math.cos(pitch); return [-Math.sin(yaw) * c, Math.sin(pitch), -Math.cos(yaw) * c]; };
+/** The inverse: { yaw, pitch } of a direction. */
+export function dirLook(d) {
+  const l = vlen(d) || 1;
+  return { yaw: Math.atan2(-d[0], -d[2]), pitch: Math.asin(Math.max(-1, Math.min(1, d[1] / l))) };
+}
+/** A facing ({ yaw, pitch }) made in a frame turned by `qFrom`, in a frame turned by `qTo` (both in the map): what you look along does not change, only the frame you say it in. */
+export function reorient(qFrom, qTo, yaw, pitch = 0) {
+  return dirLook(qirot(qTo, qrot(qFrom, lookDir(yaw, pitch))));
+}
+
 export function qslerp(a, b, t) {
   let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
   let bb = b;

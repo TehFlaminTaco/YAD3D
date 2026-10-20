@@ -1,5 +1,5 @@
-import { TILE } from './config.js';
-import { qToYaw } from './math3.js';
+import { TILE, WALL_H } from './config.js';
+import { qToYaw, qTwistY } from './math3.js';
 
 /**
  * A map: a separate space of grids, with its own void. The station, a CentCom sector and an away mission are different maps; a grid is in
@@ -42,14 +42,15 @@ export class GameMap {
     for (const b of this.grids.values()) {
       if (b === v) continue;
       const bw = b.world;
-      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
-      for (const [cx, cz] of [[0, 0], [bw.W * TILE, 0], [bw.W * TILE, bw.H * TILE], [0, bw.H * TILE]]) {
-        const p = b.worldPoint(cx, 0, cz);
-        x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[2]); z1 = Math.max(z1, p[2]);
+      let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      for (const cx of [0, bw.W * TILE]) for (const cy of [-0.3, WALL_H + 0.3]) for (const cz of [0, bw.H * TILE]) {          // its box in the map, as it is turned now
+        const p = b.worldPoint(cx, cy, cz);
+        x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); z0 = Math.min(z0, p[2]); z1 = Math.max(z1, p[2]);
       }
       const o = b.localPoint([0, 0, 0]), ex = b.localPoint([1, 0, 0]), ez = b.localPoint([0, 0, 1]);
       out.push({
-        grid: b, world: bw, rect: [x0 - 0.5, z0 - 0.5, x1 + 0.5, z1 + 0.5],
+        grid: b, world: bw, rect: [x0 - 0.5, z0 - 0.5, x1 + 0.5, z1 + 0.5], box: [x0 - 0.5, y0 - 0.5, z0 - 0.5, x1 + 0.5, y1 + 0.5, z1 + 0.5],
+        flat: !b.tilted,                                                                                // only a grid that turns about the vertical alone has a 2 by 2 way across
         a: ex[0] - o[0], b: ez[0] - o[0], c: ex[2] - o[2], d: ez[2] - o[2], tx: o[0], tz: o[2],
         dyaw: qToYaw(v.tf.q) - qToYaw(b.tf.q),
       });
@@ -67,7 +68,7 @@ export class GameMap {
   relink() {
     const all = this.solids;
     for (const g of all) g.world.neighbors = [];
-    const gs = all.filter((g) => g.docked);                    // only grids that are held in place lie against each other: a flying one has no neighbours
+    const gs = all.filter((g) => g.docked && !g.tilted);       // only grids that are held in place, and level, lie against each other: a flying one has no neighbours, nor does one that is tipped over
     const changed = [];
     for (const a of gs) {
       const aw = a.world;

@@ -81,6 +81,14 @@ export class PhysicsWorld {
     }
   }
 
+  /** Let the body tip and rise (no locks: `{}`), or keep it in its plane again (`{ y, rx, rz: true }`). */
+  setLocks(id, lock = {}) {
+    const rec = this.bodies.get(id);
+    if (!rec) return;
+    rec.rb.setEnabledTranslations(true, !lock.y, true, true);
+    rec.rb.setEnabledRotations(!lock.rx, true, !lock.rz, true);
+  }
+
   setType(id, type) {
     const rec = this.bodies.get(id);
     if (!rec || rec.type === type) return;

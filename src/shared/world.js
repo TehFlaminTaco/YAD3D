@@ -1,4 +1,4 @@
-import { TILE, KIND, DV, OPP, N, S, E, W, PLAYER_R, GRIP_REACH } from './config.js';
+import { TILE, KIND, DV, OPP, N, S, E, W, PLAYER_R, GRIP_REACH, WALL_H } from './config.js';
 import { WS, WINDOWS } from './windows.js';
 import { WALLS, RW } from './walls.js';
 
@@ -431,6 +431,26 @@ export class World {
           if ((e & E) && z + h > z0 && z - h < z1 && x + h > x1 - th && x - h < x1 + th) return true;
         }
       }
+    }
+    return false;
+  }
+
+  /**
+   * A ball of radius `h` with its middle at (x, y, z) in this grid's frame (y up from the deck), for something that is not walking on the deck but flying
+   * about outside or through it: the walls, doors, edges and things of `collidesTiles` where it is as high as they are, and the floor under it and the roof
+   * over it (a floor is a slab at the deck, a roof one at the top of the walls where the tile has a roof).
+   */
+  collidesTiles3(x, y, z, h, ignore = null, slabs = true) {
+    const lo = y - h, hi = y + h;
+    if (hi > -0.1 && lo < WALL_H && this.collidesTiles(x, z, h, ignore, false)) return true;
+    if (!slabs) return false;
+    const slab = lo < 0 && hi > -0.1, top = hi > WALL_H && lo < WALL_H + 0.1;
+    if (!slab && !top) return false;
+    const c0 = Math.floor((x - h) / TILE), c1 = Math.floor((x + h) / TILE), r0 = Math.floor((z - h) / TILE), r1 = Math.floor((z + h) / TILE);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      if (!this.inb(c, r)) continue;
+      const i = this.idx(c, r), k = this.kind[i];
+      if (k === KIND.FLOOR) { if (slab) return true; if (top && this.roof[i]) return true; }
     }
     return false;
   }

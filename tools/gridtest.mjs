@@ -6,11 +6,11 @@ import { loadSimData } from '../src/sim/load.js';
 import { initPhysics } from '../src/shared/physics.js';
 import { Sim } from '../src/sim/sim.js';
 import { Replica } from '../src/client/state.js';
-import { SIM_DT, TILE, ENTER_MAX, VOID_LIMIT } from '../src/shared/config.js';
+import { SIM_DT, TILE, ENTER_MAX, VOID_LIMIT, CENTER_H } from '../src/shared/config.js';
 import { stepMovement } from '../src/shared/movement.js';
 import { settle } from '../src/shared/frames.js';
 import { place } from '../src/sim/inventory.js';
-import { qYaw, qToYaw, tfPoint } from '../src/shared/math3.js';
+import { qYaw, qToYaw, qTwistY, qFromAxisAngle, qrot, lookDir, tfPoint } from '../src/shared/math3.js';
 import { KIND } from '../src/shared/config.js';
 import { makeBlueprint, withGrids } from './gridkit.mjs';
 
@@ -660,14 +660,14 @@ function voidRound() {
   const hurt = sim.hurt.bind(sim);
   sim.hurt = (m, amount, type, src) => { if (src === 'impact') hits.push(amount); return hurt(m, amount, type, src); };
   /** One input a tick, for `sec` seconds: keys held, facing `dir` in the map (so it stays the same whichever grid you are on). */
-  const drive = (sec, keys, dir = a.yaw + qToYaw(a.grid.tf.q)) => {
+  const drive = (sec, keys, dir = a.yaw + qTwistY(a.grid.tf.q)) => {
     for (let k = 0; k < Math.round(sec / 0.05); k++) {
-      sim.handle(A, { t: 'input', list: [{ seq: ++seq, dt: 0.05, f: 0, b: 0, l: 0, r: 0, run: 0, ...keys, yaw: dir - qToYaw(a.grid.tf.q), pitch: 0, g: a.grid.id }] });
+      sim.handle(A, { t: 'input', list: [{ seq: ++seq, dt: 0.05, f: 0, b: 0, l: 0, r: 0, run: 0, ...keys, yaw: dir - qTwistY(a.grid.tf.q), pitch: 0, g: a.grid.id }] });
       step(0.05);
     }
   };
   const [station, deck, room] = station_(sim);
-  const put = (g, x, z, vx = 0, vz = 0) => { a.grid = g; a.map = g.map; a.x = x; a.z = z; a.vx = vx; a.vz = vz; a.dirty = true; };
+  const put = (g, x, z, vx = 0, vz = 0) => { a.grid = g; a.map = g.map; a.x = x; a.z = z; a.vx = vx; a.vz = vz; a.y = g.kind === 'void' ? CENTER_H : 0; a.vy = 0; a.q = [0, 0, 0, 1]; a.dirty = true; };
   return { sim, data, A, a, inbox, step, drive, station, deck, room, vd: sim.station.map.void, put, hits };
 }
 const station_ = (sim) => sim.station.map.solids;
@@ -857,6 +857,171 @@ section('floating free in the void', () => {
     const gsnap = ibox.filter((m) => m.t === 'snap').pop();
     ok(gsnap && gsnap.you.ghost && gsnap.you.g === vd.id, 'someone who is only watching floats in the void too, in the coordinates of the map');
     void A;
+  }
+});
+
+// ---------------------------------------------------------------------------------------------------------------- grids across each other
+/** The station with the platform stood on its side (docked at (700, 60, 300), turned a quarter about the east-west axis: its up is the map's south, its north is the map's up), and Alice playing. */
+function tiltRound() {
+  BP.deck = makeBlueprint(DATA.level, DECK);
+  const q = qFromAxisAngle([1, 0, 0], Math.PI / 2);
+  const data = withGrids(DATA, BP, [{ bp: 'deck', kind: 'shuttle', p: [700, 60, 300], q }]);
+  const sim = new Sim(data, { bots: 0 });
+  const inbox = [];
+  const A = sim.addClient('Alice', (m) => inbox.push(m));
+  sim.handle(A, { t: 'lobby', op: 'job', id: 'station_engineer' });
+  sim.handle(A, { t: 'lobby', op: 'ready', v: true });
+  sim.handle(A, { t: 'lobby', op: 'start' });
+  const step = (sec) => { for (let k = 0; k < sec / SIM_DT; k++) sim.step(SIM_DT); };
+  let seq = 0;
+  const a = A.mob;
+  const drive = (sec, keys, yaw = a.yaw, pitch = 0) => {
+    for (let k = 0; k < Math.round(sec / 0.05); k++) {
+      sim.handle(A, { t: 'input', list: [{ seq: ++seq, dt: 0.05, f: 0, b: 0, l: 0, r: 0, run: 0, ...keys, yaw, pitch, g: a.grid.id }] });
+      step(0.05);
+    }
+  };
+  const [station, deck] = sim.station.map.solids;
+  const put = (g, x, z, vx = 0, vz = 0, y = g.kind === 'void' ? CENTER_H : 0) => { a.grid = g; a.map = g.map; a.x = x; a.z = z; a.vx = vx; a.vz = vz; a.y = y; a.vy = 0; a.q = [0, 0, 0, 1]; a.dirty = true; };
+  return { sim, data, A, a, inbox, step, drive, station, deck, vd: sim.station.map.void, put, q };
+}
+
+section('grids across each other', () => {
+  const near3 = (u, v, e = 1e-6) => u.every((x, i) => Math.abs(x - v[i]) <= e);
+  // ---- a grid on its side
+  {
+    const { sim, station, deck } = tiltRound();
+    ok(deck.tilted && !station.tilted, 'a grid turned about a horizontal axis is tipped, one that only turns about the vertical is not');
+    ok(deck.docked && deck.world.neighbors.length === 0 && station.world.neighbors.every((n) => n.grid !== deck), 'a tipped grid does not lie against the others (there is no walking across to it)');
+    ok(near3(deck.worldPoint(5, 0, 5), [705, 55, 300], 1e-9) && near3(deck.worldDir([0, 1, 0]), [0, 0, 1], 1e-9), 'its floor is a wall of the map, and its up is the map\'s south');
+    const rec = sim.station.map.void.world.neighbors.find((n) => n.grid === deck);
+    ok(rec && rec.flat === false && rec.box[4] - rec.box[1] > 9 && rec.box[5] - rec.box[2] < 5, 'the void knows the box it fills, turned as it is');
+  }
+  // ---- riding it, and leaving it up and away
+  {
+    const { sim, a, drive, deck, vd, put } = tiltRound();
+    put(deck, 9, 5);
+    drive(0.6, { f: 1 }, -Math.PI / 2);
+    const w1 = sim.worldPos(a);
+    ok(a.grid === deck && a.x > 10 && Math.abs(w1[2] - 300) < 1e-6 && w1[1] > 50 && w1[1] < 60 && near3(w1, deck.worldPoint(a.x, 0, a.z), 1e-9), `walking about on it is as ever, in its own frame (it is a wall of the map: you are at y ${w1[1].toFixed(2)})`);
+    let before = null;
+    for (let k = 0; k < 80 && a.grid === deck; k++) { before = sim.worldPos(a); drive(0.05, { f: 1 }, -Math.PI / 2); }
+    ok(a.grid === vd && a.x > 717.9, 'off the edge of its array you are in the void');
+    ok(Math.abs(a.y - 55) < 1.5 && Math.abs(a.z - (300 + CENTER_H)) < 0.05, `where you left it, by your middle, one body-height out from its face (y ${a.y.toFixed(2)}, z ${a.z.toFixed(2)})`);
+    ok(Math.abs(a.q[0] - Math.sin(Math.PI / 4)) < 1e-4 && Math.abs(a.q[3] - Math.cos(Math.PI / 4)) < 1e-4, 'and you keep its up: your own turn is its tip');
+    ok(Math.abs(a.vx - 3.4) < 0.2 && Math.abs(a.vy) < 0.05 && Math.abs(a.vz) < 0.05, `at your own speed (${a.vx.toFixed(2)}, ${a.vy.toFixed(2)}, ${a.vz.toFixed(2)})`);
+    ok(before && Math.hypot(a.x - before[0], a.y - before[1], a.z - before[2]) < 0.9, 'and the place you are in the map does not jump');
+    a.vy = 1.5; a.vx = 0;
+    const y0 = a.y;
+    drive(2, {}, -Math.PI / 2);
+    ok(a.vy === 1.5 && near3([a.y], [y0 + 3], 0.3), 'floating, you also go up and down, nothing slowing you');
+  }
+  // ---- steering in three dimensions
+  {
+    const { vd } = tiltRound();
+    const q = qFromAxisAngle([1, 0, 0], Math.PI / 2);
+    const st = { x: 600, y: 80, z: 100, vx: 0, vy: 0, vz: 0, q };
+    for (let k = 0; k < 40; k++) stepMovement(st, { f: 1, yaw: 0, pitch: 0.6 }, vd.world, 0.05, { jet: true });
+    const want = qrot(q, lookDir(0, 0.6)), v = [st.vx, st.vy, st.vz], sp = Math.hypot(...v);
+    ok(Math.abs(sp - 3.4) < 0.05 && (v[0] * want[0] + v[1] * want[1] + v[2] * want[2]) / sp > 0.999, 'a jetpack takes you where you look, whichever way your up is');
+    const coast = { x: 600, y: 80, z: 100, vx: 1, vy: 2, vz: -1, q };
+    for (let k = 0; k < 40; k++) stepMovement(coast, { f: 1, yaw: 0, pitch: 0.6 }, vd.world, 0.05, {});
+    ok(coast.vx === 1 && coast.vy === 2 && coast.vz === -1, 'without one nothing steers you');
+  }
+  // ---- arriving
+  {
+    const { sim, a, drive, deck, vd, put } = tiltRound();
+    sim.undock(deck);                                                                            // let it go (it hangs where it is)
+    sim.physics.setVel(deck, [0, 0, 0], [0, 0, 0]);
+    sim.physics.setFree3d(deck, true);
+    put(vd, 703, 301.2, 0, 0, 55);
+    a.yaw = 0; a.pitch = 0;
+    drive(0.05, {}, 0, 0);
+    ok(a.grid === deck && a.y === 0 && near3([a.x, a.z], [3, 5], 0.3), `from the side of its face, at the height of its rooms, you are on it (${a.x.toFixed(2)}, ${a.z.toFixed(2)}, ${a.y.toFixed(2)})`);
+    ok(Math.abs(a.pitch + Math.PI / 2) < 0.1, `and still looking the way you were: straight down into the floor (pitch ${a.pitch.toFixed(2)})`);
+    // from above, through a roof, no
+    const r2 = tiltRound();
+    r2.sim.undock(r2.deck); r2.sim.physics.setVel(r2.deck, [0, 0, 0], [0, 0, 0]);
+    r2.put(r2.vd, 705, 304, 0, -2, 55);
+    r2.drive(2, {}, 0, 0);
+    ok(r2.a.grid === r2.vd && r2.a.z > 302.9 && r2.a.vz === 0, `a roof is solid from outside (stopped at ${r2.a.z.toFixed(2)})`);
+    // from under, a floor
+    const r3 = tiltRound();
+    r3.sim.undock(r3.deck); r3.sim.physics.setVel(r3.deck, [0, 0, 0], [0, 0, 0]);
+    r3.put(r3.vd, 705, 297, 0, 2, 55);
+    r3.drive(3, {}, 0, 0);
+    ok(r3.a.grid === r3.vd && r3.a.z < 299.6, `and a floor is solid from underneath (stopped at ${r3.a.z.toFixed(2)})`);
+  }
+  // ---- the client agrees
+  {
+    const { sim, A, inbox, step, deck, vd } = tiltRound();
+    const welcome = inbox.find((m) => m.t === 'welcome');
+    const rep = new Replica({ level: sim.level, rects: sim.rects }, { ...welcome, you: A.id });
+    const rd = rep.grids.get(deck.id), rv = rep.map.void.world;
+    ok(rd.tilted && rv.neighbors.find((n) => n.grid === rd)?.flat === false, 'the client has it on its side too');
+    let same = 0, total = 0;
+    for (let k = 0; k < 400; k++) {
+      const x = 695 + (k * 37 % 31), y = 40 + (k * 53 % 30), z = 296 + (k * 71 % 11) * 0.7;
+      total++;
+      if (vd.world.collides3(x, y, z, 0.45) === rv.collides3(x, y, z, 0.45)) same++;
+    }
+    ok(same === total, `and finds the same hull in the way (${same} of ${total} places)`);
+    const s1 = { x: 18.2, z: 5, y: 0, vx: 3.4, vz: 0, vy: 0, yaw: 0.3, pitch: 0.2 }, s2 = { ...s1 };
+    const r1 = settle(deck, s1, true), r2 = settle(rd, s2, true);
+    ok(r1 && r2 && r1.grid.id === vd.id && Object.keys(s1).every((k) => (k === 'q' ? s1.q.every((v, i) => near(v, s2.q[i], 1e-9)) : near(s1[k], s2[k], 1e-9))), 'the client takes you off it just as the server does');
+    step(0.5);
+  }
+  // ---- what the server tells
+  {
+    const { a, inbox, step, vd, put } = tiltRound();
+    put(vd, 650, 20, 1, 0, 33);
+    a.q = qFromAxisAngle([1, 0, 0], Math.PI / 2);
+    inbox.length = 0;
+    step(0.5);
+    const snap = inbox.filter((m) => m.t === 'snap').pop();
+    ok(snap && snap.you.g === vd.id && snap.you.y > 32.9 && snap.you.q.length === 4 && Math.abs(snap.you.q[0] - 0.70711) < 1e-4, 'a snapshot tells a floating body its height and which way is up');
+    const row = snap.mobs.find((r) => r[0] === a.id);
+    ok(row && row.length === 8 && Math.abs(row[7] - 33) < 0.2, 'and everyone else its height');
+  }
+  // ---- a ghost flies where it looks
+  {
+    const { sim, step } = tiltRound();
+    const B = sim.addClient('Bob', () => {});
+    const y0 = B.ghost.y, x0 = B.ghost.x;
+    for (let k = 0; k < 20; k++) { sim.handle(B, { t: 'input', list: [{ seq: k + 1, dt: 0.05, f: 1, b: 0, l: 0, r: 0, run: 0, yaw: -Math.PI / 2, pitch: 0.5, g: sim.station.map.void.id }] }); step(0.05); }
+    ok(Math.abs(B.ghost.y - y0 - 6.12 * Math.sin(0.5)) < 0.3 && Math.abs(B.ghost.x - x0 - 6.12 * Math.cos(0.5)) < 0.3, `a ghost goes where it looks, up as well as along (${(B.ghost.y - y0).toFixed(2)} m up, ${(B.ghost.x - x0).toFixed(2)} along)`);
+  }
+  // ---- a flying grid can be turned over
+  {
+    const { sim, deck, step } = tiltRound();
+    sim.undock(deck);
+    const w = sim.physics.world(deck.map), at = [deck.tf.p[0] + 9, deck.tf.p[1] - 8, deck.tf.p[2]];
+    w.impulse(deck.id, [0, 4000, 0], at);                                          // a shove up, off to one side
+    step(1);
+    ok(Math.abs(deck.ang[0]) < 1e-9 && Math.abs(deck.vel[1]) < 1e-9, 'held to its plane a grid is not tipped or lifted by a knock (this one was put on its side, and stays)');
+    sim.physics.setFree3d(deck, true);
+    w.impulse(deck.id, [0, 4000, 0], at);
+    step(1);
+    ok(Math.abs(deck.ang[0]) > 0.01 && deck.vel[1] > 0.1, 'but with its locks off the same knock lifts it and turns it over');
+  }
+  // ---- the debug menu turns one over
+  {
+    const sim = new Sim(DATA, { bots: 0, debug: true });
+    const inbox = [];
+    const A = sim.addClient('Alice', (m) => inbox.push(m));
+    sim.handle(A, { t: 'lobby', op: 'job', id: 'station_engineer' });
+    sim.handle(A, { t: 'lobby', op: 'ready', v: true });
+    sim.handle(A, { t: 'lobby', op: 'start' });
+    const step = (sec) => { for (let k = 0; k < sec / SIM_DT; k++) sim.step(SIM_DT); };
+    const pod = sim.station.map.solids.find((g) => g.kind === 'pod');
+    inbox.length = 0;
+    sim.handle(A, { t: 'dbg', op: 'grid', what: 'tilt', id: pod.id, deg: 90 });
+    step(0.3);
+    const ev = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).find((e) => e.e === 'grid~' && e.g === pod.id);
+    ok(pod.tilted && !pod.docked && ev && ev.tf.q.length === 4, 'Tilt turns a grid on its side, and the clients are told');
+    sim.handle(A, { t: 'dbg', op: 'grid', what: 'level', id: pod.id });
+    step(0.3);
+    ok(!pod.tilted && Math.abs(pod.tf.p[1]) < 1e-6, 'and Level rights it');
   }
 });
 

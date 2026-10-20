@@ -262,7 +262,7 @@ export class DebugMenu {
     const box = el('div', 'db-grids');
     box.id = 'db-grids';
     this.body.appendChild(box);
-    this.row(el('span', 'db-note', 'Let a shuttle go, send it out or home, spin it. Riders feel nothing. Board puts you on it.'));
+    this.row(el('span', 'db-note', 'Let a shuttle go, send it out or home, spin it, stand it on its side. Riders feel nothing. Board puts you on it.'));
     this.drawGrids();
     this.send('grid', { what: 'list' });
     clearInterval(this.gridTimer);
@@ -275,12 +275,12 @@ export class DebugMenu {
     box.textContent = '';
     for (const gr of this.grids || []) {
       const row = el('div', 'db-person');
-      const state = gr.docked ? 'docked' : gr.flying ? `flying, ${gr.sp} m/s` : `adrift, ${gr.sp} m/s${gr.spin ? `, turning ${gr.spin}` : ''}`;
+      const state = gr.docked ? (gr.tilted ? 'docked, on its side' : 'docked') : gr.flying ? `flying, ${gr.sp} m/s` : `adrift, ${gr.sp} m/s${gr.spin ? `, turning ${gr.spin}` : ''}`;
       row.append(el('b', '', gr.name), el('i', '', `${gr.kind}, ${state}`));
       const acts = el('span', 'db-acts');
       const go = (what, extra = {}) => { this.send('grid', { what, id: gr.id, ...extra }); setTimeout(() => this.send('grid', { what: 'list' }), 150); };
       if (gr.kind === 'station') { row.appendChild(acts); box.appendChild(row); continue; }
-      for (const [label, what, extra, title] of [['Out', 'out', {}, 'Fly it clear of the station'], ['Home', 'home', {}, 'Fly it back and dock it'], ['Spin', 'spin', { w: 0.5 }, 'Let it go and turn it'], ['Stop', 'stop', {}, 'Stop it where it is'], ['Board', 'board', {}, 'Put me on it']]) acts.appendChild(this.button(label, () => go(what, extra), title));
+      for (const [label, what, extra, title] of [['Out', 'out', {}, 'Fly it clear of the station'], ['Home', 'home', {}, 'Fly it back and dock it'], ['Spin', 'spin', { w: 0.5 }, 'Let it go and turn it'], ['Stop', 'stop', {}, 'Stop it where it is'], ['Tilt', 'tilt', { deg: 90 }, 'Stand it on its side'], ['Level', 'level', {}, 'Right it again'], ['Board', 'board', {}, 'Put me on it']]) acts.appendChild(this.button(label, () => go(what, extra), title));
       row.appendChild(acts);
       box.appendChild(row);
     }

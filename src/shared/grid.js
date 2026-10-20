@@ -55,6 +55,9 @@ export class Grid {
     return (this._bounds = c1 < 0 ? null : [c0, r0, c1, r1]);
   }
 
+  /** Is it tipped off level (turned about a horizontal axis as well as, or instead of, the vertical)? A level grid can lie against another and be walked onto across a seam. */
+  get tilted() { const q = this.tf.q; return Math.abs(q[0]) > 1e-6 || Math.abs(q[2]) > 1e-6; }
+
   get gravityOn() { return this.world.gravityOn; }
   set gravityOn(v) { this.world.gravityOn = !!v; }
 

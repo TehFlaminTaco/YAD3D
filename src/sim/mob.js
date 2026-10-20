@@ -21,6 +21,7 @@ export class Mob {
     this.yaw = o.yaw ?? Math.random() * Math.PI * 2;
     this.pitch = 0;
     this.vx = 0; this.vz = 0;
+    this.vy = 0; this.q = [0, 0, 0, 1];      // floating in the void only: how fast it goes up, and the turn it keeps from the grid it left (its up); y is then the height of its middle
     this.speed = o.speed ?? 1.7;
     this.hostile = !!o.hostile;
     this.pet = !!o.pet;

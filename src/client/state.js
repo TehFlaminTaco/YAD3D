@@ -195,13 +195,13 @@ export class Replica {
       if (g.buf.length > 6) g.buf.shift();
     }
     for (const row of snap.mobs) {
-      const [id, gid, x, z, yaw, flags, speed] = row;
+      const [id, gid, x, z, yaw, flags, speed, y] = row;                    // (y only for someone floating in the void)
       const m = this.mobs.get(id);
       if (!m) continue;
       m.flags = flags; m.speed = speed; m.dead = !!(flags & 1); m.crit = !!(flags & 2); m.lying = !!(flags & 16);
-      m.buf.push({ t: now, g: gid, x, z, yaw });
+      m.buf.push({ t: now, g: gid, x, z, yaw, y: y ?? 0 });
       if (m.buf.length > 6) m.buf.shift();
-      if (m.fresh) { m.fresh = false; m.g = gid; m.x = x; m.z = z; m.yaw = yaw; }
+      if (m.fresh) { m.fresh = false; m.g = gid; m.x = x; m.z = z; m.yaw = yaw; m.y = y ?? 0; }
     }
   }
 

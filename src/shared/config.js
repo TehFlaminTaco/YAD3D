@@ -16,6 +16,8 @@ export const WIND_PUSH = 3;           // how hard escaping air shoves you while 
 export const LEAVE_CAP = 24;          // m/s: the fastest you are carried off a moving grid (a fast spin would fling you off at hundreds)
 export const ENTER_MAX = 6;           // m/s: the most you can meet a grid at, relative to it, without it stopping you dead (and hurting)
 export const VOID_LIMIT = 1500;       // m: how far from its origin a map goes; past it there is nothing to float to
+export const CENTER_H = 0.85;         // m: how high the middle of a person is above their feet (a body floating free is placed by its middle: it has no feet to stand on)
+export const VOID_R = 0.45;           // m: how big a body is, floating (a ball: it has no up to be taller along)
 
 // BYOND direction bitflags
 export const N = 1, S = 2, E = 4, W = 8;

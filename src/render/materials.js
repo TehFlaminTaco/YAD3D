@@ -110,7 +110,15 @@ void main() {
     // the camera's right, in the frame the sprites are placed in (their grid's: the batch's matrix takes them into the scene)
     mat3 R = mat3(modelMatrix);
     vec3 rl = vec3(dot(R[0], uCamRight), dot(R[1], uCamRight), dot(R[2], uCamRight));
-    vec3 r = normalize(vec3(rl.x, 0.0, rl.z));
+    vec3 r;
+    if (length(rl.xz) > 0.35) r = normalize(vec3(rl.x, 0.0, rl.z));
+    else {
+      // the grid is turned over so far that the camera's right lies along its up: face the camera's place instead
+      vec3 d = uCam - modelMatrix[3].xyz;
+      vec3 camL = vec3(dot(R[0], d), dot(R[1], d), dot(R[2], d));
+      vec3 vd = iA.xyz - camL;
+      r = normalize(vec3(-vd.z, 0.0, vd.x) + vec3(1e-4, 0.0, 0.0));
+    }
     world = iA.xyz + r * (iB.z + cn.x * iB.x) + up * (iB.w + cn.y * iB.y);
   } else if (mode < 1.5) {
     vec3 n = vec3(sin(iD.x), 0.0, cos(iD.x));

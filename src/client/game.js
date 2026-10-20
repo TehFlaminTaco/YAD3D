@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { TILE, EYE, REACH, RENDER_HEIGHT, KIND } from '../shared/config.js';
+import { TILE, EYE, REACH, RENDER_HEIGHT, KIND, CENTER_H } from '../shared/config.js';
 import { stepMovement, floatState } from '../shared/movement.js';
-import { settle, frameYaw } from '../shared/frames.js';
-import { qToYaw } from '../shared/math3.js';
+import { settle, frameYaw, Frame } from '../shared/frames.js';
+import { qTwistY, qrot, qirot, reorient, tfInvDir } from '../shared/math3.js';
 import { WINDOWS } from '../shared/windows.js';
 import { WALLS, girderLook } from '../shared/walls.js';
 import { clamp } from '../shared/util.js';
@@ -69,10 +69,13 @@ export class Game {
     addEventListener('beforeunload', (e) => { if (this.inWorld() && !this.input.forced) { e.preventDefault(); e.returnValue = ''; } });
     document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) navigator.keyboard?.unlock?.(); });
     this.audio = new AudioSys();
-    this.pred = { g: 0, x: 0, z: 0, vx: 0, vz: 0 };           // where I am: on grid `g`, in its frame
-    this.corr = { x: 0, z: 0 };
+    this.pred = { g: 0, x: 0, z: 0, vx: 0, vz: 0, y: 0, vy: 0, q: [0, 0, 0, 1] };           // where I am: on grid `g`, in its frame (floating, `g` is the void: the map's coordinates in three dimensions, y the height of my middle, q the up I keep)
+    this.corr = { x: 0, z: 0, y: 0 };    // how far the picture is from where I am (a correction easing away: x, z, and y when floating)
+    this.lift = 0;                        // the same, up and down, for arriving on a grid (you are put on the floor)
+    this.frameObj = new Frame();          // what the scene is drawn in while I float free: the map, turned as I am
     this.yaw = 0;
     this.yawG = 0;                        // the grid whose frame `yaw` is in (it follows you from grid to grid: see syncYaw)
+    this.yawQ = null;                     // and, floating, the turn of the frame it was in (a body in the void is turned as it chooses)
     this.pitch = 0;
     this.seq = 0;
     this.pending = [];
@@ -256,7 +259,7 @@ export class Game {
     const phase = you.id ? 'playing' : rep.myState === 'ghost' ? 'ghost' : 'lobby';
     if (phase !== this.phase) this.setPhase(phase, you);
     if (this.inWorld()) this.reconcile(you, s.ack);
-    else { this.pred.g = you.g ?? this.pred.g; this.pred.x = you.x; this.pred.z = you.z; }
+    else { this.pred.g = you.g ?? this.pred.g; this.pred.x = you.x; this.pred.z = you.z; this.pred.y = you.y ?? 0; this.pred.q = you.q ? [...you.q] : [0, 0, 0, 1]; }
     this.syncYaw();
   }
 
@@ -265,7 +268,8 @@ export class Game {
     this.phase = phase;
     this.pred.g = this.yawG = you.g ?? this.pred.g;
     this.pred.x = you.x; this.pred.z = you.z; this.pred.vx = you.vx || 0; this.pred.vz = you.vz || 0;
-    this.corr.x = this.corr.z = 0;
+    this.pred.y = you.y ?? 0; this.pred.vy = you.vy || 0; this.pred.q = you.q ? [...you.q] : [0, 0, 0, 1];
+    this.corr.x = this.corr.z = this.corr.y = 0; this.lift = 0;
     this.pending = []; this.sendBuf = [];
     if (phase === 'playing' && was !== 'playing') {
       if (was === 'lobby') this.chat.clearOlderThan(this.time - 1.5);
@@ -341,7 +345,7 @@ export class Game {
   // ---------------------------------------------------------------- prediction
   predictCtx() {
     const s = this.self;
-    if (this.phase === 'ghost') return { noclip: true };
+    if (this.phase === 'ghost') return { noclip: true, ghost: true };
     return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind, noclip: !!s?.dbg?.noclip, ignore: s?.haul >= 0 ? this.myGrid().props.interact[s.haul] : null, jet: !!s?.jet, mag: !!s?.mag, free: true };   // you pass through what you drag; you may float off the edge of a grid
   }
 
@@ -362,28 +366,53 @@ export class Game {
     } else stepMovement(this.pred, inp, grid.world, dt, this.predictCtx());
     if (this.phase === 'playing') {                              // walked onto another grid (through a docking door), or off the side of one into the void? then that is yours now
       const r = settle(grid, this.pred, true);
-      if (r) this.pred.g = r.grid.id;
+      if (r) {
+        this.pred.g = r.grid.id;
+        if (r.lift) this.lift += r.lift;                                              // put on the floor: the eye comes down to where it is on a floor (a pop of up to a metre, eased)
+      }
     }
   }
 
-  /** Keep `yaw` meaning the same way in the world when you step onto a grid that is turned differently: it is in the frame of the grid you are on. */
+  /** The turn of the frame you are in: a grid's own, or, floating, the one you keep. */
+  frameQ() {
+    const g = this.myGrid();
+    return g.kind === 'void' ? this.pred.q : g.tf.q;
+  }
+
+  /** What the scene is drawn in: the grid you stand on, or (floating) the map turned as you are. */
+  viewFrame() {
+    const g = this.myGrid();
+    if (g.kind !== 'void') return g;
+    this.frameObj.tf.q = this.pred.q;
+    return this.frameObj;
+  }
+
+  /**
+   * Keep `yaw` and `pitch` meaning the same way in the world when you move to another frame (another grid; or, floating, another up): they are in the frame of the
+   * grid you are on. A facing is a direction, so it is turned like one (`reorient`); for grids that only turn about the vertical that is adding the difference.
+   */
   syncYaw() {
-    if (this.yawG === this.pred.g) return;
-    const from = this.rep.grids.get(this.yawG), to = this.myGrid();
-    if (from && to) this.yaw += frameYaw(from, to);
+    const to = this.myGrid(), qTo = this.frameQ();
+    const same = this.yawG === this.pred.g && (to.kind !== 'void' || (this.yawQ && this.yawQ.every((v, i) => Math.abs(v - qTo[i]) < 1e-9)));
+    if (same) return;
+    const from = this.rep.grids.get(this.yawG);
+    const qFrom = from?.kind === 'void' ? this.yawQ : from?.tf.q;
+    if (qFrom) { const f = reorient(qFrom, qTo, this.yaw, this.pitch); this.yaw = f.yaw; this.pitch = clamp(f.pitch, -1.45, 1.45); }
     this.yawG = this.pred.g;
+    this.yawQ = to.kind === 'void' ? [...qTo] : null;
   }
 
   reconcile(you, ack) {
     const p = this.pred;
     this.pending = this.pending.filter((i) => i.seq > ack);
-    const ox = p.x, oz = p.z, og = p.g;
+    const ox = p.x, oz = p.z, oy = p.y, og = p.g;
     p.g = you.g ?? p.g; p.x = you.x; p.z = you.z; p.vx = you.vx || 0; p.vz = you.vz || 0;
+    p.y = you.y ?? 0; p.vy = you.vy || 0; p.q = you.q ? [...you.q] : [0, 0, 0, 1];
     this.wind = you.wind || null;
     for (const inp of this.pending) this.stepPred(inp, inp.dt);
     this.syncYaw();
-    const ex = ox - p.x, ez = oz - p.z;
-    if (p.g !== og || ex * ex + ez * ez > 9) { this.corr.x = this.corr.z = 0; } else { this.corr.x += ex; this.corr.z += ez; }
+    const ex = ox - p.x, ez = oz - p.z, ey = p.g === og ? oy - p.y : 0;
+    if (p.g !== og || ex * ex + ez * ez + ey * ey > 9) { this.corr.x = this.corr.z = this.corr.y = 0; } else { this.corr.x += ex; this.corr.z += ez; this.corr.y += ey; }
   }
 
   readMovement(dt) {
@@ -434,7 +463,7 @@ export class Game {
       }
     }
     const k = Math.exp(-12 * dt);
-    this.corr.x *= k; this.corr.z *= k;
+    this.corr.x *= k; this.corr.z *= k; this.corr.y *= k; this.lift *= k;
   }
 
   flushInputs() {
@@ -466,6 +495,17 @@ export class Game {
   findTarget(o, f) {
     const grid = this.myGrid(), world = grid.world;
     const st = { best: null, bs: 1e9 };
+    if (grid.kind === 'void') {                      // floating: the scene is turned as you are, the grids lie in the map as they are: each is searched in its own frame, however it is turned
+      const q = this.pred.q, P = [this.pred.x, this.pred.y, this.pred.z];
+      const om = qrot(q, [o.x, o.y, o.z]), fm = qrot(q, [f.x, f.y, f.z]);
+      this.scanGrid(grid, { x: om[0], y: om[1], z: om[2] }, { x: fm[0], y: fm[1], z: fm[2] }, P[0], P[2], st);
+      for (const nb of world.neighbors) {
+        if (!world.near(nb, P[0], P[1], P[2], REACH + 1.5)) continue;
+        const G = nb.grid, lo = G.localPoint(om), lf = tfInvDir(G.tf, fm), lp = G.localPoint(P);
+        this.scanGrid(G, { x: lo[0], y: lo[1], z: lo[2] }, { x: lf[0], y: lf[1], z: lf[2] }, lp[0], lp[2], st);
+      }
+      return st.best;
+    }
     this.scanGrid(grid, o, f, this.pred.x, this.pred.z, st);
     for (const nb of world.neighbors) {
       const [x0, z0, x1, z1] = nb.rect, m = REACH + 1.5;
@@ -756,7 +796,7 @@ export class Game {
     this.updateCursor();
 
     rep.updatePoses(this.time - INTERP_DELAY);
-    this.view.update(dt, this.time, this.time - INTERP_DELAY, cam.position, this.yaw, this.phase === 'playing' ? rep.you?.id : -1, this.pred.g);
+    this.view.update(dt, this.time, this.time - INTERP_DELAY, cam.position, this.yaw, this.pitch, this.phase === 'playing' ? rep.you?.id : -1, this.viewFrame());
     U.uCam.value.copy(cam.position);
     const dir = new THREE.Vector3(); cam.getWorldDirection(dir);
     U.uCamDir.value.copy(dir);
@@ -767,7 +807,7 @@ export class Game {
 
     const here = this.myGrid();
     const ear = here.worldPoint(this.pred.x, 0, this.pred.z);                       // sounds come in the map's coordinates
-    this.audio.listener.x = ear[0]; this.audio.listener.z = ear[2]; this.audio.listener.yaw = this.yaw + qToYaw(here.tf.q);
+    this.audio.listener.x = ear[0]; this.audio.listener.z = ear[2]; this.audio.listener.yaw = this.yaw + qTwistY(this.frameQ());
     const c = Math.floor(this.pred.x / TILE), r = Math.floor(this.pred.z / TILE);
     const area = this.myGrid().world.areaAt(c, r);
     const vac = rep.env.p < 30;
@@ -828,7 +868,10 @@ export class Game {
       roll += Math.sin(this.time * 0.6) * 0.012;
     }
     const px = this.pred.x + this.corr.x, pz = this.pred.z + this.corr.z;
-    cam.position.set(px + Math.cos(this.yaw) * bobX, eye + bobY, pz - Math.sin(this.yaw) * bobX);
+    if (this.phase === 'playing' && this.myGrid().kind === 'void') {                // floating: the scene is turned as you are, and you are at the middle of your body
+      const s = qirot(this.pred.q, [px, this.pred.y + this.corr.y, pz]);
+      cam.position.set(s[0] + Math.cos(this.yaw) * bobX, s[1] + (eye - CENTER_H) + bobY, s[2] - Math.sin(this.yaw) * bobX);
+    } else cam.position.set(px + Math.cos(this.yaw) * bobX, eye + bobY + this.lift + (this.inWorld() && this.phase !== 'playing' ? this.pred.y : 0), pz - Math.sin(this.yaw) * bobX);       // (a ghost flies about up and down too)
     cam.rotation.order = 'YXZ';
     cam.rotation.set(this.pitch, this.yaw, roll);
     if (this.shakeAmt > 0.001) {
@@ -843,7 +886,7 @@ export class Game {
     if (this.phase !== 'playing') return;
     for (const m of this.rep.mobs.values()) {
       if (m.dead || m.speed < 1 || m.kind !== 'human' || m.id === this.rep.you?.id) continue;
-      const mf = this.view.mobPose(m), dx = mf.x - this.pred.x, dz = mf.z - this.pred.z;
+      const mf = this.view.mobPose(m), me = this.camera.position, dx = mf.x - me.x, dz = mf.z - me.z;               // (in the scene: the camera is where you are)
       if (dx * dx + dz * dz > 14 * 14) continue;
       m.stepAcc = (m.stepAcc || 0) + m.speed * dt;
       if (m.stepAcc > (m.speed > 3.8 ? 2.6 : 2.0)) { m.stepAcc = 0; const mp = this.rep.grids.get(m.g)?.worldPoint(m.x, 0, m.z) || [m.x, 0, m.z]; this.audio.footstep(m.speed > 3.8, 'floor', mp[0], mp[2]); }

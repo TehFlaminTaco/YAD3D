@@ -1,4 +1,5 @@
-import { PLAYER_R, DRIFT_MAX, WIND_PUSH, KIND, TILE } from './config.js';
+import { PLAYER_R, DRIFT_MAX, WIND_PUSH, KIND, TILE, VOID_R } from './config.js';
+import { qrot, lookDir, vlen, vscale } from './math3.js';
 
 export const WALK_SPEED = 3.4;
 export const RUN_SPEED = 5.6;
@@ -10,7 +11,7 @@ export const RUN_SPEED = 5.6;
 export function floatState(world, st, ctx = {}) {
   const floating = !ctx.noclip && !world.hasGravity(st.x, st.z)
     && !(ctx.mag && world.kindAt(Math.floor(st.x / TILE), Math.floor(st.z / TILE)) === KIND.FLOOR);
-  const held = !floating || !!ctx.jet || world.hasGrip(st.x, st.z, ctx.ignore, ctx.free);
+  const held = !floating || !!ctx.jet || world.hasGrip(st.x, st.z, ctx.ignore, ctx.free, st.y);
   return { floating, held, adrift: floating && !held };
 }
 
@@ -26,6 +27,8 @@ export function floatState(world, st, ctx = {}) {
  * something or get hold of it.
  */
 export function stepMovement(st, inp, world, dt, ctx = {}) {
+  if (ctx.ghost) return stepGhost(st, inp, dt);
+  if (world?.isVoid && !ctx.noclip) return stepVoid(st, inp, world, dt, ctx);
   const limp = !!ctx.limp;
   const fz = limp ? 0 : (inp.f ? 1 : 0) - (inp.b ? 1 : 0);
   const fx = limp ? 0 : (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
@@ -41,10 +44,8 @@ export function stepMovement(st, inp, world, dt, ctx = {}) {
 
   if (!adrift) {
     const k = Math.min(1, 14 * dt);
-    // floating in the void and holding on to a grid that is itself moving: you steer relative to it (stand still and you go along with it)
-    const hv = floating && world.isVoid ? world.holdVelocity(st.x, st.z, ctx.ignore) : null;
-    st.vx += (wx * speed + (hv ? hv[0] : 0) - st.vx) * k;
-    st.vz += (wz * speed + (hv ? hv[1] : 0) - st.vz) * k;
+    st.vx += (wx * speed - st.vx) * k;
+    st.vz += (wz * speed - st.vz) * k;
   } else if (ctx.wind) {
     st.vx += ctx.wind[0] * WIND_PUSH * dt; st.vz += ctx.wind[1] * WIND_PUSH * dt;     // blown out of the airlock: you keep going
   }
@@ -63,4 +64,48 @@ export function stepMovement(st, inp, world, dt, ctx = {}) {
     }
   }
   return floating ? 0 : Math.hypot(st.vx, st.vz);       // a floating body does not walk (no steps, no walking animation)
+}
+
+/**
+ * Floating in the void, in three dimensions: there is no gravity and no up to the map, so a body steers along where it looks (turned by `st.q`, the way up it has
+ * kept from the grid it left) when it can push off something: a jetpack, or a grid within reach. Then it goes where it is steered, relative to what it holds
+ * (the hull of a moving shuttle takes you along with it); otherwise it coasts at whatever speed it has. A bump stops you dead on that axis.
+ * st: {x, y, z, vx, vy, vz, q}, y the height of the body's middle (see `CENTER_H`). Same inputs and context as `stepMovement`.
+ */
+export function stepVoid(st, inp, world, dt, ctx = {}) {
+  const limp = !!ctx.limp;
+  const fz = limp ? 0 : (inp.f ? 1 : 0) - (inp.b ? 1 : 0);
+  const fx = limp ? 0 : (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
+  const speed = (inp.run ? RUN_SPEED : WALK_SPEED) * (ctx.slow ?? 1);
+  const q = st.q || [0, 0, 0, 1];
+  const fwd = qrot(q, lookDir(inp.yaw, inp.pitch || 0)), right = qrot(q, [Math.cos(inp.yaw), 0, -Math.sin(inp.yaw)]);
+  let w = [fwd[0] * fz + right[0] * fx, fwd[1] * fz + right[1] * fx, fwd[2] * fz + right[2] * fx];
+  const len = vlen(w);
+  if (len > 1) w = vscale(w, 1 / len);
+  st.y = st.y ?? 0; st.vy = st.vy ?? 0;
+  const hv = world.holdVelocity(st.x, st.z, ctx.ignore, st.y);
+  if (hv || ctx.jet) {
+    const k = Math.min(1, 14 * dt), base = hv || [0, 0, 0];
+    st.vx += (w[0] * speed + base[0] - st.vx) * k;
+    st.vy += (w[1] * speed + base[1] - st.vy) * k;
+    st.vz += (w[2] * speed + base[2] - st.vz) * k;
+  }
+  const mx = st.vx * dt, my = st.vy * dt, mz = st.vz * dt;
+  if (!world.collides3(st.x + mx, st.y, st.z, VOID_R, ctx.ignore)) st.x += mx; else st.vx = 0;
+  if (!world.collides3(st.x, st.y + my, st.z, VOID_R, ctx.ignore)) st.y += my; else st.vy = 0;
+  if (!world.collides3(st.x, st.y, st.z + mz, VOID_R, ctx.ignore)) st.z += mz; else st.vz = 0;
+  return 0;                                                          // a floating body does not walk
+}
+
+/** A ghost flies where it looks, through everything, in three dimensions (st: {x, y, z}; y the height of its feet-plane, as for anyone, its eyes are a little above). */
+export function stepGhost(st, inp, dt) {
+  const fz = (inp.f ? 1 : 0) - (inp.b ? 1 : 0), fx = (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
+  const speed = (inp.run ? RUN_SPEED : WALK_SPEED) * 1.8;
+  const fwd = lookDir(inp.yaw, inp.pitch || 0), right = [Math.cos(inp.yaw), 0, -Math.sin(inp.yaw)];
+  let w = [fwd[0] * fz + right[0] * fx, fwd[1] * fz + right[1] * fx, fwd[2] * fz + right[2] * fx];
+  const len = vlen(w);
+  if (len > 1) w = vscale(w, 1 / len);
+  st.x += w[0] * speed * dt; st.y = (st.y ?? 0) + w[1] * speed * dt; st.z += w[2] * speed * dt;
+  st.vx = st.vz = st.vy = 0;
+  return 0;
 }

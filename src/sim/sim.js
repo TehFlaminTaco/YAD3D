@@ -431,7 +431,7 @@ export class Sim {
         if (m.dead || m.stunned > 0 || m.body.crit) { this.limp(m, d); continue; }
         const run = inp.run && !(m.body.health < 30);
         const ctx = this.moveCtx(m);
-        m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw }, m.grid.world, d, ctx);
+        m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw, pitch: m.pitch }, m.grid.world, d, ctx);
         if (m.jetOn && (inp.f || inp.b || inp.l || inp.r) && floatState(m.grid.world, m, { ...ctx, jet: false }).floating) this.burnJetpack(m, d);
         this.settleMob(m);
         moved = true;
@@ -465,7 +465,7 @@ export class Sim {
   /** A body that cannot act: it stops where it is, unless there is no gravity to stop it, then it keeps drifting. */
   limp(m, d) {
     if (m.grid.world.hasGravity(m.x, m.z)) { m.vx = m.vz = 0; return; }
-    m.speedNow = stepMovement(m, { yaw: m.yaw }, m.grid.world, d, { ...this.moveCtx(m), limp: true });
+    m.speedNow = stepMovement(m, { yaw: m.yaw, pitch: m.pitch }, m.grid.world, d, { ...this.moveCtx(m), limp: true });
     this.settleMob(m);
   }
 
@@ -477,7 +477,7 @@ export class Sim {
         const inp = c.inputs.shift();
         c.lastSeq = inp.seq;
         g.yaw = inp.yaw; g.pitch = inp.pitch || 0;
-        stepMovement(g, inp, null, clamp(inp.dt || 0.016, 0.001, 0.06), { noclip: true });      // a ghost passes through everything: it needs no tiles
+        stepMovement(g, inp, null, clamp(inp.dt || 0.016, 0.001, 0.06), { noclip: true, ghost: true });      // a ghost passes through everything, and goes where it looks: it needs no tiles
       }
     }
   }
@@ -767,7 +767,9 @@ export class Sim {
         seen.add(m.id);
         if (!c.known.has(m.id)) { c.known.add(m.id); c.outbox.push({ e: 'mob+', id: m.id, n: m.name, job: m.job, set: m.set, kind: m.kind, ap: m.look ? this.appearanceOf(m) : undefined }); }
         const flags = (m.dead ? 1 : 0) | (m.body.crit ? 2 : 0) | (m.speedNow > 3.8 ? 8 : 0) | (m.stunned > 0 || m.downed ? 16 : 0);
-        list.push([m.id, m.grid ? m.grid.id : 0, +m.x.toFixed(2), +m.z.toFixed(2), +m.yaw.toFixed(2), flags, +(m.speedNow || 0).toFixed(1)]);
+        const row = [m.id, m.grid ? m.grid.id : 0, +m.x.toFixed(2), +m.z.toFixed(2), +m.yaw.toFixed(2), flags, +(m.speedNow || 0).toFixed(1)];
+        if (m.grid?.kind === 'void') row.push(+m.y.toFixed(2));                       // floating, it has a height as well
+        list.push(row);
       }
       for (const id of [...c.known]) if (!seen.has(id)) { c.known.delete(id); c.outbox.push({ e: 'mob-', id }); }
       const snap = { t: 'snap', tick: this.tick, ack: c.lastSeq, mobs: list };
@@ -777,6 +779,7 @@ export class Sim {
       if (m) {
         const [tc, tr] = m.tile, g = m.grid;
         snap.you = { g: g.id, x: +m.x.toFixed(3), z: +m.z.toFixed(3), vx: +m.vx.toFixed(2), vz: +m.vz.toFixed(2), id: m.id };
+        if (g.kind === 'void') Object.assign(snap.you, { y: +m.y.toFixed(3), vy: +m.vy.toFixed(2), q: m.q.map((v) => +v.toFixed(5)) });          // floating: its height, and which way is up
         snap.env = { p: +g.atmos.pressureAt(tc, tr).toFixed(1), o2: +g.atmos.o2At(tc, tr).toFixed(1), tox: +g.atmos.toxAt(tc, tr).toFixed(2), area: g.world.inb(tc, tr) ? g.world.areaIdx[g.world.idx(tc, tr)] : 0 };
         const wind = g.atmos.windAt(m.x, m.z);
         if (wind) snap.you.wind = [+wind[0].toFixed(2), +wind[1].toFixed(2)];
@@ -784,7 +787,7 @@ export class Sim {
         const json = JSON.stringify(self);
         if (json !== c.selfJson) { c.selfJson = json; c.outbox.push({ e: 'self', ...self }); }
       } else {
-        snap.you = { g: map.void.id, x: +c.ghost.x.toFixed(2), z: +c.ghost.z.toFixed(2), vx: 0, vz: 0, ghost: true };      // a ghost floats in the void, in the map's own coordinates
+        snap.you = { g: map.void.id, x: +c.ghost.x.toFixed(2), y: +c.ghost.y.toFixed(2), z: +c.ghost.z.toFixed(2), vx: 0, vz: 0, ghost: true };      // a ghost floats in the void, in the map's own coordinates
       }
       c.send(snap);
     }

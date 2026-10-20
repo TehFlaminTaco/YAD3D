@@ -71,6 +71,9 @@ export class GridView {
     this.stat = new SpriteBatch(big ? 20000 : Math.max(400, props.statics.length * 2 + 200), mat);
     this.dyn = new SpriteBatch(big ? 3000 : Math.max(300, (props.doors.length + props.fdoors.length) * 2 + 200), mat);
     this.itemB = new SpriteBatch(big ? 6000 : 900, mat);
+    this.mobB = new SpriteBatch(600, mat);        // the people on this grid: drawn here so they stand upright on it, however it is turned in the scene
+    this.mobFree = [];
+    this.cam = { x: 0, y: 0, z: 0, yaw: 0 };      // where the camera is in this grid's frame (set every frame by the WorldView)
     this.group = new THREE.Group();
     this.group.matrixAutoUpdate = false;
     this.lit = [];                               // sprites whose tint follows the light field
@@ -83,7 +86,7 @@ export class GridView {
 
     this.lightField = new LightField(world);
     this.levelMesh = new LevelMesh(world, assets, { tables: props.tables, panes: props.panes });
-    this.group.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh);
+    this.group.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh, this.mobB.mesh);
     scene.add(this.group);
     this.addStatics(props.statics);
     for (const it of props.closets) this.setClosetView(it);     // the welcome may have told us some are open
@@ -115,7 +118,7 @@ export class GridView {
     this.scene.remove(this.group);
     for (const ch of [...this.levelMesh.chunks.keys()]) this.levelMesh.disposeChunk(ch);
     for (const m of this.mirrors) { m.mesh.geometry.dispose(); m.mat.dispose(); }
-    for (const b of [this.stat, this.dyn, this.itemB]) b.geometry.dispose();
+    for (const b of [this.stat, this.dyn, this.itemB, this.mobB]) b.geometry.dispose();
   }
 
   // ------------------------------------------------------------------ static scenery
