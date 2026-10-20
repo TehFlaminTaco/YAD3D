@@ -17,7 +17,7 @@ export const BEHAVIORS = [
   ['/obj/item/wirecutters', { tool: 'wirecutters' }],
   ['/obj/item/weldingtool', { tool: 'welder', fuel: 20 }],
   ['/obj/item/multitool', { tool: 'multitool' }],
-  ['/obj/item/t_scanner', { tool: 'scanner' }],
+  ['/obj/item/t_scanner', { tool: 'scanner', tray: true }],
   ['/obj/item/flashlight', { light: true }],
   ['/obj/item/clothing/head/hardhat', { light: true }],
   ['/obj/item/storage/backpack/duffelbag', { storage: { max: 30, wmax: 3 } }],
@@ -28,6 +28,7 @@ export const BEHAVIORS = [
   ['/obj/item/storage/belt/medical', { storage: { items: 7, wmax: 3, only: MED } }],
   ['/obj/item/storage/belt', { storage: { items: 7, wmax: 3 } }],
   ['/obj/item/storage/firstaid', { storage: { max: 14, wmax: 2, only: MED } }],
+  ['/obj/item/storage/box/lights', { storage: { items: 21, wmax: 2, only: ['/obj/item/light/tube', '/obj/item/light/bulb'] } }],
   ['/obj/item/storage/box', { storage: { max: 14, wmax: 2 } }],
   ['/obj/item/extinguisher', { extinguisher: true, charges: 10 }],
   ['/obj/item/fireaxe', { breaks: true, reach: 2.6, cooldown: 0.9 }],
@@ -126,6 +127,7 @@ export function describeState(it) {
   if (d.tank) return `${Math.round(it.gas / d.tank.cap * 100)}% air`;
   if (d.jetpack) return `${Math.round(it.gas / d.jetpack.cap * 100)}% gas`;
   if (d.tool === 'welder') return `fuel ${Math.ceil(it.fuel)}${it.lit ? ', lit' : ''}`;
+  if (d.tray) return it.on ? 'on' : 'off';
   if (d.charges) return `${it.charges} charges`;
   if (it.amount !== undefined && d.stack > 1) return `x${it.amount}`;
   if (d.storage) return `${it.contents.length} item${it.contents.length === 1 ? '' : 's'}`;

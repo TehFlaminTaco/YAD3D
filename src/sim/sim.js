@@ -26,8 +26,10 @@ import { GIRDER } from '../shared/walls.js';
 import { Debug } from './debug.js';
 import { Looks, WORN_SLOTS } from '../shared/looks.js';
 import { Sun } from './power/powersim.js';
+import { Lights } from './lights.js';
+import { Tanks } from './tanks.js';
 import { AI } from './ai.js';
-import { attach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv } from './inventory.js';
+import { attach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, allItems } from './inventory.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -110,6 +112,8 @@ export class Sim {
     this.walls = new Walls(this);
     this.stacks = new Stacks(this);
     this.floors = new Floors(this);
+    this.lights = new Lights(this);
+    this.tanks = new Tanks(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 
@@ -429,6 +433,8 @@ export class Sim {
       g: g.id, bp: g.bp, kind: g.kind, name: g.name, tf: tfClone(g.tf), docked: g.docked,
       ...(this.madeBlueprints.has(g.bp) ? { def: this.level.grids[g.bp] } : {}),                     // (a blueprint made while the game runs is sent whole: the clients' level data does not have it)
       pw: g.powersim.state(),
+      lights: g.props.lights.filter((L) => L.status).map((L) => [L.idx, L.status]),                 // the fixtures that are not whole
+      gone: g.props.interact.filter((it) => it.gone && it.kind !== 'closet').map((it) => it.idx),    // things that were blown up
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
       gravity: g.world.gravityOn, built: [...g.built].map((b) => [b.id, b.k, b.c, b.r, b.st]),
@@ -746,6 +752,25 @@ export class Sim {
 
   flicker(g, sec) { g.emit({ e: 'flicker', s: sec }); }
 
+  /**
+   * Something blows up at (x, z) of grid `g` (explosion(dev, heavy, light): `heavy` and `light` are radii in tiles): people near it are burnt and thrown about, cables
+   * are cut, lamps smashed, and everyone within earshot feels it.
+   */
+  explosion(g, x, z, o = {}) {
+    const heavy = (o.heavy ?? 0) * TILE, light = (o.light ?? 0) * TILE, at = { grid: g, x, z, l: o.l | 0 };
+    this.sound('explosion', at, 1);
+    this.shake(at, 0.8, 60);
+    for (const m of this.mobs.values()) {
+      if (m.dead || m.grid !== g) continue;
+      const d = Math.hypot(m.x - x, m.z - z);
+      if (d <= heavy) { this.hurt(m, 60 * (1 - d / (heavy + 0.01) * 0.4), 'brute', 'explosion'); this.hurt(m, 25, 'burn', 'explosion'); m.stunned = Math.max(m.stunned, 3); }
+      else if (d <= light) this.hurt(m, 30 * (1 - (d - heavy) / (light - heavy + 0.01)), 'brute', 'explosion');
+    }
+    const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
+    g.powersim.blast(c, r, Math.ceil(heavy / TILE) + 1, o.l | 0);
+    this.lights.blast(g, c, r, Math.ceil(light / TILE));
+  }
+
   /** The wall switch of a room's lights. */
   setLightSwitch(g, a, on) { g.powersim.setSwitch(a, on); }
 
@@ -893,6 +918,7 @@ export class Sim {
       cuffed: !!m.cuffed, grabbed: m.pulledBy ? m.pulledBy.grab : -1, pulling: m.pulling ? m.pulling.name : m.hauling ? m.hauling.name : null, haul: m.hauling?.it ? m.hauling.it.idx : -1,
       job: m.job, name: m.name, access: [...m.access],
       suit: spaceSafe(m), slow: this.moveFactor(m), jet: !!m.jetOn, mag: !!m.magOn,
+      tray: m.humanoid && allItems(m).some((i) => i.def.tray && i.on),
       ...(this.opts.debug ? { dbg: { god: !!b.god, noclip: !!m.noclip, speed: m.dbgSpeed ?? 1 } } : {}),
     };
   }

@@ -353,6 +353,9 @@ GAME_ITEMS = [
     '/obj/item/multitool', '/obj/item/paper', '/obj/item/pen', '/obj/item/lighter', '/obj/item/storage/box',
     '/obj/item/stack/sheet/plasteel', '/obj/item/clothing/head/welding', '/obj/item/geiger_counter',
     '/obj/item/assembly/igniter', '/obj/item/stock_parts/cell/high', '/obj/item/clothing/suit/hazardvest',
+    # light fixtures that break, and what puts them right (lighting.dm)
+    '/obj/item/light/tube', '/obj/item/light/bulb', '/obj/item/light/tube/broken', '/obj/item/light/bulb/broken',
+    '/obj/item/storage/box/lights/mixed', '/obj/item/storage/box/lights/tubes', '/obj/item/storage/box/lights/bulbs',
     '/obj/item/clothing/under/color/grey', '/obj/item/clothing/shoes/sneakers/black', '/obj/item/storage/backpack',
     # what windows and grilles drop and are rebuilt from (window.dm spawnDebris, grille.dm deconstruct)
     '/obj/item/stack/rods', '/obj/item/stack/sheet/rglass', '/obj/item/stack/sheet/plasmaglass', '/obj/item/stack/sheet/plasmarglass', '/obj/item/shard',
@@ -769,7 +772,9 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                 kl = 'floor' if '/floor' in p else ('bulb' if '/small' in p else 'tube')
                 col = {'bulb': '#ffcf8f', 'tube': '#eaf2ff', 'floor': '#ffffff'}[kl]
                 if sp >= 0:
-                    props.append(dict(base, k='light', s=sp, lt=kl, c=col))
+                    # what the fixture looks like with its glass smashed, burnt out, or taken out (lighting.dm: [fitting]-broken, -burned, -empty)
+                    ss = [spr.add([(icon, '%s-%s' % (kl, s_), d, None, None)]) if icon_ok(icon, '%s-%s' % (kl, s_)) else sp for s_ in ('broken', 'burned', 'empty')]
+                    props.append(dict(base, k='light', s=sp, lt=kl, c=col, ss=ss))
                     stats['light'] += 1
                 continue
 
@@ -1189,6 +1194,13 @@ def build(mapname):
     for mask in range(16):
         state = 'l2-' + '-'.join(str(b) for b in (1, 2, 4, 8) if mask & b) if mask else 'l2-noconnection'
         cable_cells.append(cells.add(sl.compose([('icons/turf/floors.dmi', 'plating', S, None, None), ('icons/obj/power_cond/layer_cable.dmi', state, S, '#ffdd00', None)], (32, 32))))
+    # the same cables as sprites with nothing under them, for the T-ray scanner to show through an intact floor
+    cable_sprites = []
+    for mask in range(16):
+        state = 'l2-' + '-'.join(str(b) for b in (1, 2, 4, 8) if mask & b) if mask else 'l2-noconnection'
+        cable_sprites.append(spr.add_image(sl.compose([('icons/obj/power_cond/layer_cable.dmi', state, S, '#ffdd00', None)], (32, 32)), ('cablespr', mask)))
+    # a light tube or bulb as an item is whole, broken or burnt out (lighting.dm update(): ltube, ltube-broken, ltube-burned)
+    light_items = {kind: [spr.add([('icons/obj/lighting.dmi', base + suffix, S, None, None)]) for suffix in ('', '-broken', '-burned')] for kind, base in (('tube', 'ltube'), ('bulb', 'lbulb'))}
     # make sure the three floors a player can make exist as types (the map has them all, this just says where)
     ftypes = shared['floor_types']
     print('  floor types:', ', '.join('%s%s' % (t['k'], ' (' + t['tile'].split('/')[-1] + ')' if t['tile'] else '') for t in ftypes))
@@ -1233,7 +1245,7 @@ def build(mapname):
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'tiles': base['tiles'],
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'lightItems': light_items, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,

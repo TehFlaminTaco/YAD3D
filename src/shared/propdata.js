@@ -179,8 +179,9 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const dx = (rc.ox + rc.w / 2 - rc.fw / 2) * PX, dz = (rc.oy + rc.h / 2 - rc.fh / 2) * PX;
         const st = sprite({ tag: 'light', rect: p.s, mode: 2, x: cx, y: yb + WALL_H - 0.02, z: cz, w: rc.w * PX, h: rc.h * PX, ox: dx, oy: dz, emit: 1 });
         const L = {
-          c, r, l, x: cx + dx, z: cz + dz, color: hexToRgb(p.c), radius: p.lt === 'bulb' ? 4.5 : p.lt === 'floor' ? 3 : 7.5,
-          strength: p.lt === 'bulb' ? 0.85 : 1.0, on: true, area: world.areaIdx[i], kind: p.lt, st,
+          idx: out.lights.length, c, r, l, x: cx + dx, z: cz + dz, color: hexToRgb(p.c), radius: p.lt === 'bulb' ? 4.5 : p.lt === 'floor' ? 3 : 7.5,
+          strength: p.lt === 'bulb' ? 0.85 : 1.0, on: true, area: world.areaIdx[i], kind: p.lt, st, grid,
+          ss: p.ss, status: 0, y: yb + WALL_H - 0.02,                      // status (lighting.dm): 0 ok, 1 empty, 2 broken, 3 burnt out; `ss` are the pictures of the last three
         };
         out.lights.push(L); out.added.lights.push(L);
         break;

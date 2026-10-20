@@ -72,6 +72,8 @@ export class GridView {
     this.dyn = new SpriteBatch(big ? 3000 : Math.max(300, (props.doors.length + props.fdoors.length) * 2 + 200), mat);
     this.itemB = new SpriteBatch(big ? 6000 : 900, mat);
     this.mobB = new SpriteBatch(600, mat);        // the people on this grid: drawn here so they stand upright on it, however it is turned in the scene
+    this.trayB = new SpriteBatch(64, mat);        // the cables a T-ray scanner shows under the floor around you
+    this.trayKey = '';
     this.mobFree = [];
     this.cam = { x: 0, y: 0, z: 0, yaw: 0 };      // where the camera is in this grid's frame (set every frame by the WorldView)
     this.group = new THREE.Group();
@@ -86,10 +88,11 @@ export class GridView {
 
     this.lightField = new LightField(world);
     this.levelMesh = new LevelMesh(world, assets, { tables: props.tables, panes: props.panes });
-    this.group.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh, this.mobB.mesh);
+    this.group.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh, this.mobB.mesh, this.trayB.mesh);
     scene.add(this.group);
     this.addStatics(props.statics);
     for (const it of props.closets) this.setClosetView(it);     // the welcome may have told us some are open
+    for (const it of props.interact) if (it.gone && it.kind !== 'closet') this.setPropGone(it);
 
     this.doorViews = [];
     for (const d of grid.doors) this.addDoorView(d);
@@ -118,7 +121,7 @@ export class GridView {
     this.scene.remove(this.group);
     for (const ch of [...this.levelMesh.chunks.keys()]) this.levelMesh.disposeChunk(ch);
     for (const m of this.mirrors) { m.mesh.geometry.dispose(); m.mat.dispose(); }
-    for (const b of [this.stat, this.dyn, this.itemB, this.mobB]) b.geometry.dispose();
+    for (const b of [this.stat, this.dyn, this.itemB, this.mobB, this.trayB]) b.geometry.dispose();
   }
 
   // ------------------------------------------------------------------ static scenery
@@ -423,7 +426,47 @@ export class GridView {
     if (id !== undefined) this.itemB.setHighlight(id, on ? 1 : 0);
   }
 
+  /**
+   * The T-ray scanner (t_scanner.dm: objects under the floor within three tiles, half see-through): the cables under floor tiles that hide them, round tile (c, r) of deck `l`.
+   * `on` false hides them.
+   */
+  updateTray(on, c, r, l) {
+    const key = on ? `${c},${r},${l},${this.grid.cableRev | 0}` : '';
+    if (key === this.trayKey) return;
+    this.trayKey = key;
+    const B = this.trayB, w = this.grid.world, sprites = this.assets.level.cableSprites;
+    B.clear();
+    if (on && sprites) {
+      const yb = l * DECK_H;
+      for (let dr = -3; dr <= 3; dr++) for (let dc = -3; dc <= 3; dc++) {
+        const cc = c + dc, rr = r + dr;
+        if (!w.inb(cc, rr, l)) continue;
+        const i = w.idx(cc, rr, l);
+        if (w.cable[i] !== 1 || (w.kind[i] === KIND.FLOOR && w.floorType(i)?.k === 'plating') || w.kind[i] === KIND.LATTICE) continue;       // (the bare ones are drawn already)
+        const has = (a, b) => w.inb(cc + a, rr + b, l) && w.cable[w.idx(cc + a, rr + b, l)] === 1;
+        const mask = (has(0, -1) ? 1 : 0) | (has(0, 1) ? 2 : 0) | (has(1, 0) ? 4 : 0) | (has(-1, 0) ? 8 : 0);
+        const rc = this.rects[sprites[mask]];
+        if (!rc) continue;
+        B.add({ x: cc * TILE + TILE / 2, y: yb + 0.04, z: rr * TILE + TILE / 2, mode: 3, w: rc.w * PX, h: rc.h * PX, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.oy + rc.h / 2 - rc.fh / 2) * PX, rect: rc, alpha: 0.5, tint: [1.2, 1.2, 1.2] });
+      }
+    }
+    B.flush();
+  }
+
+  /** Something was blown up: it is not there any more. */
+  setPropGone(it) { if (it?.st && it.st.id !== undefined) this.stat.setAlpha(it.st.id, 0); }
+
   // ------------------------------------------------------------------ lighting
+  /** A fixture's glass is smashed, burnt out or taken out (or put back): its picture changes, and its lamp. */
+  setLightStatus(L) {
+    if (!L.st || L.st.id === undefined) return;
+    const sprite = L.status && L.ss ? L.ss[L.status === 1 ? 2 : L.status === 2 ? 0 : 1] : L.st.rect;        // (ss: broken, burnt, empty)
+    const rc = this.rects[sprite];
+    if (!rc) return;
+    this.stat.setRect(L.st.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, (rc.oy + rc.h / 2 - rc.fh / 2) * PX);
+    this.rebuildLights();
+  }
+
   rebuildLights() {
     const { grid, lightField: lf } = this;
     const { world, props, power } = grid;

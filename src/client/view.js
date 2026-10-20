@@ -229,6 +229,11 @@ export class WorldView {
   }
 
   // ------------------------------------------------------------------ lighting
+  /** Show what a T-ray scanner shows (the cables under the floor round `pred`) in the grid you stand on; hide it everywhere else. */
+  updateTray(on, pred) {
+    for (const v of this.views.values()) v.updateTray(on && v.id === pred.g, Math.floor(pred.x / 2), Math.floor(pred.z / 2), pred.l | 0);
+  }
+
   relightItems() { for (const v of this.views.values()) v.relightItems(); }
 
   // ------------------------------------------------------------------ effects

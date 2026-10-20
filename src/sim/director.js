@@ -173,6 +173,7 @@ export class Director {
       if (d < 6) sim.hurt(m, 14 * (1 - d / 6) + 4, 'brute', 'meteor shrapnel');
     }
     g.powersim.blast(c, r, 3);                                                // the cables it hits are cut
+    sim.lights.blast(g, c, r, 4);                                             // and the lamps near it smashed
     this.carpTimer = 22;
     this.npcReact('breach', s.room);
   }

@@ -91,6 +91,8 @@ export class Replica {
     }
     g.world.gravityOn = gs.gravity !== false;
     for (const [id, k, c, r, st] of gs.built || []) g.built.add({ id, k, c, r, st, grid: g });
+    for (const [i, st] of gs.lights || []) if (g.props.lights[i]) g.props.lights[i].status = st;
+    for (const i of gs.gone || []) { const it = g.props.interact[i]; if (it) { it.gone = true; g.world.boxDrop(it); } }
     for (const ev of gs.tiles) this.setTile(g, ev);
     for (const [c, r, d] of gs.panes) this.killPane(g, c, r, d);
     for (const [i, cs, gone] of gs.closets || []) this.setCloset(g, i, cs, !!gone);
@@ -173,7 +175,9 @@ export class Replica {
       case 'pane': if (g) this.killPane(g, ev.c, ev.r, ev.d); break;
       case 'item+': this.items.set(ev.id, { id: ev.id, s: ev.s, n: ev.n, x: ev.x, y: ev.y, z: ev.z, g: ev.g, l: ev.l | 0 }); break;
       case 'item-': this.lastRemoved = this.items.get(ev.id) || null; this.items.delete(ev.id); break;
-      case 'cable': if (g) g.world.cable[ev.i] = ev.on; break;
+      case 'cable': if (g) { g.world.cable[ev.i] = ev.on; g.cableRev = (g.cableRev || 0) + 1; } break;
+      case 'light': if (g && g.props.lights[ev.i]) g.props.lights[ev.i].status = ev.st; break;
+      case 'pg': { const it = g?.props.interact[ev.i]; if (it) { it.gone = true; g.world.boxDrop(it); } break; }
       case 'area': if (g) { g.power.set(ev.a, ev.op, ev.ch[0], ev.ch[1], ev.ch[2], ev.mn); g.power.lightSwitch[ev.a] = ev.sw; } break;
       case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, g: 0, x: 0, z: 0, l: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
       case 'look': { const m = this.mobs.get(ev.id); if (m) m.ap = ev.ap; break; }

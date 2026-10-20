@@ -44,6 +44,7 @@ export class AreaPower {
  */
 export function lightMode(L, power, areas) {
   const a = L.area;
+  if (L.status) return { on: false };                               // broken, burnt out or taken out
   if (power.lightsOn(a)) return { on: true, scale: 1, tint: null };
   if (!power.powered(a, CH.LIGHT)) {
     const cat = areas[a].c;

@@ -205,6 +205,8 @@ export class Game {
     rep.on('dbg', (ev) => this.debugMenu.reply(ev));
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('area', (ev) => gv(ev)?.rebuildLights());
+    rep.on('pg', (ev) => { const v = gv(ev); if (v) v.setPropGone(v.grid.props.interact[ev.i]); });
+    rep.on('light', (ev) => { const v = gv(ev); if (v) v.setLightStatus(v.grid.props.lights[ev.i]); });
     rep.on('cable', (ev) => { const v = gv(ev); if (v) { const w = v.grid.world, wh = w.W * w.H, rem = ev.i % wh; v.tilesChanged([[rem % w.W, Math.floor(rem / w.W), Math.floor(ev.i / wh)]]); } });
     rep.on('flicker', (ev) => gv(ev)?.flickerLights(ev.s, this.time));
     rep.on('self', (ev) => this.onSelf(ev));
@@ -598,6 +600,10 @@ export class Game {
       const bx = b.c * TILE + TILE / 2, bz = b.r * TILE + TILE / 2;
       if (!pl && near(bx, bz)) consider({ k: 'built', id: b.id }, bx, 0.1, bz, 0.95, { y1: 1.7, name: girderLook(b.st).name });
     }
+    for (const L of G.props.lights) {                  // the lamps (up on the ceiling): to put a tube in or take one out
+      if ((L.l | 0) !== pl || !near(L.x, L.z)) continue;
+      consider({ k: 'light', idx: L.idx }, L.x, yb + 2.2, L.z, 0.6, { y1: yb + 2.55, name: 'light fixture', bias: 1.8 });
+    }
     for (const m of rep.mobs.values()) {
       if (m.id === rep.you?.id || m.g !== gid || (m.l | 0) !== pl || !near(m.x, m.z)) continue;
       consider({ k: 'mob', id: m.id }, m.x, yb + 0.1, m.z, m.dead ? 0.8 : 0.7, { y1: yb + (m.dead ? 0.4 : 1.6), name: m.n, mob: m });
@@ -820,6 +826,7 @@ export class Game {
     this.updateCursor();
 
     rep.updatePoses(this.time - INTERP_DELAY);
+    this.view.updateTray(this.phase === 'playing' && !!this.self?.tray, this.pred);
     this.view.update(dt, this.time, this.time - INTERP_DELAY, cam.position, this.yaw, this.pitch, this.phase === 'playing' ? rep.you?.id : -1, this.viewFrame());
     U.uCam.value.copy(cam.position);
     const dir = new THREE.Vector3(); cam.getWorldDirection(dir);

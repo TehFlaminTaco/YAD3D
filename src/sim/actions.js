@@ -131,6 +131,7 @@ export class Actions {
       sim.tell(m, 'notice', it.lit ? 'You turn on the welding tool.' : 'You turn off the welding tool.');
       return;
     }
+    if (d.tray) { it.on = !it.on; m.dirty = true; sim.sound('beep', m, 0.3); return; }           // the T-ray scanner (t_scanner.dm attack_self: no message)
     if (d.storage) {
       if (m.openContainers.has(it.id)) m.openContainers.delete(it.id); else m.openContainers.add(it.id);
       m.dirty = true; return;
@@ -165,6 +166,7 @@ export class Actions {
         return th ? { k: t.k, c: t.c, r: t.r, d: t.d, grid: g, x: th.x, z: th.z } : undefined;
       }
       case 'floor': { const th = sim.floors.floor(g, t); return th ? { k: 'floor', c: t.c, r: t.r, grid: g, x: th.x, z: th.z } : undefined; }
+      case 'light': return sim.lights.thing(g, t) || undefined;
       case 'wall': { const th = sim.walls.wall(g, t); return th ? { k: 'wall', c: t.c, r: t.r, grid: g, x: th.x, z: th.z } : undefined; }
       case 'built': { const th = sim.walls.girder(g, t); return th ? { k: 'built', id: t.id, grid: g, x: th.x, z: th.z } : undefined; }
       default: return undefined;
@@ -174,8 +176,8 @@ export class Actions {
   inReach(m, t) {
     if ((t.l | 0) !== (m.l | 0) && t.grid === m.grid) return false;                // not through a floor
     const d = this.sim.dist(m, t);
-    if (d > REACH + (t.k === 'mob' ? 0.5 : t.k === 'window' || t.k === 'pane' || t.k === 'breach' || t.k === 'wall' || t.k === 'built' || t.k === 'floor' ? 1.3 : 0)) return false;       // a window's middle is a metre behind its face
-    if (t.k === 'door' || t.k === 'breach' || t.k === 'window' || t.k === 'pane' || t.k === 'wall' || (t.k === 'prop' && t.it.kind === 'wm')) return true;
+    if (d > REACH + (t.k === 'mob' ? 0.5 : t.k === 'window' || t.k === 'pane' || t.k === 'breach' || t.k === 'wall' || t.k === 'built' || t.k === 'floor' || t.k === 'light' ? 1.3 : 0)) return false;       // a window's middle is a metre behind its face
+    if (t.k === 'door' || t.k === 'breach' || t.k === 'window' || t.k === 'pane' || t.k === 'wall' || t.k === 'light' || (t.k === 'prop' && t.it.kind === 'wm')) return true;
     if (t.grid !== m.grid) return true;               // across a doorway between two grids there are no tiles to look along: arm's length is all that counts
     const wd = m.grid.world.raycast(m.x, m.z, t.x - m.x, t.z - m.z, d, 'shot', m.l | 0);
     return wd >= d - 0.8;
@@ -207,6 +209,7 @@ export class Actions {
       case 'floor': if (sim.floors.click(m, t, held)) return; return this.clickAir(m, held);
       case 'wall': if (sim.walls.clickWall(m, t, held)) return; return this.clickAir(m, held);
       case 'built': if (sim.walls.clickGirder(m, t, held)) return; return this.clickAir(m, held);
+      case 'light': if (sim.lights.click(m, t, held)) return; return this.clickAir(m, held);
       default: return;
     }
   }
@@ -285,6 +288,8 @@ export class Actions {
     const g = it.grid, area = g.world.areaIdx[g.world.idx(it.c, it.r)];
     if (it.kind === 'closet') return sim.closets.click(c, m, it, held, alt);
     if (it.mach && it.mach.click(c, m, held, alt)) return;                        // a machine with its own rules (the power machines: src/sim/power/)
+    if (it.gone) return;
+    if (sim.tanks.click(m, it, held)) return;                                     // a fuel or water tank: refill from it
     if (it.kind === 'container') return this.openContainer(m, it);
     if (it.kind === 'wm') {
       switch (it.sub) {
@@ -460,6 +465,25 @@ export class Actions {
     return best ? { mob: best, dist: bd } : null;
   }
 
+  /** The first fuel tank on the line of a shot, nearer than `maxDist` (reagent_dispenser.dm fueltank bullet_act: a shot tank blows up). */
+  rayTanks(m, f, maxDist) {
+    let best = null, bd = maxDist;
+    const len2 = f.x * f.x + f.z * f.z;
+    if (len2 < 1e-6) return null;
+    for (const it of m.grid.props.interact) {
+      if (it.gone || it.kind !== 'prop' || (it.l | 0) !== (m.l | 0) || !this.sim.tanks.isFuel(it)) continue;
+      const mx = it.x - m.x, mz = it.z - m.z;
+      const tt = (mx * f.x + mz * f.z) / len2;
+      if (tt < 0 || tt > bd) continue;
+      const cx = m.x + f.x * tt - it.x, cz = m.z + f.z * tt - it.z;
+      if (cx * cx + cz * cz > 0.45 * 0.45) continue;
+      const y = EYE + f.y * tt;
+      if (y < 0 || y > 1.5) continue;
+      bd = tt; best = it;
+    }
+    return best ? { it: best, dist: bd } : null;
+  }
+
   fire(m, gun) {
     const sim = this.sim;
     const g = gun.def.gun;
@@ -476,7 +500,11 @@ export class Actions {
     const wallHit = world.hit;
     const hit = this.rayMobs(m, { x: dx, y: dy, z: dz }, wall);
     let end = wall;
-    if (hit) {
+    const tank = this.rayTanks(m, { x: dx, y: dy, z: dz }, hit ? hit.dist : wall);
+    if (tank) {
+      end = tank.dist;
+      sim.tanks.damaged(tank.it);
+    } else if (hit) {
       end = hit.dist;
       sim.hurt(hit.mob, g.dmg, g.type, m.name);
       hit.mob.fear = 6; hit.mob.target = m;
@@ -604,8 +632,27 @@ export class Actions {
     if (m.client) m.client.outbox.push({ e: 'prog', f: -1 });
   }
 
+  /** A lit welding tool burns a unit of fuel every 13 power ticks, 26 s (weldingtool.dm process, WELDER_FUEL_BURN_INTERVAL); out of fuel it goes out. */
+  burnWelders(dt) {
+    const sim = this.sim;
+    for (const m of sim.mobs.values()) {
+      if (m.dead || !m.humanoid) continue;
+      for (const it of allItems(m)) {
+        if (it.def.tool !== 'welder' || !it.lit) continue;
+        it.burn = (it.burn || 0) + dt;
+        if (it.burn < 26) continue;
+        it.burn = 0;
+        it.fuel = Math.max(0, it.fuel - 1);
+        m.dirty = true;
+        if (it.fuel <= 0) { it.lit = false; sim.tell(m, 'notice', `You switch the ${it.name} off.`); sim.sound('beep', m, 0.4); }
+      }
+    }
+  }
+
   update(dt) {
     const sim = this.sim;
+    this.burnAcc = (this.burnAcc || 0) + dt;
+    if (this.burnAcc >= 1) { this.burnWelders(this.burnAcc); this.burnAcc = 0; }
     for (const m of sim.mobs.values()) {
       const b = m.busy;
       if (!b) continue;
@@ -755,6 +802,7 @@ export class Actions {
     else if (t.k === 'breach' || t.k === 'window' || t.k === 'pane') lines.push(...sim.windows.examine(g, t));
     else if (t.k === 'wall' || t.k === 'built') lines.push(...sim.walls.examine(g, t));
     else if (t.k === 'floor') lines.push(...sim.floors.examine(g, t));
+    else if (t.k === 'light') { const L = g.props.lights[t.idx]; if (L) lines.push(...sim.lights.examine(g, L)); }
     if (m && lines.length) sim.tellClient(c, 'info', lines.join(' '));
   }
 
@@ -762,7 +810,8 @@ export class Actions {
     const db = this.sim.db;
     const out = [`This is ${a(it.name)}.`];
     const info = db.info(it.path);
-    if (info.d) out.push(info.d);
+    const desc = it.desc ?? info.d;
+    if (desc) out.push(desc);
     out.push(`It is ${a(db.sizeName(it.w))} item.`);
     const stack = stackInfo(it.path);
     if (stack) out.push((it.amount ?? 1) > 1 ? `There are ${plural(it.amount, stack.one)} in the stack.` : `There is ${plural(1, stack.one)} in the stack.`);
@@ -796,6 +845,7 @@ export class Actions {
     const d = this.sim.level.descs[it.path] || this.sim.level.descs[(it.path || '').replace(/^\//, '')];
     const out = [`This is ${a(it.name || 'thing')}.`, d?.[1] || ''];
     if (it.kind === 'closet') out.push(...this.sim.closets.examineLines(it));
+    out.push(...this.sim.tanks.examine(it));
     return out.filter(Boolean);
   }
 }
