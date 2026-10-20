@@ -8,6 +8,7 @@ import {
   recalc, internalsSource, allItems, consume, mergeStack, stackNote,
 } from './inventory.js';
 import { mountApcFrame } from './power/apckit.js';
+import { scanMix, scanAir } from './atmosdev.js';
 
 const REACH = 3.2;
 
@@ -124,6 +125,7 @@ export class Actions {
     if (!it) { sim.tell(m, 'notice', 'You have nothing in your hand.'); return; }
     const d = it.def;
     if (stackInfo(it.path)) return sim.stacks.open(m, it);               // a stack: what it can make, and taking some out
+    if (d.analyzer) return scanAir(sim, m);                              // a gas analyzer: what the air about you is
     if (d.light) return this.toggleLight(m);
     if (d.tool === 'welder') {
       if (it.fuel <= 0) { sim.tell(m, 'warning', 'The welding tool is out of fuel.'); return; }
@@ -227,6 +229,7 @@ export class Actions {
       if (mergeStack(sim, rec.item, held)) { stackNote(sim, m, held); sim.sound('pickup', m, 0.5); }
       return;
     }
+    if (held?.def.analyzer && rec.item.mix) { scanMix(sim, m, rec.item.mix, `the ${rec.item.name}`); return; }       // a gas analyzer on a tank lying there
     // a held container takes the item in
     if (held?.def.storage && m.intent === 'help') {
       const why = storageReason(held, rec.item);
@@ -297,7 +300,6 @@ export class Actions {
       switch (it.sub) {
         case 'light_switch': sim.setLightSwitch(g, area, !g.power.lightSwitch[area]); sim.sound('terminal_key', it, 0.5); return;
         case 'apc': sim.terminals.open(c, 'apc', { area, grid: g }); return;
-        case 'airalarm': sim.terminals.open(c, 'airalarm', { area, grid: g }); return;
         case 'requests_console': sim.terminals.open(c, 'rc', { area, grid: g }); return;
         case 'newscaster': sim.terminals.open(c, 'news', { area, grid: g }); return;
         case 'status_display': case 'ai_status_display': sim.terminals.open(c, 'status', { area, grid: g }); return;
@@ -473,7 +475,7 @@ export class Actions {
     const len2 = f.x * f.x + f.z * f.z;
     if (len2 < 1e-6) return null;
     for (const it of m.grid.props.interact) {
-      if (it.gone || it.kind !== 'prop' || (it.l | 0) !== (m.l | 0) || !this.sim.tanks.isFuel(it)) continue;
+      if (it.gone || it.kind !== 'prop' || (it.l | 0) !== (m.l | 0) || !(this.sim.tanks.isFuel(it) || (it.mach?.shootable && !it.mach.broken))) continue;
       const mx = it.x - m.x, mz = it.z - m.z;
       const tt = (mx * f.x + mz * f.z) / len2;
       if (tt < 0 || tt > bd) continue;
@@ -505,7 +507,7 @@ export class Actions {
     const tank = this.rayTanks(m, { x: dx, y: dy, z: dz }, hit ? hit.dist : wall);
     if (tank) {
       end = tank.dist;
-      sim.tanks.damaged(tank.it);
+      if (tank.it.mach?.hit) tank.it.mach.hit(g.dmg); else sim.tanks.damaged(tank.it);
     } else if (hit) {
       end = hit.dist;
       sim.hurt(hit.mob, g.dmg, g.type, m.name);

@@ -3,6 +3,7 @@ import { describeState, storageReason, fitsSlot, EQUIP_ORDER } from '../shared/i
 import { stackKey, stackInfo, plural } from '../shared/stacks.js';
 
 const MAGBOOT_SLOW = 0.65;
+export const TANK_EMPTY = 0.005;             // moles: a tank with less than this has nothing to breathe
 
 /**
  * SS13 inventory rules, server side. An item lives in exactly one place (item.loc):
@@ -90,7 +91,7 @@ export function recalc(sim, mob) {
 export function internalsSource(mob) {
   if (!mob.worn.mask?.def.internals) return null;
   const cands = [mob.worn.suit_store, mob.worn.back, mob.worn.belt, mob.worn.lpocket, mob.worn.rpocket, mob.hands[0], mob.hands[1]];
-  for (const it of cands) if (it && it.def.tank && it.gas > 0) return it;
+  for (const it of cands) if (it && it.def.tank && it.mix.total() > TANK_EMPTY) return it;
   return null;
 }
 

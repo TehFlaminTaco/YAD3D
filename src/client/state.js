@@ -94,6 +94,7 @@ export class Replica {
     for (const [i, st] of gs.lights || []) if (g.props.lights[i]) g.props.lights[i].status = st;
     for (const i of gs.gone || []) { const it = g.props.interact[i]; if (it) { it.gone = true; g.world.boxDrop(it); } }
     for (const [i, v] of gs.pv || []) { const it = g.props.interact[i]; if (it) it.pv = v; }
+    for (const i of gs.pd || []) { const it = g.props.interact[i]; if (it) { it.dense = false; g.world.boxSet(it); } }
     for (const [i, a] of gs.pa || []) { const it = g.props.interact[i]; if (it) setPropAnchored(g.world, it, a); }
     for (const ev of gs.tiles) this.setTile(g, ev);
     for (const [c, r, d] of gs.panes) this.killPane(g, c, r, d);
@@ -180,6 +181,7 @@ export class Replica {
       case 'cable': if (g) { g.world.cable[ev.i] = ev.on; g.cableRev = (g.cableRev || 0) + 1; } break;
       case 'light': if (g && g.props.lights[ev.i]) g.props.lights[ev.i].status = ev.st; break;
       case 'pv': { const it = g?.props.interact[ev.i]; if (it) it.pv = ev.v; break; }
+      case 'pd': { const it = g?.props.interact[ev.i]; if (it) { it.dense = !!ev.d; g.world.boxSet(it); } break; }
       case 'pa': { const it = g?.props.interact[ev.i]; if (it) setPropAnchored(g.world, it, ev.a); break; }
       case 'pg': { const it = g?.props.interact[ev.i]; if (it) { it.gone = true; g.world.boxDrop(it); } break; }
       case 'area': if (g) { g.power.set(ev.a, ev.op, ev.ch[0], ev.ch[1], ev.ch[2], ev.mn); g.power.lightSwitch[ev.a] = ev.sw; } break;

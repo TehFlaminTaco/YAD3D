@@ -60,8 +60,10 @@ export class Body {
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 1.8);
     this.stun = Math.max(0, this.stun - dt);
     if (this.breathes) {
+      // what is breathed: the tank's gas when internals are on and give one (`env.breath`, partial pressures in kPa), else the room's air (a carp breathes nothing in particular)
+      const b = env.breath || env;
       const ambientOk = env.o2 >= 16 && env.pressure >= 30;
-      const ok = env.internals || ambientOk;
+      const ok = env.breath ? b.o2 >= 16 : (env.internals || ambientOk);
       if (ok) {
         this.breathless = Math.max(0, this.breathless - dt * 2);
         this.oxy = Math.max(0, this.oxy - dt * 6);
@@ -69,7 +71,13 @@ export class Body {
         this.breathless += dt;
         if (this.breathless > 2.5) this.damage('oxy', dt * (this.crit ? 2.2 : 3.4));
       }
-      if (!env.internals && env.tox > 1.5) this.damage('tox', dt * Math.min(3, env.tox * 0.4));
+      const tox = env.breath ? b.tox : env.internals ? 0 : env.tox;
+      if (tox > 1.5) this.damage('tox', dt * Math.min(3, tox * 0.4));
+      const co2 = env.breath ? b.co2 : env.internals ? 0 : (env.co2 || 0);          // lungs.dm: over 10 kPa for 12 s, and then it hurts (3 a breath, 8 after 30 s)
+      if (co2 > 10) {
+        this.co2time = (this.co2time || 0) + dt;
+        if (this.co2time > 12) this.damage('oxy', dt * (this.co2time > 30 ? 5.5 : 1.5));
+      } else this.co2time = 0;
     }
     if (!env.safeSuit && env.pressure < 32) {
       this.damage('brute', dt * clamp((32 - env.pressure) / 32, 0, 1) * 3.2, 'pressure');

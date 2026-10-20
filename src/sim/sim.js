@@ -29,7 +29,9 @@ import { Sun } from './power/powersim.js';
 import { Lights } from './lights.js';
 import { Tanks } from './tanks.js';
 import { AI } from './ai.js';
-import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, allItems } from './inventory.js';
+import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, allItems, TANK_EMPTY } from './inventory.js';
+import { breathRate } from '../shared/items.js';
+import { breathOf, GAS_IDS } from '../shared/gases.js';
 import { Dispensers } from './dispensers.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
@@ -437,7 +439,8 @@ export class Sim {
       pw: g.powersim.state(),
       lights: g.props.lights.filter((L) => L.status).map((L) => [L.idx, L.status]),                 // the fixtures that are not whole
       gone: g.props.interact.filter((it) => it.gone && it.kind !== 'closet').map((it) => it.idx),    // things that were blown up
-      pv: Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]),      // machines that show another picture (an APC open, an emitter running)
+      pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv()],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
+      pd: g.atmosdev.pd(),                                                                         // canisters broken open: no longer in the way
       pa: [...g.anchorLog],                                                                        // props bolted down or freed
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
@@ -477,7 +480,7 @@ export class Sim {
     for (const g of this.grids.values()) g.firedoors.update(dt);
     this.windows.update();
     this.sun.update(dt);
-    for (const g of this.grids.values()) { g.atmos.update(dt); g.powersim.update(dt); }
+    for (const g of this.grids.values()) { g.atmos.update(dt); g.powersim.update(dt); g.atmosdev.update(dt); }
     this.shuttles.update(dt);
     this.physics.step(dt);
     this.ai.update(dt);
@@ -620,15 +623,23 @@ export class Sim {
       m.stunned = Math.max(0, m.stunned - dt);
       const [c, r] = m.tile;
       const a = m.grid?.atmos;                                       // in the void there is no air at all
-      let internals = false;
+      const env = a ? a.gasesAt(c, r, m.l | 0) : Object.fromEntries([['pressure', 0], ...GAS_IDS.map((id) => [id, 0])]);
+      let internals = false, breath = null;
       if (m.humanoid && m.internals) {
         const src = internalsSource(m);
-        if (src) { internals = true; src.gas = Math.max(0, src.gas - dt); if (src.gas <= 0) { m.internals = false; this.tell(m, 'danger', 'Your air tank runs dry!'); } }
+        if (src) {                                                   // what is breathed is what the tank holds (at the pressure internals give it), and it is used up
+          internals = true;
+          breath = breathOf(src.mix);
+          src.mix.remove(breathRate(src.def) * dt);
+          if (src.mix.total() <= TANK_EMPTY) { m.internals = false; this.tell(m, 'danger', 'Your air tank runs dry!'); }
+        }
       }
-      m.body.tick(dt, {
-        pressure: a ? a.pressureAt(c, r, m.l | 0) : 0, o2: a ? a.o2At(c, r, m.l | 0) : 0, tox: a ? a.toxAt(c, r, m.l | 0) : 0,
-        safeSuit: m.kind === 'carp' || (m.humanoid && spaceSafe(m)), internals: internals || m.kind === 'carp',
-      });
+      m.body.tick(dt, { ...env, breath, safeSuit: m.kind === 'carp' || (m.humanoid && spaceSafe(m)), internals: internals || m.kind === 'carp' });
+      if (m.kind === 'human' && !m.body.dead) {                      // nitrous oxide (lungs.dm: over 1 kPa you are knocked out for a bit, over 5 you sleep)
+        const pp = (breath || (internals ? null : env))?.n2o || 0;
+        if (pp > 5) m.stunned = Math.max(m.stunned, 20);
+        else if (pp > 1) m.stunned = Math.max(m.stunned, 6);
+      }
     }
   }
 
@@ -788,6 +799,7 @@ export class Sim {
     }
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
     g.powersim.blast(c, r, Math.ceil(heavy / TILE) + 1, o.l | 0);
+    g.atmosdev.blast(c, r, o.heavy ?? 0, o.light ?? 0, o.l | 0);
     this.lights.blast(g, c, r, Math.ceil(light / TILE));
   }
 
@@ -901,7 +913,8 @@ export class Sim {
         if (m.l) snap.you.l = m.l;
         if (g.kind === 'void') Object.assign(snap.you, { y: +m.y.toFixed(3), vy: +m.vy.toFixed(2), q: m.q.map((v) => +v.toFixed(5)) });          // floating: its height, and which way is up
         const ml = m.l | 0;
-        snap.env = { p: +g.atmos.pressureAt(tc, tr, ml).toFixed(1), o2: +g.atmos.o2At(tc, tr, ml).toFixed(1), tox: +g.atmos.toxAt(tc, tr, ml).toFixed(2), area: g.world.inb(tc, tr, ml) ? g.world.areaIdx[g.world.idx(tc, tr, ml)] : 0 };
+        const e = g.atmos.gasesAt(tc, tr, ml);
+        snap.env = { p: +e.pressure.toFixed(1), o2: +e.o2.toFixed(1), tox: +e.tox.toFixed(2), co2: +e.co2.toFixed(2), n2o: +e.n2o.toFixed(2), area: g.world.inb(tc, tr, ml) ? g.world.areaIdx[g.world.idx(tc, tr, ml)] : 0 };
         const wind = g.atmos.windAt(m.x, m.z, ml);
         if (wind) snap.you.wind = [+wind[0].toFixed(2), +wind[1].toFixed(2)];
         const self = this.selfState(c);

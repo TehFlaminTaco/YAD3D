@@ -231,7 +231,7 @@ section('the collector', () => {
   ok(c.examine().join(' ').includes('Please insert Plasma'), 'an empty collector asks for plasma');
   empty();
   const tank = hold('/obj/item/tank/internals/plasma');
-  ok(tank.plasma > 8 && tank.plasma < 9, 'a plasma tank holds about 8.7 moles');
+  ok(tank.mix.g.tox > 8 && tank.mix.g.tox < 9, 'a plasma tank holds about 8.7 moles');
   click(c);
   ok(c.tank === tank && a.hands.every((h) => h !== tank) && c.v === 1, 'it goes into the collector, which shows it');
   const t2 = hold('/obj/item/tank/internals/plasma');
@@ -246,10 +246,10 @@ section('the collector', () => {
   c.radAct(480);
   ok(c.stored === (480 - 80) * 100, 'radiation over it stores (strength - 80) x 100');
   const net = c.net; net.newavail = 0;
-  const stored = c.stored, plasma = tank.plasma;
+  const stored = c.stored, plasma = tank.mix.g.tox;
   c.process();
   ok(Math.abs(net.newavail - Math.min(stored, stored * 0.04 + 1000)) < 1e-6 && Math.abs(c.stored - (stored - net.newavail)) < 1e-6, 'and it puts out min(stored, stored x 4% + 1000) watts, taking that off what it stores');
-  ok(Math.abs(plasma - tank.plasma - 0.001) < 1e-9, 'and uses a thousandth of a mole of plasma');
+  ok(Math.abs(plasma - tank.mix.g.tox - 0.001) < 1e-9, 'and uses a thousandth of a mole of plasma');
   ok(/stored/.test(c.examine().join(' ')) && /is processing/.test(c.examine().join(' ')), 'examined, it says what it has stored and is processing');
   // lock with an ID, and the crowbar
   a.access = new Set([11]);
@@ -264,7 +264,7 @@ section('the collector', () => {
   hold('/obj/item/crowbar'); click(c);
   ok(msgs().includes("There isn't a tank loaded!"), 'an empty collector: "There isn\'t a tank loaded!"');
   // out of fuel
-  const t3 = sim.newItem('/obj/item/tank/internals/plasma'); t3.plasma = 0;
+  const t3 = sim.newItem('/obj/item/tank/internals/plasma'); t3.mix.g.tox = 0;
   c.tank = t3; c.touch();
   c.process();
   ok(c.tank === null && [...sim.floor.values()].some((f) => f.item === t3), 'a tank with no plasma left pops out');

@@ -5,6 +5,7 @@ import { Atmos } from '../shared/atmos.js';
 import { Nav } from '../shared/nav.js';
 import { BuiltSet } from '../shared/built.js';
 import { FireDoors } from './firedoors.js';
+import { AtmosDevices } from './atmosdev.js';
 
 /**
  * A grid as the server runs it: the shared `Grid` (tiles, props, doors, pose) plus everything that is simulated per grid. Each grid has its own
@@ -22,6 +23,7 @@ export class GridSim extends Grid {
     this.atmos = new Atmos(w, this.power);
     this.nav = new Nav(w);
     this.firedoors = new FireDoors(sim, this);
+    this.atmosdev = new AtmosDevices(sim, this);   // the canisters, pumps and scrubbers standing about, and the air alarms
     this.built = new BuiltSet(w);
     this.tileLog = [];                         // tile events since the round began, for late joiners
     this.deadPanes = [];                       // thin windows smashed or taken apart: [c, r, d]

@@ -3,6 +3,7 @@ import { attach, detach, place, recalc } from './inventory.js';
 import { stackInfo } from '../shared/stacks.js';
 import { qmul, qFromAxisAngle, qYaw, qTwistY, tfClone } from '../shared/math3.js';
 import { makeBlueprint } from '../shared/blueprint.js';
+import { GAS_IDS, GAS_NAME } from '../shared/gases.js';
 
 const MAX_ITEMS = 25;             // most things one spawn makes (a stack counts as one thing with that many in it)
 const MAX_STACK = 50;
@@ -97,7 +98,7 @@ export class Debug {
       // -- going places
       tp: this.tp, area: this.goArea, goto: this.goMob, bring: this.bring, who: this.who,
       // -- the station
-      map: this.mapOp, alert: this.alert, power: this.power, strike: this.strike, carp: this.carp, shuttle: this.shuttle, doors: this.doors,
+      map: this.mapOp, gas: this.gas, alert: this.alert, power: this.power, strike: this.strike, carp: this.carp, shuttle: this.shuttle, doors: this.doors,
       repair: this.repair, round: this.round, skip: this.skip, gravity: this.gravity, space: this.space, grid: this.gridOp,
       // -- what the network test uses
       kill: this.kill, finish: this.finish, tile: this.tile, noop() {},
@@ -448,6 +449,20 @@ export class Debug {
     }
     this.teleport(c, c.mob, g, 3 * TILE + 1, 3 * TILE + 1);
     this.say(c, 'You are on the deck test grid: the stair climbs east, out of a hole in the upper floor.');
+  }
+
+  /** Let gas out where you look (or in front of you): `kpa` of `gas` added to the tile's air, or, with no `gas`, all the air of the tile taken away. */
+  gas(c, msg) {
+    const g = this.grid(c), a = g.atmos, [x, z] = this.target(c, msg), l = c.mob?.l | 0;
+    const col = Math.floor(x / TILE), row = Math.floor(z / TILE);
+    if (!g.world.inb(col, row, l)) return;
+    const i = g.world.idx(col, row, l);
+    if (!a.isCell[i]) { this.say(c, 'There is no air there.'); return; }
+    if (msg.gas === undefined || msg.gas === null) { for (const arr of a.arrs) arr[i] = 0; this.say(c, 'The air there is gone.'); return; }
+    const id = String(msg.gas), kpa = int(msg.kpa, 1, 2000, 50);
+    if (!GAS_IDS.includes(id)) return;
+    a.addGases(col, row, { [id]: kpa }, l);
+    this.say(c, `${kpa} kPa of ${GAS_NAME[id]} let out.`);
   }
 
   /** Go to another map: `away` (made on the first visit: a copy of a shuttle, alone in a map of its own), `centcom` (Central Command) or back `home` to where the crew arrive. A watcher goes too. */

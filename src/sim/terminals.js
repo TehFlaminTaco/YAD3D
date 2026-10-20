@@ -81,7 +81,7 @@ export class Terminals {
       case 'solar': return this.solar(c, t);
       case 'pacman': return this.pacman(c, t);
       case 'dispenser': return this.sim.dispensers.console(c, t);
-      case 'airalarm': return this.airalarm(c, g, area, bar);
+      case 'airalarm': case 'portable': return t.ctx.machine.console(c, t);          // an air alarm, a canister, a pump or a scrubber: atmosdev.js
       case 'crew': return this.crew();
       case 'atmos': return this.atmosMap(g);
       case 'alerts': return this.alerts(g);
@@ -183,20 +183,6 @@ export class Terminals {
         { label: 'Output higher', fn: () => { if (s.powerOutput < 4) s.powerOutput++; } },
         { label: 'Eject fuel', disabled: s.active || s.sheets < 1, fn: () => { s.eject(c.mob); } },
       ],
-    };
-  }
-
-  airalarm(c, g, area, bar) {
-    const a = g.atmos, m = c.mob;
-    const [tc, tr] = m.tile;
-    const ml = m.l | 0;
-    const p = a.pressureAt(tc, tr, ml), o2 = a.o2At(tc, tr, ml), n2 = a.n2[g.world.idx(tc, tr, ml)], tox = a.toxAt(tc, tr, ml);
-    const aidx = g.world.areas.indexOf(area);
-    const avg = a.areaStats.get(aidx);
-    return {
-      title: 'Air Alarm', live: true,
-      html: `<span class="h">${esc(area.n)}</span>\n\nStatus        ${p < 30 ? '<span class="b">DANGER: low pressure</span>' : p < 80 ? '<span class="w">Warning: thin atmosphere</span>' : '<span class="c">Optimal</span>'}\nPressure      ${p.toFixed(1)} kPa   ${bar(Math.min(1, p / 101.3))}\nOxygen        ${o2.toFixed(1)} kPa\nNitrogen      ${n2.toFixed(1)} kPa\nToxins        ${tox.toFixed(2)} kPa ${tox > 0.5 ? '<span class="b">HAZARD</span>' : ''}\nArea average  ${avg !== undefined ? avg.toFixed(1) + ' kPa' : 'n/a'}\nVents         ${a.ventsOn ? '<span class="c">On</span>' : '<span class="b">Off</span>'} ${g.power.areaPowered(aidx) ? '' : '<span class="b">(no power)</span>'}`,
-      buttons: [{ label: a.ventsOn ? 'Vents off' : 'Vents on', fn: () => { a.ventsOn = !a.ventsOn; } }],
     };
   }
 
@@ -309,8 +295,8 @@ export class Terminals {
           if (w.kind[i] === KIND.WALL) { s += w.glass[i] ? 'G' : 'W'; continue; }
           if (!a.isCell[i]) { s += ' '; continue; }
           if (w.areas[w.areaIdx[i]].c === 'space') { s += ' '; continue; }
-          if (a.tox[i] > 1) { s += 'T'; continue; }
-          const p = a.o2[i] + a.n2[i] + a.tox[i];
+          if (a.tox[i] > 1 || a.co2[i] > 10 || a.n2o[i] > 1) { s += 'T'; continue; }
+          const p = a.total(i);
           s += p > 85 ? '4' : p > 60 ? '3' : p > 30 ? '2' : p > 8 ? '1' : '0';
         }
         return { x0, y0, w: x1 - x0, h: y1 - y0, data: s };

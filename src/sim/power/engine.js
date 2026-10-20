@@ -198,13 +198,13 @@ export class Collector extends Machine {
 
   process() {
     if (!this.tank || this.broken) { this.out = 0; return; }
-    if (!(this.tank.plasma > 0)) {                                                     // out of fuel: the tank pops out
+    if (!(this.tank.mix.g.tox > 0)) {                                                     // out of fuel: the tank pops out
       this.ps.sim.sound('ping', { grid: this.ps.grid, x: this.rec.x, z: this.rec.z, l: this.rec.l | 0 }, 0.6);
       this.eject();
       this.out = 0;
       return;
     }
-    this.tank.plasma = Math.max(0, this.tank.plasma - PLASMA_DRAIN);
+    this.tank.mix.g.tox = Math.max(0, this.tank.mix.g.tox - PLASMA_DRAIN);
     const out = Math.min(this.stored, this.stored * STORED_OUT + 1000);
     this.out = out;
     const net = this.net;

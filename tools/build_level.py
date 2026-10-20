@@ -395,6 +395,29 @@ def solar_image(tracker=False):
     return img
 
 
+def portable_variants(p, st, icon, spr):
+    """The pictures of a portable atmospherics machine (the `sv` the sim picks from, see src/sim/atmosdev.js): a canister is eleven (with or without a tank in it, and its lamp for how full
+    it is: canister.dm update_overlays; the last broken: `<colour>-1`), a pump and a scrubber four (off or on, with or without a tank: pump.dm / scrubber.dm update_icon_state and
+    update_overlays), the huge scrubber two."""
+    def one(*states):
+        layers = [(icon, s_, S, None, None) for s_ in states]
+        return spr.add(layers) if all(icon_ok(icon, s_) for s_ in states) else -1
+    if '/canister' in p:
+        out = []
+        for hold in (False, True):
+            for lvl in range(-1, 4):
+                out.append(one(st, 'tier 1-0', *(['can-open'] if hold else []), *([f'can-{lvl}'] if lvl >= 0 else [])))
+        out.append(one(st + '-1', 'tier 1-1'))
+        return out
+    if '/pump' in p:
+        return [one(f'psiphon:{on}', *(['siphon-open'] if hold else [])) for on in (0, 1) for hold in (False, True)]
+    if '/scrubber/huge' in p:
+        return [one(f'scrubber:{on}') for on in (0, 1)]
+    if '/scrubber' in p:
+        return [one(f'pscrubber:{on}', *(['scrubber-open'] if hold else [])) for on in (0, 1) for hold in (False, True)]
+    return None
+
+
 def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
     """Classify tiles + props for one grid. Registries (areas, wall variants, floor types, cells, sprites) are shared across calls.
     `full` is the first call (the station): only it makes the things that belong to the game as a whole (the loot pool, the mob sets, the
@@ -909,6 +932,10 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                 if p.startswith('/obj/machinery/power/emitter'):
                     # off, lit and firing, lit and short of power (emitter.dm update_icon_state): the pictures `sv`, each from the four sides
                     rec['sv'] = [[spr.add(dir_set([(icon, es, d, None, None)], dd)) for dd in (S, N, E, W)] for es in ('emitter', 'emitter_+a', 'emitter_+u')]
+                elif p.startswith('/obj/machinery/portable_atmospherics/'):
+                    sv = portable_variants(p, st, icon, spr)
+                    if sv and all(v >= 0 for v in sv):
+                        rec['sv'] = sv
                 elif p.startswith('/obj/machinery/power/rad_collector'):
                     # empty / with a plasma tank / running / running with a tank (collector.dm update_overlays: ca or ca_on, ptank, on)
                     rec['sv'] = [spr.add([(icon, cs_, S, None, None) for cs_ in combo]) for combo in (('ca',), ('ca', 'ptank'), ('ca_on', 'on'), ('ca_on', 'ptank', 'on'))]

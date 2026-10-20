@@ -2,6 +2,8 @@
  * Item database. Sprite, name, description, size class (w), allowed worn slots (sl) and melee force (f)
  * come from the real SS13 item definitions (level.itemdefs). Behaviour is a small prefix table below.
  */
+import { Mix, molesAt, ONE_ATMOSPHERE, O2STANDARD, N2STANDARD } from './gases.js';
+
 const TOOLS = ['/obj/item/screwdriver', '/obj/item/wrench', '/obj/item/weldingtool', '/obj/item/crowbar', '/obj/item/wirecutters', '/obj/item/multitool',
   '/obj/item/stack/cable_coil', '/obj/item/t_scanner', '/obj/item/flashlight', '/obj/item/extinguisher', '/obj/item/analyzer', '/obj/item/geiger_counter'];
 const MED = ['/obj/item/stack/medical', '/obj/item/reagent_containers', '/obj/item/healthanalyzer', '/obj/item/tank/internals/emergency', '/obj/item/clothing/mask/breath'];
@@ -39,11 +41,19 @@ export const BEHAVIORS = [
   ['/obj/item/stack/medical/ointment', { heal: { burn: 28 }, stack: 6 }],
   ['/obj/item/reagent_containers/hypospray/medipen', { heal: { brute: 15, burn: 15, tox: 15, oxy: 30 }, stack: 1, single: true }],
   ['/obj/item/healthanalyzer', { scanner: true }],
+  ['/obj/item/analyzer', { analyzer: true }],                                      // the gas analyzer (scanners.dm): use it in the hand for the air round you, on a tank or a machine for what it holds
   ['/obj/item/tank/jetpack', { jetpack: { cap: 900 } }],             // propellant, not air: a carbon dioxide jetpack is not for breathing
   ['/obj/item/clothing/shoes/magboots', { magboots: true }],
-  ['/obj/item/tank/internals/plasma', { plasmaTank: { moles: 8.73 } }],        // (3 atmospheres in 70 litres: tank/internals/plasma, not for breathing)
-  ['/obj/item/tank/internals/emergency_oxygen', { tank: { cap: 300 } }],
-  ['/obj/item/tank/internals', { tank: { cap: 1500 } }],
+  // A tank holds real gas (`it.mix`, see gases.js): `vol` litres, filled with `gas` atmospheres of each gas (tank_types.dm populate_gas). `cap` is how many seconds of breathing a full one gives (the game's pace:
+  // the DM's tanks would last hours); it breathes that fraction of its gas a second whatever is in it.
+  ['/obj/item/tank/internals/plasma/full', { plasmaTank: { vol: 70, gas: { tox: 10 } } }],
+  ['/obj/item/tank/internals/plasma', { plasmaTank: { vol: 70, gas: { tox: 3 } } }],        // (not for breathing)
+  ['/obj/item/tank/internals/anesthetic', { tank: { cap: 1500, vol: 70, gas: { o2: 3 * O2STANDARD, n2o: 3 * N2STANDARD } } }],
+  ['/obj/item/tank/internals/emergency_oxygen/engi', { tank: { cap: 600, vol: 2, gas: { o2: 10 } } }],
+  ['/obj/item/tank/internals/emergency_oxygen/double', { tank: { cap: 2400, vol: 8, gas: { o2: 10 } } }],
+  ['/obj/item/tank/internals/emergency_oxygen', { tank: { cap: 300, vol: 1, gas: { o2: 10 } } }],
+  ['/obj/item/tank/internals/generic', { tank: { cap: 1500, vol: 70, gas: {} } }],
+  ['/obj/item/tank/internals', { tank: { cap: 1500, vol: 70, gas: { o2: 6 } } }],
   ['/obj/item/clothing/mask/breath', { internals: true }],
   ['/obj/item/clothing/mask/gas', { internals: true }],
   ['/obj/item/clothing/suit/space/hardsuit', { spaceSuit: true, slow: 0.85, armor: 0.35 }],
@@ -109,15 +119,30 @@ export class ItemDB {
 }
 
 /** Build an item instance (caller assigns the id). */
+/** What a tank (or plasma tank) of this kind holds when it is new: its design gas, or nothing for the `/empty` ones. */
+export function tankMix(def, path) {
+  const spec = def.tank || def.plasmaTank;
+  const m = new Mix(spec.vol);
+  if (/\/empty(\/|$)/.test(path)) return m;
+  for (const [id, atm] of Object.entries(spec.gas)) m.g[id] = molesAt(atm * ONE_ATMOSPHERE, spec.vol);
+  return m;
+}
+
+/** Moles of gas a breathing tank gives up each second: the moles in a full one, over the seconds it lasts. */
+export function breathRate(def) {
+  const t = def.tank;
+  if (t.rate === undefined) { let n = 0; for (const [, atm] of Object.entries(t.gas)) n += molesAt(atm * ONE_ATMOSPHERE, t.vol); t.rate = n / t.cap; }
+  return t.rate;
+}
+
 export function makeItemData(db, path, extra = {}) {
   const info = db.info(path), def = db.behavior(path);
   const it = { id: 0, path, name: extra.name || info.n, sprite: info.s, w: info.w, slots: info.sl, force: info.f, def, ...extra };
   if (def.gun) it.shots = def.gun.shots;
-  if (def.tank) it.gas = def.tank.cap;
+  if (def.tank || def.plasmaTank) it.mix = tankMix(def, path);
   if (def.jetpack) it.gas = def.jetpack.cap;
   if (def.tool === 'welder') { it.fuel = def.fuel; it.lit = false; }
   if (def.charges) it.charges = def.charges;
-  if (def.plasmaTank) it.plasma = def.plasmaTank.moles;
   if (def.stack) it.amount = extra.amount ?? def.stack;
   if (def.storage) it.contents = [];
   return it;
@@ -126,11 +151,10 @@ export function makeItemData(db, path, extra = {}) {
 export function describeState(it) {
   const d = it.def;
   if (d.gun) return `${it.shots}/${d.gun.shots} charges`;
-  if (d.tank) return `${Math.round(it.gas / d.tank.cap * 100)}% air`;
+  if (d.tank || d.plasmaTank) return `${Math.round(it.mix.pressure())} kPa`;
   if (d.jetpack) return `${Math.round(it.gas / d.jetpack.cap * 100)}% gas`;
   if (d.tool === 'welder') return `fuel ${Math.ceil(it.fuel)}${it.lit ? ', lit' : ''}`;
   if (d.tray) return it.on ? 'on' : 'off';
-  if (d.plasmaTank) return `${Math.round(it.plasma / d.plasmaTank.moles * 100)}% plasma`;
   if (d.charges) return `${it.charges} charges`;
   if (it.amount !== undefined && d.stack > 1) return `x${it.amount}`;
   if (d.storage) return `${it.contents.length} item${it.contents.length === 1 ? '' : 's'}`;
