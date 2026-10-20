@@ -1,4 +1,4 @@
-import { TILE, KIND, LEAVE_CAP, ENTER_MAX, CENTER_H, VOID_R, WALL_H } from './config.js';
+import { TILE, KIND, LEAVE_CAP, ENTER_MAX, CENTER_H, VOID_R, WALL_H, DECK_H } from './config.js';
 import { qTwistY, qTilt, pointVelocity, tfInvDir, tfPoint, tfInvPoint, tfDir, tfIdentity, reorient } from './math3.js';
 
 /** A place to put a facing and a point in, that is not a grid: just a pose in the map (the scene is drawn in one when you float free, turned the way you are). Same calls as a `Grid` has. */
@@ -30,10 +30,12 @@ export class Frame {
 export function settle(grid, st, free = false) {
   const w = grid.world;
   if (w.isVoid) return arrive(grid, st);
-  const c = Math.floor(st.x / TILE), r = Math.floor(st.z / TILE);
-  const inb = w.inb(c, r);
-  if (inb && w.kind[w.idx(c, r)] !== KIND.SPACE) return null;                           // still over this grid's own floor or walls
+  const c = Math.floor(st.x / TILE), r = Math.floor(st.z / TILE), l = st.l | 0;
+  const inb = w.inb(c, r, l);
+  if (inb && w.kind[w.idx(c, r, l)] !== KIND.SPACE) return null;                        // still over this grid's own floor or walls
+  if (inb && l > 0) return null;                                                        // an open tile above the first deck is a hole in the floor (you fall through it), not the edge of the grid
   for (const nb of w.neighbors) {                                                       // a docked grid against this one: through the door
+    if (l > 0) break;
     const [x0, z0, x1, z1] = nb.rect;
     if (st.x < x0 || st.x > x1 || st.z < z0 || st.z > z1) continue;
     const x = nb.a * st.x + nb.b * st.z + nb.tx, z = nb.c * st.x + nb.d * st.z + nb.tz;
@@ -61,7 +63,7 @@ function turnFacing(st, qFrom, qTo) {
 function depart(grid, st) {
   const v = grid.map?.void;
   if (!v) return null;
-  const p = grid.worldPoint(st.x, (st.y || 0) + CENTER_H, st.z);                          // a body floating is placed by its middle
+  const p = grid.worldPoint(st.x, (st.y || 0) + (st.l | 0) * DECK_H + CENTER_H, st.z);    // a body floating is placed by its middle (and a body on an upper deck is that much higher)
   const lv = grid.worldDir([st.vx, 0, st.vz]);
   const pv = pointVelocity(grid.vel, grid.ang, grid.tf.p, p);
   let vx = lv[0] + pv[0], vy = lv[1] + pv[1], vz = lv[2] + pv[2];
@@ -69,7 +71,7 @@ function depart(grid, st) {
   if (s > LEAVE_CAP) { vx *= LEAVE_CAP / s; vy *= LEAVE_CAP / s; vz *= LEAVE_CAP / s; }
   const qFrom = grid.tf.q, qTo = qTilt(qFrom);
   turnFacing(st, qFrom, qTo);
-  st.x = p[0]; st.y = p[1]; st.z = p[2]; st.vx = vx; st.vy = vy; st.vz = vz; st.q = qTo;
+  st.x = p[0]; st.y = p[1]; st.z = p[2]; st.vx = vx; st.vy = vy; st.vz = vz; st.q = qTo; st.l = 0;
   return { grid: v, qFrom, qTo, dyaw: qTwistY(qFrom), impact: 0 };
 }
 
@@ -83,16 +85,18 @@ function arrive(vg, st) {
   let pick = null, spare = null, at = null;
   for (const nb of w.neighbors) {
     if (!w.near(nb, st.x, st.y, st.z, VOID_R)) continue;
-    const G = nb.grid, L = G.localPoint([st.x, st.y, st.z]), nw = nb.world;
+    const G = nb.grid, P = G.localPoint([st.x, st.y, st.z]), nw = nb.world;
+    const dl = Math.max(0, Math.min(nw.levels - 1, Math.floor(P[1] / DECK_H)));            // which of its decks (if it has more than one) the middle is level with
+    const L = [P[0], P[1] - dl * DECK_H, P[2], dl];                                         // [x, height above that deck's floor, z, deck]
     const cc = Math.floor(L[0] / TILE), rr = Math.floor(L[2] / TILE);
-    if (!nw.inb(cc, rr)) continue;
-    const i = nw.idx(cc, rr);
+    if (!nw.inb(cc, rr, dl)) continue;
+    const i = nw.idx(cc, rr, dl);
     if (nw.kind[i] !== KIND.SPACE) {
-      if (nw.solid[i] || L[1] < VOID_R || L[1] > WALL_H - VOID_R || nw.collidesTiles(L[0], L[2], VOID_R, null, false)) continue;           // (a wall, or not within the height of its rooms: see unstick)
+      if (nw.solid[i] || L[1] < VOID_R || L[1] > WALL_H - VOID_R || nw.collidesTiles(L[0], L[2], VOID_R, null, false, dl)) continue;           // (a wall, or not within the height of its rooms: see unstick)
       pick = nb; at = L;
       break;
     }
-    if (!spare && G.docked && !G.tilted && Math.abs(L[1] - CENTER_H) < 0.6) { spare = nb; at = L; }
+    if (!spare && G.docked && !G.tilted && dl === 0 && Math.abs(L[1] - CENTER_H) < 0.6) { spare = nb; at = L; }
   }
   const nb = pick || spare;
   if (!nb) { unstick(w, st); return null; }
@@ -104,7 +108,7 @@ function arrive(vg, st) {
   if (pick && s > ENTER_MAX) { impact = s - ENTER_MAX; rel[0] *= ENTER_MAX / s; rel[2] *= ENTER_MAX / s; }
   const qFrom = st.q || [0, 0, 0, 1], qTo = G.tf.q;
   turnFacing(st, qFrom, qTo);
-  st.x = L[0]; st.z = L[2]; st.y = 0; st.vx = rel[0]; st.vz = rel[2]; st.vy = 0; st.q = [0, 0, 0, 1];                               // on the deck, feet down
+  st.x = L[0]; st.z = L[2]; st.y = 0; st.l = L[3]; st.vx = rel[0]; st.vz = rel[2]; st.vy = 0; st.q = [0, 0, 0, 1];                   // on the deck, feet down
   return { grid: G, qFrom, qTo, dyaw: -qTwistY(qTo), impact, lift: L[1] - CENTER_H };            // (`lift`: how far above where a person's middle is when standing, the middle was: you are put on the floor)
 }
 

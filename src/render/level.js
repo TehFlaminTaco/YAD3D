@@ -1,21 +1,27 @@
 import * as THREE from 'three';
-import { TILE, WALL_H, CHUNK, KIND, DV } from '../shared/config.js';
+import { TILE, WALL_H, CHUNK, KIND, DV, DECK_H, DECK_THICK } from '../shared/config.js';
 import { terrainMaterial } from './materials.js';
 
 class Acc {
   constructor() {
-    this.pos = []; this.uv = []; this.layer = []; this.sx = []; this.sz = []; this.mul = []; this.tint = [];
+    this.pos = []; this.uv = []; this.layer = []; this.sx = []; this.sz = []; this.sl = []; this.mul = []; this.tint = [];
     this.index = []; this.nv = 0;
+    this.deck = 0;
   }
 
-  /** p: 4x[x,y,z]; uv: 4x[u,v]; s: 4x[x,z] light sample points */
+  /** Everything added from here on is on deck `l`: heights are given from that deck's floor, and its light is the one sampled. */
+  setDeck(l) { this.deck = l; }
+
+  /** p: 4x[x,y,z] (y from the floor of the deck being drawn); uv: 4x[u,v]; s: 4x[x,z] light sample points */
   quad(p, uv, layer, s, mul, tint = [1, 1, 1]) {
+    const yb = this.deck * DECK_H;
     for (let i = 0; i < 4; i++) {
-      this.pos.push(p[i][0], p[i][1], p[i][2]);
+      this.pos.push(p[i][0], p[i][1] + yb, p[i][2]);
       this.uv.push(uv[i][0], uv[i][1]);
       this.layer.push(layer);
       this.sx.push(s[i][0]);
       this.sz.push(s[i][1]);
+      this.sl.push(this.deck);
       this.mul.push(mul);
       this.tint.push(tint[0], tint[1], tint[2]);
     }
@@ -60,7 +66,7 @@ export class LevelMesh {
     this.tmp = [0, 0, 0];
     this.lf = null;
     this.tableAt = new Map();
-    for (const t of extras.tables || []) this.tableAt.set(world.idx(t.c, t.r), t);
+    for (const t of extras.tables || []) this.tableAt.set(world.idx(t.c, t.r, t.l | 0), t);
     this.build();
   }
 
@@ -72,8 +78,8 @@ export class LevelMesh {
   }
 
   build() {
-    const { W, H } = this.world;
-    for (let cy = 0; cy * CHUNK < H; cy++) for (let cx = 0; cx * CHUNK < W; cx++) this.buildChunk(cx, cy);
+    const { W, H, levels } = this.world;
+    for (let l = 0; l < levels; l++) for (let cy = 0; cy * CHUNK < H; cy++) for (let cx = 0; cx * CHUNK < W; cx++) this.buildChunk(cx, cy, l);
   }
 
   disposeChunk(key) {
@@ -86,32 +92,49 @@ export class LevelMesh {
     this.chunks.delete(key);
   }
 
-  buildChunk(cx, cy) {
+  /** A chunk is one square of tiles of one deck; its key says which. */
+  static key(cx, cy, l) { return (l * 1000 + cy) * 1000 + cx; }
+
+  /**
+   * Is there a ceiling over tile i? On the top deck the roof flag says so; under another deck it is that deck's floor (a hole in it, or a grating, is no ceiling).
+   * The deck above is drawn as a floor of its own, a slab's thickness higher.
+   */
+  ceilingOver(i, l) {
+    const { world } = this;
+    if (l + 1 >= world.levels) return world.roof[i] === 1;
+    const up = world.kind[i + world.W * world.H];
+    return up === KIND.FLOOR || up === KIND.WALL;
+  }
+
+  buildChunk(cx, cy, l = 0) {
     const { world, assets } = this;
     const { W, H } = world;
     const lvl = assets.level.terrain;
-    const key = cy * 1000 + cx;
+    const key = LevelMesh.key(cx, cy, l);
     this.disposeChunk(key);
     const ao = new Acc(), ag = new Acc();
+    ao.setDeck(l); ag.setDeck(l);
     const c0 = cx * CHUNK, r0 = cy * CHUNK;
     const c1 = Math.min(W, c0 + CHUNK), r1 = Math.min(H, r0 + CHUNK);
     for (let r = r0; r < r1; r++) {
       for (let c = c0; c < c1; c++) {
-        const i = r * W + c;
+        const i = world.idx(c, r, l);
         const k = world.kind[i];
         if (k === KIND.FLOOR || k === KIND.LATTICE) {
           this.floorQuad(ao, c, r, world.floorCell[i]);
-          if (k === KIND.FLOOR && world.roof[i]) this.ceilingQuad(ao, c, r, lvl.ceiling);
-          if (world.breached.has(i) && world.grille[i]) this.grillePanels(ao, c, r, world.variants[world.wallVar[i]]);   // the window is gone, the grille is not (until it is cut)
+          if (k === KIND.FLOOR && this.ceilingOver(i, l)) this.ceilingQuad(ao, c, r, lvl.ceiling);
+          if (k === KIND.FLOOR && l > 0) this.slabEdges(ao, c, r, l, world.floorCell[i]);
+          if (world.stairs[i]) this.stairRamp(ao, c, r, world.stairs[i], world.floorCell[i]);
+          if (world.breached.has(i) && world.grille[i]) this.grillePanels(ao, c, r, world.variants[world.wallVar[i]], l);   // the window is gone, the grille is not (until it is cut)
           const tb = this.tableAt.get(i);
-          if (tb) this.tableBox(ao, this.tableAt, tb, c, r);
+          if (tb) this.tableBox(ao, this.tableAt, tb, c, r, l);
         } else if (k === KIND.WALL) {
-          this.wallBlock(ao, ag, c, r, i);
+          this.wallBlock(ao, ag, c, r, i, l);
         }
       }
     }
     for (const p of this.extras.panes || []) {
-      if (p.dead) continue;
+      if (p.dead || (p.l | 0) !== l) continue;
       if (p.c >= c0 && p.c < c1 && p.r >= r0 && p.r < r1) {
         const v = this.glassVariant(p.tag);
         if (v >= 0) face(ag, p.c, p.r, p.d, TILE / 2, world.variants[v].cells[3], 0.9);
@@ -124,16 +147,16 @@ export class LevelMesh {
     }
   }
 
-  /** Rebuild every chunk touching the 3x3 neighbourhood of the given tiles. */
+  /** Rebuild every chunk touching the 3x3 neighbourhood of the given tiles ([c, r] or [c, r, deck]), and the decks above and below (what is over a tile is its ceiling). */
   rebuildTiles(list) {
     const keys = new Set();
-    for (const [c, r] of list) {
-      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
-        const cc = c + dc, rr = r + dr;
-        if (this.world.inb(cc, rr)) keys.add(Math.floor(rr / CHUNK) * 1000 + Math.floor(cc / CHUNK));
+    for (const [c, r, l = 0] of list) {
+      for (let dl = -1; dl <= 1; dl++) for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const cc = c + dc, rr = r + dr, ll = l + dl;
+        if (this.world.inb(cc, rr, ll)) keys.add(LevelMesh.key(Math.floor(cc / CHUNK), Math.floor(rr / CHUNK), ll));
       }
     }
-    for (const k of keys) this.buildChunk(k % 1000, Math.floor(k / 1000));
+    for (const k of keys) this.buildChunk(k % 1000, Math.floor(k / 1000) % 1000, Math.floor(k / 1000000));
   }
 
   floorQuad(acc, c, r, cell) {
@@ -149,18 +172,39 @@ export class LevelMesh {
       [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], 0.72);
   }
 
+  /** The edge of the slab a deck above the first stands on, where there is nothing beside it (a hole, or the end of the grid): a skirt, the thickness of the slab. */
+  slabEdges(acc, c, r, l, cell) {
+    if (cell === 0xffff) return;
+    const { world } = this;
+    for (const d of [1, 2, 4, 8]) {
+      const [dc, dr] = DV[d];
+      const nc = c + dc, nr = r + dr;
+      if (world.inb(nc, nr, l) && world.kind[world.idx(nc, nr, l)] !== KIND.SPACE) continue;
+      face(acc, c, r, d, TILE / 2, cell, 0.8, -DECK_THICK, 0);
+    }
+  }
+
+  /** A stair: a slope from the floor it stands on at the end you come on at, to the floor of the deck above where you leave it (a deck higher, which is also the top of the tile in front of it). */
+  stairRamp(acc, c, r, dir, cell) {
+    if (cell === 0xffff) return;
+    const x0 = c * TILE, z0 = r * TILE, x1 = x0 + TILE, z1 = z0 + TILE;
+    const hi = (x, z) => (dir & 4 ? (x === x1 ? DECK_H : 0) : dir & 8 ? (x === x0 ? DECK_H : 0) : dir & 2 ? (z === z1 ? DECK_H : 0) : (z === z0 ? DECK_H : 0));
+    const pts = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
+    acc.quad(pts.map(([x, z]) => [x, hi(x, z) + 0.02, z]), UV_FULL, cell, pts.map(([x, z]) => [x, z]), 0.95);
+  }
+
   /** A window's grille: a see-through panel just inside each side the glass would face (or did, once it is smashed). */
-  grillePanels(acc, c, r, variant) {
+  grillePanels(acc, c, r, variant, l = 0) {
     if (variant?.gr === undefined) return;
     const { world } = this;
     for (const d of [1, 2, 4, 8]) {
       const [dc, dr] = DV[d];
-      if (!world.inb(c + dc, r + dr) || world.kind[world.idx(c + dc, r + dr)] === KIND.WALL) continue;
+      if (!world.inb(c + dc, r + dr, l) || world.kind[world.idx(c + dc, r + dr, l)] === KIND.WALL) continue;
       face(acc, c, r, d, TILE / 2 - GRILLE_INSET, variant.gr, 0.9);
     }
   }
 
-  tableBox(acc, tableAt, tb, c, r) {
+  tableBox(acc, tableAt, tb, c, r, l = 0) {
     const { world } = this;
     const T = TILE, h = tb.h, ins = 0.05;
     const x0 = c * T + ins, x1 = c * T + T - ins, z0 = r * T + ins, z1 = r * T + T - ins;
@@ -169,7 +213,7 @@ export class LevelMesh {
     // top fill (sprite sits just above)
     acc.quad([[x0, h, z0], [x1, h, z0], [x1, h, z1], [x0, h, z1]], UV_FULL, this.assets.level.terrain.flat,
       [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], 1, col);
-    const hasT = (dc, dr) => tableAt.has(world.idx(c + dc, r + dr));
+    const hasT = (dc, dr) => tableAt.has(world.idx(c + dc, r + dr, l));
     const sides = [
       [0, -1, [[x0, 0, z0], [x1, 0, z0], [x1, h, z0], [x0, h, z0]], [x0, z0 - 0.3]],
       [0, 1, [[x1, 0, z1], [x0, 0, z1], [x0, h, z1], [x1, h, z1]], [x0, z1 + 0.3]],
@@ -182,8 +226,9 @@ export class LevelMesh {
     }
   }
 
-  wallBlock(ao, ag, c, r, i) {
+  wallBlock(ao, ag, c, r, i, l = 0) {
     const { world } = this;
+    const y0 = l > 0 ? -DECK_THICK : 0;                                             // (on a deck above the first the wall goes down through the slab, so the hull has no seam)
     const v = world.wallVar[i];
     if (v === 0xffff) return;
     const variant = world.variants[v];
@@ -192,14 +237,14 @@ export class LevelMesh {
     for (const d of [1, 2, 4, 8]) {
       const [dc, dr] = DV[d];
       const nc = c + dc, nr = r + dr;
-      if (!world.inb(nc, nr)) continue;
-      const ni = world.idx(nc, nr), nk = world.kind[ni];
+      if (!world.inb(nc, nr, l)) continue;
+      const ni = world.idx(nc, nr, l), nk = world.kind[ni];
       if (nk === KIND.SPACE && world.covered[ni] === 2) continue;                     // another grid's wall is there (a docked shuttle's): it draws that face, and two would shimmer
       if (glass) { if (nk !== KIND.WALL) open.push(d); }
       else if (nk !== KIND.WALL || world.glass[ni]) open.push(d);                     // including space: you can float out and look back at the hull
     }
-    const conn = (cc, rr) => (glass ? world.kind[world.idx(cc, rr)] === KIND.WALL && world.inb(cc, rr)
-      : world.inb(cc, rr) && world.opaque(cc, rr));
+    const conn = (cc, rr) => (glass ? world.inb(cc, rr, l) && world.kind[world.idx(cc, rr, l)] === KIND.WALL
+      : world.inb(cc, rr, l) && world.opaque(cc, rr, l));
     const cellFor = (d) => {
       const [nx, nz] = DV[d];
       const rx = nz, rz = -nx;
@@ -209,11 +254,11 @@ export class LevelMesh {
     if (glass) {
       // a glass block is a full tile: the real floor (and ceiling) shows through it, not space
       this.floorQuad(ao, c, r, world.floorCell[i]);
-      if (world.roof[i]) this.ceilingQuad(ao, c, r, this.assets.level.terrain.ceiling);
-      for (const d of open) face(ag, c, r, d, TILE / 2, cellFor(d), 0.9);
-      this.grillePanels(ao, c, r, variant);
+      if (this.ceilingOver(i, l)) this.ceilingQuad(ao, c, r, this.assets.level.terrain.ceiling);
+      for (const d of open) face(ag, c, r, d, TILE / 2, cellFor(d), 0.9, y0);
+      this.grillePanels(ao, c, r, variant, l);
     } else {
-      for (const d of open) face(ao, c, r, d, TILE / 2, cellFor(d), d === 1 || d === 2 ? 0.92 : 0.8);
+      for (const d of open) face(ao, c, r, d, TILE / 2, cellFor(d), d === 1 || d === 2 ? 0.92 : 0.8, y0);
     }
   }
 
@@ -235,7 +280,7 @@ export class LevelMesh {
       this.group.add(mesh);
       const rec = {
         mesh, light, nv: acc.nv,
-        sx: new Float32Array(acc.sx), sz: new Float32Array(acc.sz),
+        sx: new Float32Array(acc.sx), sz: new Float32Array(acc.sz), sl: new Uint8Array(acc.sl),
         mul: new Float32Array(acc.mul), tint: new Float32Array(acc.tint),
       };
       out.meshes.push(rec);
@@ -248,7 +293,7 @@ export class LevelMesh {
     for (const m of ch.meshes) {
       const a = m.light.array;
       for (let j = 0; j < m.nv; j++) {
-        lf.sample(m.sx[j], m.sz[j], t);
+        lf.sample(m.sx[j], m.sz[j], t, m.sl[j]);
         const k = m.mul[j];
         a[j * 3] = Math.min(1.4, t[0] * k * m.tint[j * 3]);
         a[j * 3 + 1] = Math.min(1.4, t[1] * k * m.tint[j * 3 + 1]);

@@ -2,11 +2,18 @@ import { TILE, KIND, SLOTS } from '../shared/config.js';
 import { attach, detach, place, recalc } from './inventory.js';
 import { stackInfo } from '../shared/stacks.js';
 import { qmul, qFromAxisAngle, qYaw, qTwistY, tfClone } from '../shared/math3.js';
+import { makeBlueprint } from '../shared/blueprint.js';
 
 const MAX_ITEMS = 25;             // most things one spawn makes (a stack counts as one thing with that many in it)
 const MAX_STACK = 50;
 const PETS = { corgi: 'Ian', cat: 'Runtime', monkey: 'Pun Pun' };
 const LEVELS = ['green', 'blue', 'red'];
+
+/** The two-deck grid of the debug menu: a room with a stair (>) up to a floor that has a hole (the blank squares) over its west end, where the stair is. */
+const DECKS = [
+  ['###########', '#.........#', '#.L.....L.#', '#.S.>.....#', '#.L.....L.#', '#.........#', '###########'],
+  ['###########', '#    .....#', '#    ..L..#', '#    .....#', '#    ..L..#', '#    .....#', '###########'],
+];
 
 const num = (v, d = 0) => (Number.isFinite(+v) ? +v : d);
 const int = (v, lo, hi, d = lo) => Math.min(hi, Math.max(lo, Math.round(num(v, d))));
@@ -75,7 +82,7 @@ export class Debug {
     if (who.inside) { const it = who.inside; it.mobs.splice(it.mobs.indexOf(who), 1); who.inside = null; }
     sim.people.release(who);
     if (who.pulledBy) sim.people.release(who.pulledBy);
-    who.grid = g; who.map = g.map;
+    who.grid = g; who.map = g.map; who.l = 0;
     who.x = spot[0]; who.z = spot[1]; who.vx = who.vz = 0;
     who.dirty = true;
   }
@@ -135,7 +142,7 @@ export class Debug {
       const job = sim.jobs.byId[msg.job];
       if (!job) { this.say(c, 'No such job.'); return; }
       const m = sim.spawnCrew(job, null);
-      m.grid = g; m.map = g.map; m.x = x; m.z = z; m.home = [Math.floor(x / TILE), Math.floor(z / TILE)];
+      m.grid = g; m.map = g.map; m.l = 0; m.x = x; m.z = z; m.home = [Math.floor(x / TILE), Math.floor(z / TILE)];
       this.say(c, `${m.name} the ${job.title} appears.`);
     } else this.say(c, 'No such creature.');
   }
@@ -361,6 +368,7 @@ export class Debug {
       sim.emit({ e: 'dbg', k: 'grids', grids }, { to: c });
       return;
     }
+    if (what === 'deck') { this.deckOp(c); return; }
     const g = sim.grids.get(int(msg.id, 0, 1e6));
     if (!g || g === sim.station) { this.say(c, 'No such grid.'); return; }
     switch (what) {
@@ -405,6 +413,21 @@ export class Debug {
       }
       default: break;
     }
+  }
+
+  /** A small grid of two decks, made once, out beyond the station's edge, held where it is: somewhere to try stairs, holes and falls. You are put on it. */
+  deckOp(c) {
+    const sim = this.sim, name = 'debug_decks';
+    if (!c.mob) { this.say(c, 'You need a body for that.'); return; }
+    if (!sim.madeBlueprints.has(name)) { sim.level.grids[name] = makeBlueprint(sim.level, DECKS); sim.madeBlueprints.add(name); }
+    let g = [...sim.grids.values()].find((x) => x.bp === name && x.map === sim.mapOf(c.at));
+    if (!g) {
+      const tf = { p: [-80, 0, 120], q: [0, 0, 0, 1] };
+      g = sim.addGrid(name, { map: sim.mapOf(c.at), kind: 'shuttle', name: 'Deck Test', tf, docked: true });
+      g.home = tfClone(tf);
+    }
+    this.teleport(c, c.mob, g, 3 * TILE + 1, 3 * TILE + 1);
+    this.say(c, 'You are on the deck test grid: the stair climbs east, out of a hole in the upper floor.');
   }
 
   /** Go to another map: `away` (made on the first visit: a copy of a shuttle, alone in a map of its own) or back `home` to where the crew arrive. A watcher goes too. */

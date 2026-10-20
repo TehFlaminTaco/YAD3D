@@ -103,10 +103,10 @@ export class WorldView {
   hideItem(itemId, hide) { this.itemView.get(itemId)?.hideItem(itemId, hide); }
   removeItem(itemId) { this.itemView.get(itemId)?.removeItem(itemId); this.itemView.delete(itemId); }
 
-  /** Something thrown: fly a copy of it from a to b (both in grid `gid`'s frame). */
-  addToss(gid, id, a, b, now) {
+  /** Something thrown: fly a copy of it from a to b (both in grid `gid`'s frame, heights from the floor of its deck `l`). */
+  addToss(gid, id, a, b, now, l = 0) {
     const it = this.rep.items.get(id);
-    this.views.get(gid)?.addToss(it, a, b, now);
+    this.views.get(gid)?.addToss(it, a, b, now, l);
   }
 
   /** Where a floor item currently is, for animations. */
@@ -143,16 +143,16 @@ export class WorldView {
   interpolate(m, rt) {
     const b = m.buf;
     if (!b.length) return;
-    if (rt <= b[0].t) { m.g = b[0].g; m.x = b[0].x; m.z = b[0].z; m.yaw = b[0].yaw; m.y = b[0].y; return; }
+    if (rt <= b[0].t) { m.g = b[0].g; m.x = b[0].x; m.z = b[0].z; m.yaw = b[0].yaw; m.y = b[0].y; m.h = b[0].h; return; }
     const last = b[b.length - 1];
-    if (rt >= last.t) { m.g = last.g; m.x = last.x; m.z = last.z; m.yaw = last.yaw; m.y = last.y; return; }
+    if (rt >= last.t) { m.g = last.g; m.x = last.x; m.z = last.z; m.yaw = last.yaw; m.y = last.y; m.h = last.h; return; }
     for (let i = b.length - 2; i >= 0; i--) {
       if (b[i].t <= rt) {
         const a = b[i], c = b[i + 1];
-        if (a.g !== c.g) { m.g = c.g; m.x = c.x; m.z = c.z; m.yaw = c.yaw; m.y = c.y; return; }      // stepped onto another grid: no blending between two frames
+        if (a.g !== c.g) { m.g = c.g; m.x = c.x; m.z = c.z; m.yaw = c.yaw; m.y = c.y; m.h = c.h; return; }      // stepped onto another grid: no blending between two frames
         m.g = a.g;
         const k = (rt - a.t) / Math.max(1e-4, c.t - a.t);
-        m.x = a.x + (c.x - a.x) * k; m.z = a.z + (c.z - a.z) * k; m.y = a.y + (c.y - a.y) * k;
+        m.x = a.x + (c.x - a.x) * k; m.z = a.z + (c.z - a.z) * k; m.y = a.y + (c.y - a.y) * k; m.h = a.h + (c.h - a.h) * k;
         let dy = c.yaw - a.yaw;
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         m.yaw = a.yaw + dy * k;
@@ -191,7 +191,7 @@ export class WorldView {
       if (!gv) { if (v.gv) v.gv.mobB.setAlpha(v.id, 0); continue; }                    // on a grid we have not been told about
       this.seat(v, gv);
       const B = gv.mobB, cam = gv.cam, void_ = gv.grid.kind === 'void';
-      const feet = void_ ? (m.y || 0) - CENTER_H : 0;                                  // (floating, a body is placed by its middle)
+      const feet = (void_ ? (m.y || 0) - CENTER_H : 0) + (m.h || 0);                   // (floating, a body is placed by its middle; on a deck above the first it stands that much higher, and on a stair it climbs the slope)
       const [fx, fy, fz] = this.toFrame(m.g, m.x, feet, m.z);                           // where that is in the scene, for whatever is drawn over it
       m.fx = fx; m.fy = fy; m.fz = fz;
       let sid, still;
@@ -212,7 +212,7 @@ export class WorldView {
       const lift = m.kind === 'carp' ? (rc.fh - rc.oy - rc.h) * PX : 0;
       B.setRect(v.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, lift);
       v.top = lift + (this.rects[still] ?? rc).h * PX;       // where the picture ends, for speech to sit on (the standing frame: a walk cycle must not shake it)
-      gv.lightField.sample(m.x, m.z, t);
+      gv.lightField.sample(m.x, m.z, t, m.l | 0);
       B.setTint(v.id, Math.min(1.3, t[0] + 0.05), Math.min(1.3, t[1] + 0.05), Math.min(1.3, t[2] + 0.05));
       v.hi = this.target && this.target.k === 'mob' && this.target.id === mid ? 1 : 0;
       B.setHighlight(v.id, v.hi);

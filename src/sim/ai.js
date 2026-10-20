@@ -1,4 +1,5 @@
 import { TILE, KIND } from '../shared/config.js';
+import { walkStep } from '../shared/movement.js';
 import { rng } from '../shared/util.js';
 
 const FIRST = ['Alex', 'Ben', 'Cass', 'Dana', 'Eli', 'Fay', 'Gus', 'Hale', 'Ines', 'Jo', 'Kit', 'Lena', 'Milo', 'Nora', 'Otis', 'Pia', 'Quinn', 'Rex', 'Sol', 'Tess', 'Uma', 'Vic', 'Wren', 'Yuri', 'Zed', 'Marta', 'Ivo', 'Bram'];
@@ -102,7 +103,7 @@ export class AI {
       m.repath -= dt;
       if (m.repath <= 0 || !m.path) {
         m.repath = 1.2;
-        if (this.budget > 0) { this.budget--; m.path = m.grid.nav.path(m.tile[0], m.tile[1], Math.floor(tgt.x / TILE), Math.floor(tgt.z / TILE), null, 2500); m.pathIdx = 0; }
+        if (this.budget > 0) { this.budget--; m.path = m.grid.nav.path(m.tile[0], m.tile[1], Math.floor(tgt.x / TILE), Math.floor(tgt.z / TILE), null, 2500, m.l | 0, tgt.l | 0); m.pathIdx = 0; }
       }
       if (m.path) this.follow(m, dt, m.speed);
       return;
@@ -127,11 +128,12 @@ export class AI {
 
     // head for air if the pressure is dropping
     const [c, r] = m.tile, atmos = m.grid.atmos, nav = m.grid.nav;
-    if (atmos.pressureAt(c, r) < 40 && m.humanoid) {
-      let best = null, bp = atmos.pressureAt(c, r);
+    const ml = m.l | 0;
+    if (atmos.pressureAt(c, r, ml) < 40 && m.humanoid) {
+      let best = null, bp = atmos.pressureAt(c, r, ml);
       for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (!nav.passable(c + dc, r + dr, m)) continue;
-        const pp = atmos.pressureAt(c + dc, r + dr);
+        if (!nav.passable(c + dc, r + dr, m, ml)) continue;
+        const pp = atmos.pressureAt(c + dc, r + dr, ml);
         if (pp > bp) { bp = pp; best = [c + dc, r + dr]; }
       }
       if (best) { this.steer(m, best[0] * TILE + 1, best[1] * TILE + 1, m.speed * 1.2, dt); return; }
@@ -163,9 +165,9 @@ export class AI {
       m.timer -= dt;
       if (m.timer <= 0 && this.budget > 0) {
         this.budget--;
-        const t = m.grid.nav.randomTileNear(m.home[0], m.home[1], radius, this.rand, m);
+        const t = m.grid.nav.randomTileNear(m.home[0], m.home[1], radius, this.rand, m, m.l | 0);
         if (t) {
-          const path = m.grid.nav.path(m.tile[0], m.tile[1], t[0], t[1], m, 2200);
+          const path = m.grid.nav.path(m.tile[0], m.tile[1], t[0], t[1], m, 2200, m.l | 0);
           if (path && path.length) { m.path = path; m.pathIdx = 0; m.state = 'walk'; }
         }
         m.timer = 2 + this.rand() * 7;
@@ -177,9 +179,9 @@ export class AI {
   follow(m, dt, speed) {
     const sim = this.sim;
     if (!m.path || m.pathIdx >= m.path.length) { m.path = null; if (m.state === 'walk') m.state = 'idle'; return; }
-    const [tc, tr] = m.path[m.pathIdx];
+    const [tc, tr, tl = m.l | 0] = m.path[m.pathIdx];
     const tx = tc * TILE + 1, tz = tr * TILE + 1;
-    const door = m.grid.world.doorAt.get(m.grid.world.idx(tc, tr));
+    const door = m.grid.world.doorAt.get(m.grid.world.idx(tc, tr, tl));
     if (door && !door.passable) {
       if (door.state === 'closed') {
         const ok = m.kind !== 'carp' && door.allows(m) && m.grid.power.doorsWork(door);
@@ -198,16 +200,16 @@ export class AI {
     if (d < 0.01) return false;
     const vx = dx / d * speed, vz = dz / d * speed;
     m.yaw = Math.atan2(-vx, -vz);
-    const pos = { x: m.x, z: m.z };
+    const pos = { x: m.x, z: m.z, l: m.l | 0 };
     const world = m.grid.world;
-    const blocked = world.move(pos, vx * dt, vz * dt, 0.28);
+    const blocked = walkStep(world, pos, vx * dt, vz * dt, 0.28);                  // (up a stair, along the floor, or down a hole)
     for (const o of sim.mobs.values()) {
-      if (o === m || o.dead || o.grid !== m.grid) continue;
+      if (o === m || o.dead || o.grid !== m.grid || (o.l | 0) !== (pos.l | 0)) continue;
       const ox = pos.x - o.x, oz = pos.z - o.z, od = Math.hypot(ox, oz);
       if (od < 0.7 && od > 0.001) { const push = (0.7 - od) * 0.5; world.move(pos, ox / od * push, oz / od * push, 0.28); }
     }
     m.speedNow = Math.hypot(pos.x - m.x, pos.z - m.z) / Math.max(dt, 1e-4);
-    m.x = pos.x; m.z = pos.z;
+    m.x = pos.x; m.z = pos.z; m.l = pos.l | 0; m.fell = pos.fell | 0; m.landed = pos.landed || null;
     sim.settleMob(m);
     return blocked;
   }

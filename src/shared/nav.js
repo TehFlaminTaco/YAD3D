@@ -1,10 +1,10 @@
-import { TILE, KIND } from './config.js';
+import { TILE, KIND, DV } from './config.js';
 
 /** A* on the tile grid. Closed doors count as passable when the walker can open them. */
 export class Nav {
   constructor(world) {
     this.world = world;
-    const n = world.W * world.H;
+    const n = world.n;
     this.g = new Float32Array(n);
     this.stamp = new Int32Array(n);
     this.from = new Int32Array(n);
@@ -12,10 +12,10 @@ export class Nav {
     this.heap = [];
   }
 
-  passable(c, r, who) {
+  passable(c, r, who, l = 0) {
     const w = this.world;
-    if (!w.inb(c, r)) return false;
-    const i = w.idx(c, r);
+    if (!w.inb(c, r, l)) return false;
+    const i = w.idx(c, r, l);
     if (w.dyn[i]) return false;                                   // a locker or tank stands there
     if (w.solid[i]) {
       const d = w.doorAt.get(i);
@@ -25,9 +25,9 @@ export class Nav {
     return w.kind[i] === KIND.FLOOR || w.kind[i] === KIND.LATTICE;
   }
 
-  edgeBlocked(c, r, nc, nr) {
+  edgeBlocked(c, r, nc, nr, l = 0) {
     const w = this.world;
-    const e = w.edge[w.idx(c, r)];
+    const e = w.edge[w.idx(c, r, l)];
     if (!e) return false;
     if (nc > c) return !!(e & 4);
     if (nc < c) return !!(e & 8);
@@ -35,11 +35,31 @@ export class Nav {
     return !!(e & 1);
   }
 
-  /** Returns array of [c, r] tiles from (after) start to goal, or null. */
-  path(sc, sr, gc, gr, who, maxNodes = 3500) {
+  /**
+   * The tile that stepping from (c, r) of deck `l` toward (nc, nr) leads to: [c, r, deck], or null if it leads nowhere you can walk. Up a stair (to the deck above, in
+   * front of it), and down: onto a hole on an upper deck that lands on a stair, which takes the fall. Any other fall is not a way to go.
+   */
+  step(c, r, l, nc, nr, who) {
     const w = this.world;
-    const W = w.W;
-    if (!this.passable(gc, gr, who)) return null;
+    if (w.levels > 1) {
+      const d = w.inb(c, r, l) ? w.stairs[w.idx(c, r, l)] : 0;                        // up: this is a stair and that is the way it climbs (you go up, whatever is in front of it on this deck)
+      if (d && c + DV[d][0] === nc && r + DV[d][1] === nr && this.passable(nc, nr, who, l + 1)) return [nc, nr, l + 1];
+    }
+    if (this.passable(nc, nr, who, l) && !this.edgeBlocked(c, r, nc, nr, l)) return [nc, nr, l];
+    if (w.levels < 2) return null;
+    if (l > 0 && w.inb(nc, nr, l) && w.kind[w.idx(nc, nr, l)] === KIND.SPACE && !this.edgeBlocked(c, r, nc, nr, l)) {            // down: a hole whose bottom is a stair
+      let to = l - 1;
+      while (to > 0 && w.kind[w.idx(nc, nr, to)] === KIND.SPACE) to--;
+      if (w.stairs[w.idx(nc, nr, to)] && this.passable(nc, nr, who, to)) return [nc, nr, to];
+    }
+    return null;
+  }
+
+  /** Returns array of [c, r, deck] tiles from (after) start to goal, or null. (`sl` and `gl`: the decks they are on.) */
+  path(sc, sr, gc, gr, who, maxNodes = 3500, sl = 0, gl = sl) {
+    const w = this.world;
+    const W = w.W, WH = w.W * w.H;
+    if (!this.passable(gc, gr, who, gl)) return null;
     const id = ++this.id;
     const heap = this.heap;
     heap.length = 0;
@@ -71,36 +91,37 @@ export class Nav {
       }
       return top;
     };
-    const start = sr * W + sc, goal = gr * W + gc;
+    const start = sl * WH + sr * W + sc, goal = gl * WH + gr * W + gc;
     this.g[start] = 0; this.stamp[start] = id; this.from[start] = -1;
-    push(Math.abs(sc - gc) + Math.abs(sr - gr), start);
+    push(Math.abs(sc - gc) + Math.abs(sr - gr) + Math.abs(sl - gl), start);
     let nodes = 0;
     while (heap.length && nodes++ < maxNodes) {
       const [, i] = pop();
       if (i === goal) {
         const out = [];
-        for (let k = goal; k !== start; k = this.from[k]) out.push([k % W, Math.floor(k / W)]);
+        for (let k = goal; k !== start; k = this.from[k]) { const l = Math.floor(k / WH), rem = k - l * WH; out.push([rem % W, Math.floor(rem / W), l]); }
         return out.reverse();
       }
-      const c = i % W, r = (i - c) / W;
+      const l = Math.floor(i / WH), rem = i - l * WH, c = rem % W, r = (rem - c) / W;
       for (let d = 0; d < 4; d++) {
         const nc = c + (d === 0 ? 1 : d === 1 ? -1 : 0), nr = r + (d === 2 ? 1 : d === 3 ? -1 : 0);
-        if (!this.passable(nc, nr, who) || this.edgeBlocked(c, r, nc, nr)) continue;
-        const ni = nr * W + nc;
+        const to = this.step(c, r, l, nc, nr, who);
+        if (!to) continue;
+        const ni = to[2] * WH + nr * W + nc;
         const ng = this.g[i] + 1;
         if (this.stamp[ni] === id && this.g[ni] <= ng) continue;
         this.stamp[ni] = id; this.g[ni] = ng; this.from[ni] = i;
-        push(ng + Math.abs(nc - gc) + Math.abs(nr - gr), ni);
+        push(ng + Math.abs(nc - gc) + Math.abs(nr - gr) + Math.abs(to[2] - gl), ni);
       }
     }
     return null;
   }
 
-  /** Random reachable-looking floor tile near (c, r). */
-  randomTileNear(c, r, radius, rand, who) {
+  /** Random reachable-looking floor tile near (c, r) of deck `l`. */
+  randomTileNear(c, r, radius, rand, who, l = 0) {
     for (let k = 0; k < 14; k++) {
       const nc = c + Math.round((rand() * 2 - 1) * radius), nr = r + Math.round((rand() * 2 - 1) * radius);
-      if (this.passable(nc, nr, who) && !this.world.solid[nr * this.world.W + nc]) return [nc, nr];
+      if (this.passable(nc, nr, who, l) && !this.world.solid[this.world.idx(nc, nr, l)]) return [nc, nr];
     }
     return null;
   }

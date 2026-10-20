@@ -2,6 +2,8 @@
 export const TILE = 2;
 export const PX = TILE / 32;
 export const WALL_H = 2.5;
+export const DECK_THICK = 0.3;       // the slab between two decks (the floor of the upper one)
+export const DECK_H = WALL_H + DECK_THICK;       // how far apart the floors of stacked decks are
 export const EYE = 1.45;
 export const PLAYER_R = 0.32;
 export const REACH = 2.6;

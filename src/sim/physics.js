@@ -1,4 +1,4 @@
-import { TILE } from '../shared/config.js';
+import { TILE, DECK_H } from '../shared/config.js';
 import { PhysicsWorld, physicsReady } from '../shared/physics.js';
 import { tfClone, qrot, vsub, vcross } from '../shared/math3.js';
 
@@ -30,36 +30,43 @@ export class GridPhysics {
     return w;
   }
 
-  /** The solid of a grid as boxes: every tile that is not open space, merged into as few rectangles as it will go ({c: centre, h: half size, d: density}). */
+  /**
+   * The solid of a grid as boxes: every tile that is not open space, merged into as few rectangles as it will go ({c: centre, h: half size, d: density}). A grid of
+   * several decks is as tall over a tile as its highest deck there goes (a column of tiles is one box, and runs are merged only where they are as tall as each other).
+   */
   boxesOf(g) {
     const w = g.world, open = new Map(), out = [];
     const flush = (key) => { const b = open.get(key); open.delete(key); out.push(b); };
+    const top = (c, r) => { for (let l = w.levels - 1; l >= 0; l--) if (w.kind[w.idx(c, r, l)] !== 0) return l + 1; return 0; };         // how many decks high it is there
     for (let r = 0; r <= w.H; r++) {
       const runs = [];
       if (r < w.H) {
         let c = 0;
         while (c < w.W) {
-          while (c < w.W && w.kind[w.idx(c, r)] === 0) c++;
-          const c0 = c;
-          while (c < w.W && w.kind[w.idx(c, r)] !== 0) c++;
-          if (c > c0) runs.push([c0, c - 1]);
+          while (c < w.W && top(c, r) === 0) c++;
+          const c0 = c, t = c < w.W ? top(c, r) : 0;
+          while (c < w.W && top(c, r) === t && t) c++;
+          if (c > c0) runs.push([c0, c - 1, t]);
         }
       }
       const seen = new Set();
-      for (const [c0, c1] of runs) {                       // a run directly under one of the same width goes on the same box
-        const key = c0 + ',' + c1;
+      for (const [c0, c1, t] of runs) {                    // a run directly under one of the same width (and height) goes on the same box
+        const key = c0 + ',' + c1 + ',' + t;
         seen.add(key);
         const b = open.get(key);
         if (b && b.r1 === r - 1) b.r1 = r;
-        else { if (b) flush(key); open.set(key, { c0, c1, r0: r, r1: r }); }
+        else { if (b) flush(key); open.set(key, { c0, c1, r0: r, r1: r, t }); }
       }
       for (const key of [...open.keys()]) if (!seen.has(key)) flush(key);
     }
-    return out.map((b) => ({
-      c: [(b.c0 + b.c1 + 1) * TILE / 2, HEIGHT / 2, (b.r0 + b.r1 + 1) * TILE / 2],
-      h: [(b.c1 - b.c0 + 1) * TILE / 2 - INSET, HEIGHT / 2, (b.r1 - b.r0 + 1) * TILE / 2 - INSET],
-      d: DENSITY,
-    }));
+    return out.map((b) => {
+      const height = HEIGHT + (b.t - 1) * DECK_H;
+      return {
+        c: [(b.c0 + b.c1 + 1) * TILE / 2, height / 2, (b.r0 + b.r1 + 1) * TILE / 2],
+        h: [(b.c1 - b.c0 + 1) * TILE / 2 - INSET, height / 2, (b.r1 - b.r0 + 1) * TILE / 2 - INSET],
+        d: DENSITY,
+      };
+    });
   }
 
   add(g) {

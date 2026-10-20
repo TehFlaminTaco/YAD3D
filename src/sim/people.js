@@ -39,7 +39,7 @@ export class People {
 
   /** Within reach of each other with nothing solid between (this only works for two people on one grid: a doorway between grids is walked through, not reached over). */
   near(m, o, reach = REACH) {
-    return m.grid === o.grid && !!m.grid && Math.hypot(o.x - m.x, o.z - m.z) <= reach && m.grid.world.los(m.x, m.z, o.x, o.z);
+    return m.grid === o.grid && !!m.grid && (m.l | 0) === (o.l | 0) && Math.hypot(o.x - m.x, o.z - m.z) <= reach && m.grid.world.los(m.x, m.z, o.x, o.z, m.l | 0);
   }
 
   /** Throw everything `o` holds onto the floor at their feet. */

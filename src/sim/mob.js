@@ -18,6 +18,9 @@ export class Mob {
     this.grid = o.grid || null;              // the grid whose frame x, z are in; null = floating free in the void of `map` (then x, z are map coordinates)
     this.map = o.grid ? o.grid.map : o.map || null;
     this.x = o.x; this.y = o.y || 0; this.z = o.z;
+    this.l = o.l | 0;                        // the deck of its grid it is on (grids have one deck, so far)
+    this.fell = 0;                           // decks it fell this step (movement sets it, the sim handles the landing)
+    this.landed = null;
     this.yaw = o.yaw ?? Math.random() * Math.PI * 2;
     this.pitch = 0;
     this.vx = 0; this.vz = 0;

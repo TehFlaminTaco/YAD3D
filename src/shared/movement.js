@@ -1,4 +1,4 @@
-import { PLAYER_R, DRIFT_MAX, WIND_PUSH, KIND, TILE, VOID_R } from './config.js';
+import { PLAYER_R, DRIFT_MAX, WIND_PUSH, KIND, TILE, VOID_R, DV } from './config.js';
 import { qrot, lookDir, vlen, vscale } from './math3.js';
 
 export const WALK_SPEED = 3.4;
@@ -9,10 +9,68 @@ export const RUN_SPEED = 5.6;
  * floor), `held` = it can steer anyway (gravity, a jetpack, or something within reach to push off), `adrift` = floating with nothing to hold.
  */
 export function floatState(world, st, ctx = {}) {
-  const floating = !ctx.noclip && !world.hasGravity(st.x, st.z)
-    && !(ctx.mag && world.kindAt(Math.floor(st.x / TILE), Math.floor(st.z / TILE)) === KIND.FLOOR);
-  const held = !floating || !!ctx.jet || world.hasGrip(st.x, st.z, ctx.ignore, ctx.free, st.y);
+  const l = st.l | 0;                                                  // the deck you are on (0 on a grid of one deck)
+  const floating = !ctx.noclip && !world.hasGravity(st.x, st.z, l)
+    && !(ctx.mag && world.kindAt(Math.floor(st.x / TILE), Math.floor(st.z / TILE), l) === KIND.FLOOR);
+  const held = !floating || !!ctx.jet || world.hasGrip(st.x, st.z, ctx.ignore, ctx.free, st.y, l);
   return { floating, held, adrift: floating && !held };
+}
+
+/** Is tile (c, r) of deck l something to stand on, and clear (a floor or a grating that nothing solid is on)? */
+function standable(world, c, r, l) {
+  if (!world.inb(c, r, l)) return false;
+  const i = world.idx(c, r, l);
+  const k = world.kind[i];
+  return (k === KIND.FLOOR || k === KIND.LATTICE) && !world.solid[i];
+}
+
+/**
+ * Stairs (TG's /obj/structure/stairs): leaving a stair tile in the direction it climbs takes you to the deck above, onto the tile in front of it, if that is a place to
+ * stand. `mx, mz` is the step you are about to take. Returns true when it took you up (and moved you: the step is done).
+ */
+function stairStep(world, st, mx, mz) {
+  const l = st.l | 0;
+  if (l + 1 >= world.levels) return false;
+  const c = Math.floor(st.x / TILE), r = Math.floor(st.z / TILE);
+  if (!world.inb(c, r, l)) return false;
+  const d = world.stairs[world.idx(c, r, l)];
+  if (!d) return false;
+  const [dc, dr] = DV[d];
+  const nx = st.x + mx, nz = st.z + mz;
+  if (Math.floor(nx / TILE) !== c + dc || Math.floor(nz / TILE) !== r + dr) return false;       // not leaving it the way it climbs
+  if (!standable(world, c + dc, r + dr, l + 1) || world.collidesTiles(nx, nz, PLAYER_R, null, true, l + 1)) return false;
+  st.x = nx; st.z = nz; st.l = l + 1;
+  return true;
+}
+
+/**
+ * Falling: over an open tile on a deck above the first (a hole: the air down to the deck below) you drop, as far as the air goes (zFall: `turf.dm`). `st.fell` is how
+ * many decks, for the one who handles the landing (the server: damage; `0` the rest of the time), and `st.landed` is what they came down on (`stairs`: a stair tile
+ * takes the fall, `stairs.dm intercept_zImpact`, so walking down them is not a fall to be hurt by). The server and the client's prediction do the same.
+ */
+function fallStep(world, st) {
+  st.fell = 0; st.landed = null;
+  const l = st.l | 0;
+  if (l <= 0) return;
+  const c = Math.floor(st.x / TILE), r = Math.floor(st.z / TILE);
+  if (!world.inb(c, r, l) || world.kind[world.idx(c, r, l)] !== KIND.SPACE) return;
+  let to = l - 1;
+  while (to > 0 && world.kind[world.idx(c, r, to)] === KIND.SPACE) to--;
+  st.fell = l - to;
+  st.landed = world.stairs[world.idx(c, r, to)] ? 'stairs' : 'floor';
+  st.l = to;
+}
+
+/**
+ * One step of walking on the deck: up a stair if that is where it goes, else slide along the walls, then fall if the deck has a hole under where it ends up. Players
+ * (`stepMovement`) and the NPCs that walk (`ai.js`) both do this. Returns true if something was in the way.
+ */
+export function walkStep(world, st, mx, mz, h, ignore = null, free = false, stairs = true) {
+  const multi = world.levels > 1;
+  if (multi && stairs && stairStep(world, st, mx, mz)) { fallStep(world, st); return false; }
+  const blocked = world.move(st, mx, mz, h, ignore, free);
+  if (multi) fallStep(world, st);
+  return blocked;
 }
 
 /**
@@ -57,7 +115,7 @@ export function stepMovement(st, inp, world, dt, ctx = {}) {
   }
   if (ctx.noclip) { st.x += mx; st.z += mz; } else {
     const ox = st.x, oz = st.z;
-    world.move(st, mx, mz, PLAYER_R, ctx.ignore, ctx.free);
+    walkStep(world, st, mx, mz, PLAYER_R, ctx.ignore, ctx.free, !floating);
     if (floating) {                                                 // a bump stops you dead along that axis
       if (mx && st.x === ox) st.vx = 0;
       if (mz && st.z === oz) st.vz = 0;

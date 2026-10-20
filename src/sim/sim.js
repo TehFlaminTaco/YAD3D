@@ -1,4 +1,4 @@
-import { TILE, KIND, SIM_DT, SNAP_EVERY, INTEREST } from '../shared/config.js';
+import { TILE, KIND, SIM_DT, SNAP_EVERY, INTEREST, DECK_H } from '../shared/config.js';
 import { decodeGrid, VOID_BP } from '../shared/leveldata.js';
 import { GameMap } from '../shared/gamemap.js';
 import { tfPoint, tfClone } from '../shared/math3.js';
@@ -73,6 +73,7 @@ export class Sim {
   constructor(data, opts = {}) {
     this.opts = { bots: 14, autostart: 0, god: false, ...opts };
     this.level = data.level;
+    this.madeBlueprints = new Set();        // the names of blueprints made while the game runs (the debug menu's deck test): grids built from them are sent to the clients with their blueprint
     this.rects = data.rects;
     this.time = 0;
     this.tick = 0;
@@ -149,7 +150,7 @@ export class Sim {
     for (const gd of g.props.girders) g.built.add({ id: this.builtSeq++, k: 'girder', c: gd.c, r: gd.r, st: GIRDER.NORMAL, grid: g });
     for (const it of g.props.items) {
       const item = this.newItem(it.path || '/obj/item', { name: it.name, sprite: it.sprite });
-      place(this, item, g, it.x, it.z, it.y);
+      place(this, item, g, it.x, it.z, it.y, it.l);
     }
     this.closets.initGrid(g);
     if (!o.quiet) {
@@ -237,12 +238,35 @@ export class Sim {
    */
   settleMob(m) {
     if (!m.grid) return false;
+    if (m.fell) this.zImpact(m);                                         // came down through a hole in a deck (stepMovement moved it down and counted)
     const r = settle(m.grid, m, !!m.client);
     if (!r) return false;
     m.grid = r.grid;
     m.dirty = true;
     if (r.impact > 0) this.hullImpact(m, r.grid, r.impact);
     return true;
+  }
+
+  /**
+   * Landing from a fall through `m.fell` decks (turf.dm zImpact, living.dm ZImpactDamage): everyone near sees it, and it takes (5 * decks) ** 1.5 brute damage and is
+   * knocked down for 5 seconds a deck, unless it came down on stairs, which take the fall (stairs.dm intercept_zImpact: no message, no hurt).
+   */
+  zImpact(m) {
+    const levels = m.fell, how = m.landed;
+    m.fell = 0; m.landed = null;
+    m.dirty = true;
+    if (how === 'stairs') return;
+    const w = m.grid.world, c = Math.floor(m.x / TILE), r = Math.floor(m.z / TILE);
+    const floor = `the ${w.floorName(w.idx(c, r, m.l | 0)) || 'floor'}`;
+    this.chat.visible(m, `${m.name} falls through the open space!`, 'danger', 12);
+    this.chat.visible(m, `${m.name} crashes into ${floor}!`, 'danger', 12);
+    if (m.humanoid) {
+      this.tell(m, 'danger', `You crash into ${floor} with a sickening noise!`);
+      this.chat.visible(m, `${m.name} crashes into ${floor} with a sickening noise!`, 'danger', 12, m);
+    }
+    this.sound('bodyfall', m, 0.9);
+    this.hurt(m, (levels * 5) ** 1.5, 'brute', 'fall');
+    m.stunned = Math.max(m.stunned, levels * 5);
   }
 
   /** Someone has arrived on grid `g` `over` m/s faster (relative to it) than a body can take: it stops them, like landing from a height. */
@@ -281,7 +305,10 @@ export class Sim {
    * deck (height does not count, as it never has); between grids it is the true distance between where they are in the map.
    */
   dist(a, b) {
-    if (a.grid && a.grid === b.grid) return Math.hypot(a.x - b.x, a.z - b.z);
+    if (a.grid && a.grid === b.grid) {
+      const dl = (a.l | 0) - (b.l | 0);
+      return dl ? Math.hypot(a.x - b.x, a.z - b.z, dl * DECK_H) : Math.hypot(a.x - b.x, a.z - b.z);                  // (a floor between you is more than distance)
+    }
     if (this.mapOf(a) !== this.mapOf(b)) return Infinity;
     const p = this.worldPos(a), q = this.worldPos(b);
     return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
@@ -295,7 +322,7 @@ export class Sim {
   /** Everyone's start points: [{ grid, job, x, y }] (tiles), in the map the round is played in. */
   spawnPoints() {
     const out = [];
-    for (const g of this.grids.values()) if (g.map === this.defaultMap) for (const s of g.spawns) out.push({ grid: g, job: s.job, x: s.x, y: s.y });
+    for (const g of this.grids.values()) if (g.map === this.defaultMap) for (const s of g.spawns) out.push({ grid: g, job: s.job, x: s.x, y: s.y, l: s.l | 0 });
     return out;
   }
 
@@ -379,6 +406,7 @@ export class Sim {
   gridState(g) {
     return {
       g: g.id, bp: g.bp, kind: g.kind, name: g.name, tf: tfClone(g.tf), docked: g.docked,
+      ...(this.madeBlueprints.has(g.bp) ? { def: this.level.grids[g.bp] } : {}),                     // (a blueprint made while the game runs is sent whole: the clients' level data does not have it)
       power: { state: g.power.state, battery: g.power.battery },
       areaOn: [...g.power.areaOn], areaLights: [...g.power.areaLights],
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
@@ -394,7 +422,7 @@ export class Sim {
       name: this.level.name,
       map: map.id,
       grids: [...map.grids.values()].map((g) => this.gridState(g)),
-      items: [...this.floor.values()].filter((f) => f.grid.map === map).map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z, f.grid.id]),
+      items: [...this.floor.values()].filter((f) => f.grid.map === map).map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z, f.grid.id, f.l | 0]),
     };
   }
 
@@ -480,7 +508,7 @@ export class Sim {
 
   /** What `stepMovement` needs to know about a body (the client predicts with the same things, see Game.predictCtx). */
   moveCtx(m) {
-    return { slow: this.moveFactor(m) * (m.body.crit ? 0.35 : 1), wind: m.grid.atmos.windAt(m.x, m.z), ignore: m.hauling?.it, noclip: m.noclip, jet: !!m.jetOn, mag: !!m.magOn, free: !!m.client };
+    return { slow: this.moveFactor(m) * (m.body.crit ? 0.35 : 1), wind: m.grid.atmos.windAt(m.x, m.z, m.l | 0), ignore: m.hauling?.it, noclip: m.noclip, jet: !!m.jetOn, mag: !!m.magOn, free: !!m.client };
   }
 
   /** Thrusting uses the jetpack's gas; when it is gone the engines cut out. */
@@ -567,7 +595,7 @@ export class Sim {
         if (src) { internals = true; src.gas = Math.max(0, src.gas - dt); if (src.gas <= 0) { m.internals = false; this.tell(m, 'danger', 'Your air tank runs dry!'); } }
       }
       m.body.tick(dt, {
-        pressure: a ? a.pressureAt(c, r) : 0, o2: a ? a.o2At(c, r) : 0, tox: a ? a.toxAt(c, r) : 0,
+        pressure: a ? a.pressureAt(c, r, m.l | 0) : 0, o2: a ? a.o2At(c, r, m.l | 0) : 0, tox: a ? a.toxAt(c, r, m.l | 0) : 0,
         safeSuit: m.kind === 'carp' || (m.humanoid && spaceSafe(m)), internals: internals || m.kind === 'carp',
       });
     }
@@ -724,7 +752,7 @@ export class Sim {
     let p = o.late && late.length ? late[Math.floor(this.rand() * late.length)] : pts.length ? pts[Math.floor(this.rand() * pts.length)] : late[0] || all[0];
     const name = client ? client.name : this.ai.randomName();
     const look = (client && client.look) || this.looks.random(this.rand);
-    const m = this.newMob({ kind: 'human', name, job: job.id, look, grid: p.grid, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, speed: 1.7 + this.rand() * 0.5, hp: 100 });
+    const m = this.newMob({ kind: 'human', name, job: job.id, look, grid: p.grid, l: p.l, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, speed: 1.7 + this.rand() * 0.5, hp: 100 });
     this.outfit(m, job);
     if (client) { client.mob = m; m.client = client; client.state = 'playing'; }
     return m;
@@ -800,7 +828,7 @@ export class Sim {
         if (m !== c.mob && this.dist(m, here) > INTEREST) continue;
         seen.add(m.id);
         if (!c.known.has(m.id)) { c.known.add(m.id); c.outbox.push({ e: 'mob+', id: m.id, n: m.name, job: m.job, set: m.set, kind: m.kind, ap: m.look ? this.appearanceOf(m) : undefined }); }
-        const flags = (m.dead ? 1 : 0) | (m.body.crit ? 2 : 0) | (m.speedNow > 3.8 ? 8 : 0) | (m.stunned > 0 || m.downed ? 16 : 0);
+        const flags = (m.dead ? 1 : 0) | (m.body.crit ? 2 : 0) | (m.speedNow > 3.8 ? 8 : 0) | (m.stunned > 0 || m.downed ? 16 : 0) | (Math.min(15, m.l | 0) << 8);        // (bits 8 to 11: its deck)
         const row = [m.id, m.grid ? m.grid.id : 0, +m.x.toFixed(2), +m.z.toFixed(2), +m.yaw.toFixed(2), flags, +(m.speedNow || 0).toFixed(1)];
         if (m.grid?.kind === 'void') row.push(+m.y.toFixed(2));                       // floating, it has a height as well
         list.push(row);
@@ -813,9 +841,11 @@ export class Sim {
       if (m) {
         const [tc, tr] = m.tile, g = m.grid;
         snap.you = { g: g.id, x: +m.x.toFixed(3), z: +m.z.toFixed(3), vx: +m.vx.toFixed(2), vz: +m.vz.toFixed(2), id: m.id };
+        if (m.l) snap.you.l = m.l;
         if (g.kind === 'void') Object.assign(snap.you, { y: +m.y.toFixed(3), vy: +m.vy.toFixed(2), q: m.q.map((v) => +v.toFixed(5)) });          // floating: its height, and which way is up
-        snap.env = { p: +g.atmos.pressureAt(tc, tr).toFixed(1), o2: +g.atmos.o2At(tc, tr).toFixed(1), tox: +g.atmos.toxAt(tc, tr).toFixed(2), area: g.world.inb(tc, tr) ? g.world.areaIdx[g.world.idx(tc, tr)] : 0 };
-        const wind = g.atmos.windAt(m.x, m.z);
+        const ml = m.l | 0;
+        snap.env = { p: +g.atmos.pressureAt(tc, tr, ml).toFixed(1), o2: +g.atmos.o2At(tc, tr, ml).toFixed(1), tox: +g.atmos.toxAt(tc, tr, ml).toFixed(2), area: g.world.inb(tc, tr, ml) ? g.world.areaIdx[g.world.idx(tc, tr, ml)] : 0 };
+        const wind = g.atmos.windAt(m.x, m.z, ml);
         if (wind) snap.you.wind = [+wind[0].toFixed(2), +wind[1].toFixed(2)];
         const self = this.selfState(c);
         const json = JSON.stringify(self);

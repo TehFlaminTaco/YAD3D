@@ -49,17 +49,18 @@ export function attach(sim, item, loc) {
   if (m) recalc(sim, m);
 }
 
-/** Put an item on the floor of `grid` at (x, z) in that grid's frame. */
-export function place(sim, item, grid, x, z, y) {
+/** Put an item on the floor of `grid` at (x, z) in that grid's frame, on deck `l` of it (over a hole it comes to rest on the deck below). */
+export function place(sim, item, grid, x, z, y, l = 0) {
   if (!grid) throw new Error('place: which grid?');
   const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
   const w = grid.world;
-  const i = w.inb(c, r) ? w.idx(c, r) : -1;
+  if (w.levels > 1 && w.inb(c, r, l)) l = w.restDeck(c, r, l);
+  const i = w.inb(c, r, l) ? w.idx(c, r, l) : -1;
   const yy = y ?? (i >= 0 && w.tableH[i] > 0 ? w.tableH[i] + 0.01 : 0.01);
-  const rec = { item, grid, x, y: yy, z, c, r };
+  const rec = { item, grid, x, y: yy, z, c, r, l };
   sim.floor.set(item.id, rec);
   item.loc = { t: 'floor' };
-  sim.emit({ e: 'item+', id: item.id, g: grid.id, s: item.sprite, n: item.name, x, y: yy, z });
+  sim.emit({ e: 'item+', id: item.id, g: grid.id, s: item.sprite, n: item.name, x, y: yy, z, l });
   return rec;
 }
 
@@ -145,8 +146,8 @@ export function dropFromHand(sim, mob, hand = mob.active) {
   if (!it) return false;
   detach(sim, it);
   let x = mob.x - Math.sin(mob.yaw) * 0.9, z = mob.z - Math.cos(mob.yaw) * 0.9;
-  if (mob.grid.world.collides(x, z, 0.2)) { x = mob.x; z = mob.z; }
-  place(sim, it, mob.grid, x, z);
+  if (mob.grid.world.collides(x, z, 0.2, null, false, mob.l)) { x = mob.x; z = mob.z; }
+  place(sim, it, mob.grid, x, z, undefined, mob.l);
   sim.sound('drop', mob, 0.7);
   return true;
 }
@@ -223,8 +224,8 @@ export function moveItem(sim, mob, item, to) {
   if (to.t === 'floor') {
     detach(sim, item);
     let x = mob.x - Math.sin(mob.yaw) * 0.9, z = mob.z - Math.cos(mob.yaw) * 0.9;
-    if (mob.grid.world.collides(x, z, 0.2)) { x = mob.x; z = mob.z; }
-    place(sim, item, mob.grid, x, z);
+    if (mob.grid.world.collides(x, z, 0.2, null, false, mob.l)) { x = mob.x; z = mob.z; }
+    place(sim, item, mob.grid, x, z, undefined, mob.l);
     return true;
   }
   return false;

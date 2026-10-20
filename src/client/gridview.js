@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TILE, WALL_H, PX, KIND, DV } from '../shared/config.js';
+import { TILE, WALL_H, PX, KIND, DV, DECK_H } from '../shared/config.js';
 import { ITEM_SCALE } from '../shared/propdata.js';
 import { lightMode } from '../shared/power.js';
 import { closetSprite } from '../shared/closets.js';
@@ -127,7 +127,7 @@ export class GridView {
       const rc = this.rects[s.rect];
       if (!rc) continue;
       s.id = this.stat.add({ x: s.x, y: s.y, z: s.z, mode: s.mode, w: s.w, h: s.h, ox: s.ox, oy: s.oy, yaw: s.yaw, rect: rc, emit: s.emit });
-      if (s.lit) this.lit.push(s.litRef = { batch: this.stat, id: s.id, sx: s.lit[0], sz: s.lit[1] });
+      if (s.lit) this.lit.push(s.litRef = { batch: this.stat, id: s.id, sx: s.lit[0], sz: s.lit[1], sl: s.lit[2] | 0 });
       s.dx = s.x; s.dz = s.z;                           // where it is drawn right now (it slides when dragged)
       if (s.views) { s.vi = -1; this.facing.push(s); }
     }
@@ -203,7 +203,7 @@ export class GridView {
       u.uSpr.value.set(Math.min(l0, l1), yFoot, Math.max(l0, l1), yHead);
       u.uUv.value.set(rc.u0, rc.v0, rc.u1, rc.v1);
       u.uFlip.value = di < 2 ? 1 : 0;                                   // front and back views swap left and right in a mirror
-      this.lightField.sample(m.cx + m.n.x, m.cz + m.n.z, this.tmpC);
+      this.lightField.sample(m.cx + m.n.x, m.cz + m.n.z, this.tmpC, m.it.l | 0);
       const t = this.tmpC;
       u.uTint.value.set(Math.min(1.15, t[0] * 0.9), Math.min(1.15, t[1] * 0.97), Math.min(1.2, t[2] * 1.08));
       m.mesh.visible = true;
@@ -229,7 +229,7 @@ export class GridView {
       this.stat.setPos(s.id, s.dx, s.y, s.dz);
       if (done) {
         this.slides.delete(s);
-        this.lightField.sample(s.x, s.z, this.tmpC);
+        this.lightField.sample(s.x, s.z, this.tmpC, s.litRef?.sl | 0);
         const t = this.tmpC;
         this.stat.setTint(s.id, Math.min(1.35, t[0]), Math.min(1.35, t[1]), Math.min(1.35, t[2]));
       }
@@ -257,9 +257,9 @@ export class GridView {
 
   addDoorView(d) {
     const fr = d.proto.fr;
-    const id = this.dyn.add({ x: d.x, y: 0, z: d.z, mode: 1, w: TILE, h: WALL_H, yaw: d.yaw, rect: this.rects[fr[0]] });
+    const id = this.dyn.add({ x: d.x, y: (d.l | 0) * DECK_H, z: d.z, mode: 1, w: TILE, h: WALL_H, yaw: d.yaw, rect: this.rects[fr[0]] });
     this.setDoorRect(this.dyn, id, this.rects[fr[0]]);
-    this.lit.push({ batch: this.dyn, id, sx: d.x, sz: d.z });
+    this.lit.push({ batch: this.dyn, id, sx: d.x, sz: d.z, sl: d.l | 0 });
     const v = { d, id, frame: 0 };
     this.doorViews.push(v);
     return v;
@@ -280,10 +280,10 @@ export class GridView {
     if (!rc) return null;
     const yaw = f.yaw ?? 0;
     // a firelock in an airlock's doorway is drawn a little to one side of it: two closed doors in one plane would flicker through each other
-    const off = this.grid.world.doorAt.has(f.i) ? 0.2 : 0;
+    const off = this.grid.world.doorAt.has(f.i) ? 0.2 : 0;                           // (f.i is on its deck)
     const fx = f.x + Math.sin(yaw) * off, fz = f.z + Math.cos(yaw) * off;
-    const id = this.dyn.add({ x: fx, y: 0, z: fz, mode: 1, w: rc.w * PX, h: rc.h * PX * SY, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.fh - rc.oy - rc.h) * PX * SY, yaw, rect: rc, alpha: f.closed ? 1 : 0 });
-    this.lit.push({ batch: this.dyn, id, sx: f.x, sz: f.z });
+    const id = this.dyn.add({ x: fx, y: (f.l | 0) * DECK_H, z: fz, mode: 1, w: rc.w * PX, h: rc.h * PX * SY, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.fh - rc.oy - rc.h) * PX * SY, yaw, rect: rc, alpha: f.closed ? 1 : 0 });
+    this.lit.push({ batch: this.dyn, id, sx: f.x, sz: f.z, sl: f.l | 0 });
     return { f, id };
   }
 
@@ -333,7 +333,7 @@ export class GridView {
     const rc = this.rects[it.s];
     if (!rc) return;
     const o = {
-      x: it.x, y: it.y, z: it.z, mode: 0, w: rc.w * PX * ITEM_SCALE, h: rc.h * PX * ITEM_SCALE,
+      x: it.x, y: it.y + (it.l | 0) * DECK_H, z: it.z, mode: 0, w: rc.w * PX * ITEM_SCALE, h: rc.h * PX * ITEM_SCALE,
       ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX * ITEM_SCALE, oy: 0, rect: rc,
     };
     const free = this.itemFree.pop();
@@ -346,7 +346,7 @@ export class GridView {
       this.itemB.setHighlight(id, 0);
     } else id = this.itemB.add(o);
     this.itemSlot.set(it.id, id);
-    this.lightField.sample(it.x, it.z, this.tmpC);
+    this.lightField.sample(it.x, it.z, this.tmpC, it.l | 0);
     const t = this.tmpC;
     this.itemB.setTint(id, Math.min(1.35, t[0]), Math.min(1.35, t[1]), Math.min(1.35, t[2]));
   }
@@ -366,10 +366,11 @@ export class GridView {
     return free;
   }
 
-  /** Something thrown: fly a copy of it along an arc from a to b, then show the real one where it landed. */
-  addToss(it, a, b, now) {
+  /** Something thrown: fly a copy of it along an arc from a to b (heights from the floor of deck `l`), then show the real one where it landed. */
+  addToss(it, a, b, now, l = 0) {
     const rc = it && this.rects[it.s];
     if (!rc) return;
+    if (l) { a = [a[0], a[1] + l * DECK_H, a[2]]; b = [b[0], b[1] + l * DECK_H, b[2]]; }
     const sid = this.allocItemSprite(rc, a[0], a[1], a[2]);
     this.itemB.setTint(sid, 1, 1, 1);
     this.hideItem(it.id, true);
@@ -397,8 +398,8 @@ export class GridView {
   moveItem(it) {
     const id = it && this.itemSlot.get(it.id);
     if (id === undefined) return;
-    this.itemB.setPos(id, it.x, it.y, it.z);
-    this.lightField.sample(it.x, it.z, this.tmpC);
+    this.itemB.setPos(id, it.x, it.y + (it.l | 0) * DECK_H, it.z);
+    this.lightField.sample(it.x, it.z, this.tmpC, it.l | 0);
     const t = this.tmpC;
     this.itemB.setTint(id, Math.min(1.35, t[0]), Math.min(1.35, t[1]), Math.min(1.35, t[2]));
   }
@@ -427,9 +428,13 @@ export class GridView {
     const { grid, lightField: lf } = this;
     const { world, props, power } = grid;
     lf.clear(this.ambient);
-    for (let i = 0; i < world.n; i++) {
-      const k = world.kind[i];
-      if ((k === KIND.SPACE && !world.covered[i]) || k === KIND.LATTICE) { lf.r[i] = 0.11; lf.g[i] = 0.12; lf.b[i] = 0.16; }
+    for (let l = 0; l < world.levels; l++) {
+      for (let r = 0; r < world.H; r++) {
+        for (let c = 0; c < world.W; c++) {
+          const i = world.idx(c, r, l), k = world.kind[i];
+          if (world.isOpenSpace(c, r, l) || k === KIND.LATTICE) { lf.r[i] = 0.11; lf.g[i] = 0.12; lf.b[i] = 0.16; }       // (a hole in a deck over a room is the room's air: not this)
+        }
+      }
     }
     for (const L of props.lights) {
       const m = lightMode(L, power.state, power.areaOn, power.areaLights, world.areas);
@@ -437,7 +442,7 @@ export class GridView {
       if (L.st && L.st.id !== undefined) this.stat.setEmit(L.st.id, m.on && this.lightScale > 0.5 ? 1 : 0);
       if (!m.on) continue;
       const col = m.tint ? [L.color[0] * m.tint[0], L.color[1] * m.tint[1], L.color[2] * m.tint[2]] : L.color;
-      lf.addSource(L.x / TILE, L.z / TILE, col, L.radius, L.strength * (m.scale ?? 1) * this.lightScale);
+      lf.addSource(L.x / TILE, L.z / TILE, col, L.radius, L.strength * (m.scale ?? 1) * this.lightScale, L.l | 0);
     }
     lf.finalize();
     this.levelMesh.relight(lf);
@@ -449,7 +454,7 @@ export class GridView {
     const t = this.tmpC;
     const touched = new Set();
     for (const e of this.lit) {
-      this.lightField.sample(e.sx, e.sz, t);
+      this.lightField.sample(e.sx, e.sz, t, e.sl | 0);
       e.batch.setTint(e.id, Math.min(1.35, t[0]), Math.min(1.35, t[1]), Math.min(1.35, t[2]));
       touched.add(e.batch);
     }
@@ -461,7 +466,7 @@ export class GridView {
     for (const [iid, id] of this.itemSlot) {
       const it = this.items.get(iid);
       if (!it) continue;
-      this.lightField.sample(it.x, it.z, t);
+      this.lightField.sample(it.x, it.z, t, it.l | 0);
       this.itemB.setTint(id, Math.min(1.35, t[0]), Math.min(1.35, t[1]), Math.min(1.35, t[2]));
     }
   }
@@ -483,8 +488,8 @@ export class GridView {
   // ------------------------------------------------------------------ world changes
   /** Another grid has come or gone against this one (a shuttle docked): the tiles it covers are drawn, and lit, differently. */
   refreshCovered() {
-    const w = this.grid.world, now = w.covered, tiles = [];
-    for (let i = 0; i < now.length; i++) if (now[i] !== this.coverSeen[i]) tiles.push([i % w.W, Math.floor(i / w.W)]);
+    const w = this.grid.world, now = w.covered, tiles = [], wh = w.W * w.H;
+    for (let i = 0; i < now.length; i++) if (now[i] !== this.coverSeen[i]) { const rem = i % wh; tiles.push([rem % w.W, Math.floor(rem / w.W), Math.floor(i / wh)]); }
     this.coverSeen = now.slice();
     if (tiles.length) this.tilesChanged(tiles);
   }

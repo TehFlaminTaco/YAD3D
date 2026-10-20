@@ -39,7 +39,7 @@ export class Closets {
   }
 
   /** Is this floor item lying where the closet stands (a free-standing box, so not a matter of tiles)? */
-  under(it, rec) { return rec.grid === it.grid && Math.abs(rec.x - it.x) < 0.8 && Math.abs(rec.z - it.z) < 0.8; }
+  under(it, rec) { return rec.grid === it.grid && (rec.l | 0) === (it.l | 0) && Math.abs(rec.x - it.x) < 0.8 && Math.abs(rec.z - it.z) < 0.8; }
 
   /** PopulateContents(): rows are [item path, count, chance %, stack amount] or {pick: [[weight, rows]]}. */
   populate(it) {
@@ -117,7 +117,7 @@ export class Closets {
     for (const item of items) {
       item.loc = null;
       const x = it.x + (sim.rand() - 0.5) * (TILE - 0.9), z = it.z + (sim.rand() - 0.5) * (TILE - 0.9);
-      place(sim, item, it.grid, x, z);
+      place(sim, item, it.grid, x, z, undefined, it.l);
     }
     for (const mob of it.mobs.splice(0)) {
       mob.inside = null;

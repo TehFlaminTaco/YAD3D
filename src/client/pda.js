@@ -64,7 +64,7 @@ export class PDA {
   /** Reveal tiles near the player (with line of sight) so the map fills in as you explore. */
   updateSeen(dt) {
     const g = this.game;
-    if (g.phase !== 'playing') return;
+    if (g.phase !== 'playing' || g.pred.l) return;                                    // (its map is of the first deck)
     const w = g.myGrid().world;
     if (!this.seen) this.seen = new Uint8Array(w.W * w.H);
     this.seenAcc += dt;
@@ -99,7 +99,7 @@ export class PDA {
     const hh = 12 + Math.floor(t / 3600), mm = Math.floor(t / 60) % 60;
     this.$('pda-time').textContent = `Station time ${pad(hh)}:${pad(mm)}`;
     const pc = Math.floor(g.pred.x / 2), pr = Math.floor(g.pred.z / 2);
-    this.$('pda-loc').textContent = 'Location: ' + (w.areaAt(pc, pr)?.n || 'unknown');
+    this.$('pda-loc').textContent = 'Location: ' + (w.areaAt(pc, pr, g.pred.l | 0)?.n || 'unknown');
     const e = rep.env;
     this.$('pda-air').textContent = g.phase === 'playing'
       ? `Air: ${e.p.toFixed(0)} kPa, oxygen ${e.p > 0.5 ? Math.round(e.o2 / e.p * 100) : 0}%${e.tox > 0.3 ? ', toxins present' : ''}`

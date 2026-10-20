@@ -264,6 +264,7 @@ export class DebugMenu {
     box.id = 'db-grids';
     this.body.appendChild(box);
     this.row(el('span', 'db-note', 'Let a shuttle go, send it out or home, spin it, stand it on its side. Riders feel nothing. Board puts you on it.'));
+    this.row(this.button('Two-deck test grid', () => { this.send('grid', { what: 'deck' }); setTimeout(() => this.send('grid', { what: 'list' }), 300); }, 'Make a small grid of two decks (a stair up, a hole in the upper floor) and put me on it'));
     this.drawGrids();
     this.send('grid', { what: 'list' });
     clearInterval(this.gridTimer);

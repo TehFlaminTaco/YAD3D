@@ -122,7 +122,8 @@ export class Terminals {
   airalarm(c, g, area, bar) {
     const a = g.atmos, m = c.mob;
     const [tc, tr] = m.tile;
-    const p = a.pressureAt(tc, tr), o2 = a.o2At(tc, tr), n2 = a.n2[g.world.idx(tc, tr)], tox = a.toxAt(tc, tr);
+    const ml = m.l | 0;
+    const p = a.pressureAt(tc, tr, ml), o2 = a.o2At(tc, tr, ml), n2 = a.n2[g.world.idx(tc, tr, ml)], tox = a.toxAt(tc, tr, ml);
     const aidx = g.world.areas.indexOf(area);
     const avg = a.areaStats.get(aidx);
     return {

@@ -8,24 +8,24 @@ export class FireDoors {
     this.acc = 0;
     this.alarmUntil = 0;
     this.list = grid.props.fdoors.map((p, idx) => ({
-      idx, grid, c: p.x, r: p.y, i: grid.world.idx(p.x, p.y), x: p.x * TILE + 1, z: p.y * TILE + 1,
+      idx, grid, c: p.x, r: p.y, l: p.l | 0, i: grid.world.idx(p.x, p.y, p.l | 0), x: p.x * TILE + 1, z: p.y * TILE + 1,
       closed: false, hold: 0, calm: 0, name: p.n || 'firelock',
     }));
   }
 
-  pressure(c, r, fallback) {
+  pressure(c, r, fallback, l = 0) {
     const { world, atmos } = this.grid;
-    if (!world.inb(c, r)) return fallback;
-    const i = world.idx(c, r);
-    if (atmos.isCell[i]) return atmos.pressureAt(c, r);
+    if (!world.inb(c, r, l)) return fallback;
+    const i = world.idx(c, r, l);
+    if (atmos.isCell[i]) return atmos.pressureAt(c, r, l);
     const k = world.kind[i];
     return (k === 0 || k === 3) && !world.airBlock[i] ? 0 : fallback;
   }
 
   differential(f) {
-    const here = this.grid.atmos.pressureAt(f.c, f.r);
-    const pe = this.pressure(f.c + 1, f.r, here), pw = this.pressure(f.c - 1, f.r, here);
-    const pn = this.pressure(f.c, f.r - 1, here), ps = this.pressure(f.c, f.r + 1, here);
+    const here = this.grid.atmos.pressureAt(f.c, f.r, f.l);
+    const pe = this.pressure(f.c + 1, f.r, here, f.l), pw = this.pressure(f.c - 1, f.r, here, f.l);
+    const pn = this.pressure(f.c, f.r - 1, here, f.l), ps = this.pressure(f.c, f.r + 1, here, f.l);
     return Math.max(Math.abs(pe - pw), Math.abs(pn - ps));
   }
 

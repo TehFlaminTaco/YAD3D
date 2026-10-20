@@ -49,7 +49,9 @@ export class Grid {
     const w = this.world;
     let c0 = w.W, r0 = w.H, c1 = -1, r1 = -1;
     for (let r = 0; r < w.H; r++) for (let c = 0; c < w.W; c++) {
-      if (w.kind[w.idx(c, r)] === 0) continue;
+      let any = false;
+      for (let l = 0; l < w.levels && !any; l++) any = w.kind[w.idx(c, r, l)] !== 0;
+      if (!any) continue;
       if (c < c0) c0 = c; if (c > c1) c1 = c; if (r < r0) r0 = r; if (r > r1) r1 = r;
     }
     return (this._bounds = c1 < 0 ? null : [c0, r0, c1, r1]);

@@ -154,11 +154,11 @@ export class Actions {
     if (!t || t.k === 'none') return null;
     const g = sim.grids.get(t.g) || m.grid;
     switch (t.k) {
-      case 'item': { const rec = sim.floor.get(t.id); return rec ? { k: 'item', rec, grid: rec.grid, x: rec.x, z: rec.z } : undefined; }
-      case 'door': { const d = g.doors[t.idx]; return d ? { k: 'door', d, idx: t.idx, grid: g, x: d.x, z: d.z } : undefined; }
-      case 'fdoor': { const f = g.firedoors.list[t.idx]; return f ? { k: 'fdoor', f, grid: g, x: f.x, z: f.z } : undefined; }
-      case 'prop': { const it = g.props.interact[t.idx]; return it ? { k: 'prop', it, grid: g, x: it.x, z: it.z } : undefined; }
-      case 'mob': { const o = sim.mobs.get(t.id); return o && o !== m ? { k: 'mob', o, grid: o.grid, x: o.x, z: o.z } : undefined; }
+      case 'item': { const rec = sim.floor.get(t.id); return rec ? { k: 'item', rec, grid: rec.grid, l: rec.l, x: rec.x, z: rec.z } : undefined; }
+      case 'door': { const d = g.doors[t.idx]; return d ? { k: 'door', d, idx: t.idx, grid: g, l: d.l, x: d.x, z: d.z } : undefined; }
+      case 'fdoor': { const f = g.firedoors.list[t.idx]; return f ? { k: 'fdoor', f, grid: g, l: f.l, x: f.x, z: f.z } : undefined; }
+      case 'prop': { const it = g.props.interact[t.idx]; return it ? { k: 'prop', it, grid: g, l: it.l, x: it.x, z: it.z } : undefined; }
+      case 'mob': { const o = sim.mobs.get(t.id); return o && o !== m ? { k: 'mob', o, grid: o.grid, l: o.l, x: o.x, z: o.z } : undefined; }
       case 'breach': { const i = g.world.idx(t.c, t.r); return g.world.breached.has(i) ? { k: 'breach', c: t.c, r: t.r, grid: g, x: t.c * TILE + 1, z: t.r * TILE + 1 } : undefined; }
       case 'window': case 'pane': {
         const th = sim.windows.thing(g, t);
@@ -172,11 +172,12 @@ export class Actions {
   }
 
   inReach(m, t) {
+    if ((t.l | 0) !== (m.l | 0) && t.grid === m.grid) return false;                // not through a floor
     const d = this.sim.dist(m, t);
     if (d > REACH + (t.k === 'mob' ? 0.5 : t.k === 'window' || t.k === 'pane' || t.k === 'breach' || t.k === 'wall' || t.k === 'built' || t.k === 'floor' ? 1.3 : 0)) return false;       // a window's middle is a metre behind its face
     if (t.k === 'door' || t.k === 'breach' || t.k === 'window' || t.k === 'pane' || t.k === 'wall' || (t.k === 'prop' && t.it.kind === 'wm')) return true;
     if (t.grid !== m.grid) return true;               // across a doorway between two grids there are no tiles to look along: arm's length is all that counts
-    const wd = m.grid.world.raycast(m.x, m.z, t.x - m.x, t.z - m.z, d, 'shot');
+    const wd = m.grid.world.raycast(m.x, m.z, t.x - m.x, t.z - m.z, d, 'shot', m.l | 0);
     return wd >= d - 0.8;
   }
 
@@ -314,7 +315,7 @@ export class Actions {
       const item = sim.newItem(pick.path);
       sim.sound('vend', it, 0.8);
       const [vx, vz] = this.frontOf(it, m, 1.1);
-      place(sim, item, it.grid, vx, vz);
+      place(sim, item, it.grid, vx, vz, undefined, it.l);
       sim.tell(m, 'notice', `The ${it.name} dispenses ${pick.label}.`);
       return;
     }
@@ -347,7 +348,7 @@ export class Actions {
       let x = it.x + fx * fwd - fz * side, z = it.z + fz * fwd + fx * side;
       if (it.grid.world.collides(x, z, 0.12)) { x = it.x + fx * 1.2; z = it.z + fz * 1.2; }
       if (it.grid.world.collides(x, z, 0.12)) { x = m.x; z = m.z; }
-      place(sim, item, it.grid, x, z);
+      place(sim, item, it.grid, x, z, undefined, it.l);
       n++;
     }
     sim.tell(m, 'notice', n ? `You open the ${it.name}.` : `You open the ${it.name}. It is empty.`);
@@ -382,7 +383,7 @@ export class Actions {
         o.stunned = Math.max(o.stunned, 1.0);
         if (o.humanoid && o.held && Math.random() < 0.6) {
           const it = o.held; detach(sim, it);
-          place(sim, it, o.grid, o.x + (Math.random() - 0.5), o.z + (Math.random() - 0.5));
+          place(sim, it, o.grid, o.x + (Math.random() - 0.5), o.z + (Math.random() - 0.5), undefined, o.l);
           sim.chat.visible(m, `${m.name} has disarmed ${o.name}!`, 'danger', 10);
         } else sim.chat.visible(m, `${m.name} has pushed ${o.name}!`, 'warning', 10);
         o.fear = 6; o.target = m;
@@ -416,7 +417,7 @@ export class Actions {
     const reach = d?.reach ?? 2.1;
     m.cool = d?.cooldown ?? 0.55;
     const f = this.aim(m), world = m.grid.world;
-    const wall = world.raycast(m.x, m.z, f.x, f.z, reach, 'shot');
+    const wall = world.raycast(m.x, m.z, f.x, f.z, reach, 'shot', m.l | 0);
     const hit = this.rayMobs(m, f, Math.min(reach, wall + 0.2));
     if (hit) { if (!hit.mob.dead) this.attackMob(m, hit.mob, held); return; }
     if (wall < reach) {
@@ -441,7 +442,7 @@ export class Actions {
   rayMobs(m, f, maxDist, ox = m.x, oy = EYE, oz = m.z) {
     let best = null, bd = maxDist;
     for (const o of this.sim.mobs.values()) {
-      if (o === m || o.evacuated || o.grid !== m.grid) continue;
+      if (o === m || o.evacuated || o.grid !== m.grid || (o.l | 0) !== (m.l | 0)) continue;                     // (a shot does not go through a floor)
       const h = o.dead ? 0.5 : o.kind === 'carp' ? 1.0 : o.pet ? 0.9 : 1.75;
       const rad = o.dead ? 0.7 : o.kind === 'carp' ? 0.65 : 0.4;
       const mx = o.x - ox, mz = o.z - oz;
@@ -470,7 +471,7 @@ export class Actions {
     const f = this.aim(m);
     const dx = f.x + (Math.random() - 0.5) * spread, dy = f.y + (Math.random() - 0.5) * spread, dz = f.z + (Math.random() - 0.5) * spread;
     const range = 60, world = m.grid.world;
-    const wall = world.raycast(m.x, m.z, dx, dz, range, 'shot');
+    const wall = world.raycast(m.x, m.z, dx, dz, range, 'shot', m.l | 0);
     const wallHit = world.hit;
     const hit = this.rayMobs(m, { x: dx, y: dy, z: dz }, wall);
     let end = wall;
@@ -491,17 +492,17 @@ export class Actions {
     const sim = this.sim;
     const f = this.aim(m);
     const maxd = clamp(9 - item.w * 1.3, 3, 9);
-    const wall = m.grid.world.raycast(m.x, m.z, f.x, f.z, maxd, 'shot');
+    const wall = m.grid.world.raycast(m.x, m.z, f.x, f.z, maxd, 'shot', m.l | 0);
     const hit = this.rayMobs(m, f, Math.min(maxd, wall));
     const dist = Math.min(maxd, wall) - 0.4;
     detach(sim, item);
     // floating with nothing to brace on, the throw pushes you the other way (carbon.dm throw_item: newtonian_move(get_dir(target, src)))
     if (floatState(m.grid.world, m, sim.moveCtx(m)).adrift) { m.vx -= f.x * THROW_KICK; m.vz -= f.z * THROW_KICK; }
     const x = m.x + f.x * Math.max(0.5, hit ? hit.dist - 0.5 : dist), z = m.z + f.z * Math.max(0.5, hit ? hit.dist - 0.5 : dist);
-    const rec = place(sim, item, m.grid, x, z);
+    const rec = place(sim, item, m.grid, x, z, undefined, m.l);
     // everyone nearby sees it sail from the thrower's hand to where it lands
     const hx = m.x - Math.sin(m.yaw) * 0.45 + Math.cos(m.yaw) * 0.25, hz = m.z - Math.cos(m.yaw) * 0.45 - Math.sin(m.yaw) * 0.25;
-    m.grid.emit({ e: 'toss', id: item.id, a: [+hx.toFixed(2), +(EYE - 0.35).toFixed(2), +hz.toFixed(2)], b: [+x.toFixed(2), +rec.y.toFixed(2), +z.toFixed(2)] }, { near: { at: m, r: 40 } });
+    m.grid.emit({ e: 'toss', id: item.id, l: rec.l, a: [+hx.toFixed(2), +(EYE - 0.35).toFixed(2), +hz.toFixed(2)], b: [+x.toFixed(2), +rec.y.toFixed(2), +z.toFixed(2)] }, { near: { at: m, r: 40 } });
     sim.sound('drop', rec, 0.6);
     m.cool = 0.5;
     sim.chat.visible(m, `${m.name} has thrown the ${item.name}.`, 'notice', 10);
@@ -550,7 +551,7 @@ export class Actions {
     sim.sound('spray', m, 0.7);
     m.cool = 0.5;
     const [c, r] = m.tile;
-    m.grid.atmos.addGas(c, r, 0, 0, -m.grid.atmos.toxAt(c, r) * 0.4);
+    m.grid.atmos.addGas(c, r, 0, 0, -m.grid.atmos.toxAt(c, r, m.l | 0) * 0.4, m.l | 0);
   }
 
   recharge(m, cell) {
@@ -663,12 +664,13 @@ export class Actions {
     const d = Math.hypot(x - m.x, z - m.z);
     if (!Number.isFinite(d) || d > REACH) return false;
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
-    if (!w.inb(c, r)) return false;
-    const i = w.idx(c, r);
+    const l = m.l | 0;
+    if (!w.inb(c, r, l)) return false;
+    const i = w.idx(c, r, l);
     const k = w.kind[i];
     if (k !== KIND.FLOOR && k !== KIND.LATTICE) return false;
-    if (w.tableH[i] <= 0 && w.collides(x, z, 0.08)) return false;
-    if (d > 0.3 && w.raycast(m.x, m.z, x - m.x, z - m.z, d, 'shot') < d - 0.2) return false;
+    if (w.tableH[i] <= 0 && w.collides(x, z, 0.08, null, false, l)) return false;
+    if (d > 0.3 && w.raycast(m.x, m.z, x - m.x, z - m.z, d, 'shot', l) < d - 0.2) return false;
     return true;
   }
 
@@ -676,8 +678,8 @@ export class Actions {
     const sim = this.sim;
     if (!this.reachablePoint(m, x, z)) { sim.tell(m, 'warning', "You can't reach there."); return false; }
     detach(sim, item);
-    place(sim, item, m.grid, x, z);
-    sim.sound('drop', { grid: m.grid, x, z }, 0.5);
+    place(sim, item, m.grid, x, z, undefined, m.l);
+    sim.sound('drop', { grid: m.grid, l: m.l, x, z }, 0.5);
     return true;
   }
 
@@ -686,12 +688,12 @@ export class Actions {
     const sim = this.sim;
     const rec = sim.floor.get(item.id);
     if (!rec) return false;
-    if (!this.inReach(m, { k: 'item', grid: rec.grid, x: rec.x, z: rec.z })) { sim.tell(m, 'warning', "You can't reach that."); return false; }
+    if (!this.inReach(m, { k: 'item', grid: rec.grid, l: rec.l, x: rec.x, z: rec.z })) { sim.tell(m, 'warning', "You can't reach that."); return false; }
     if (to.t === 'floor') {
       if (!this.reachablePoint(m, to.x, to.z)) { sim.tell(m, 'warning', "You can't reach there."); return false; }
       detach(sim, item);
-      place(sim, item, m.grid, to.x, to.z);
-      sim.sound('drop', { grid: m.grid, x: to.x, z: to.z }, 0.4);
+      place(sim, item, m.grid, to.x, to.z, undefined, m.l);
+      sim.sound('drop', { grid: m.grid, l: m.l, x: to.x, z: to.z }, 0.4);
       return true;
     }
     if (to.t === 'hand') {

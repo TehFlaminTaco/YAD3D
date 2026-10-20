@@ -19,7 +19,8 @@ export function decodeGrid(level, bp) {
   const g = level.grids?.[bp];
   if (!g) throw new Error(`no grid blueprint "${bp}" in the level data`);
   const { w, h } = g;
-  const n = w * h;
+  const levels = g.levels ?? 1;                              // stacked decks: every array holds deck 0's tiles, then deck 1's, ...
+  const n = w * h * levels;
   const u16 = (s) => { const u = b64(s); return new Uint16Array(u.buffer, u.byteOffset, u.length >> 1); };
   const kind = b64(g.kind);
   const roof = b64(g.roof);
@@ -28,8 +29,9 @@ export function decodeGrid(level, bp) {
   const wall = u16(g.wall);
   const ft = g.ft ? b64(g.ft) : new Uint8Array(n);          // what kind of floor (index + 1 into level.floorTypes)
   const lat = g.lat ? b64(g.lat) : new Uint8Array(n);       // lattice over space: 1 lattice, 2 catwalk
+  const stairs = g.stairs ? b64(g.stairs) : new Uint8Array(n);   // a stair tile: the direction (N S E W bit) you go up
   if (kind.length !== n || area.length !== n) throw new Error(`grid "${bp}": arrays do not match its size`);
-  return { bp, level, w, h, levels: 1, kind, roof, area, floor, wall, ft, lat, props: g.props, spawns: g.spawns || [] };
+  return { bp, level, w, h, levels, kind, roof, area, floor, wall, ft, lat, stairs, props: g.props, spawns: g.spawns || [] };
 }
 
 export function makeRects(sprJson) {

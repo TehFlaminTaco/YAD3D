@@ -1,4 +1,4 @@
-import { TILE } from '../shared/config.js';
+import { TILE, DECK_H } from '../shared/config.js';
 import { Grid } from '../shared/grid.js';
 import { GameMap } from '../shared/gamemap.js';
 import { decodeGrid } from '../shared/leveldata.js';
@@ -13,7 +13,7 @@ export class GridReplica extends Grid {
     super(decoded, rects, o);
     const world = this.world;
     this.fdoors = this.props.fdoors.map((p, idx) => ({
-      idx, grid: this, c: p.x, r: p.y, i: world.idx(p.x, p.y), x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, closed: false, name: p.n || 'firelock', s: p.s, yaw: p.yaw,
+      idx, grid: this, c: p.x, r: p.y, l: p.l | 0, i: world.idx(p.x, p.y, p.l | 0), x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, closed: false, name: p.n || 'firelock', s: p.s, yaw: p.yaw,
     }));
     const na = world.areas.length;
     this.power = { state: 'normal', battery: 1, areaOn: new Uint8Array(na).fill(1), areaLights: new Uint8Array(na).fill(1) };
@@ -67,7 +67,7 @@ export class Replica {
     for (const gs of w.grids) this.addGrid(gs, true);
     if (!this.station) this.station = [...this.grids.values()].find((g) => g.kind !== 'void') || null;          // a map with no station (hyperspace, an away mission): its first grid is the one to fall back on
     this.relink();
-    for (const [id, s, n, x, y, z, g] of w.items) this.items.set(id, { id, s, n, x, y, z, g });
+    for (const [id, s, n, x, y, z, g, l] of w.items) this.items.set(id, { id, s, n, x, y, z, g, l: l | 0 });
   }
 
   /** We have moved to another map (the grid we are on was carried there): everything of the old one goes, and the new is built from what the server sends. */
@@ -79,6 +79,7 @@ export class Replica {
 
   /** A grid exists: build it from its blueprint and bring it up to the state the server describes. */
   addGrid(gs, batch = false) {
+    if (gs.def) this.level.grids[gs.bp] = gs.def;                          // (a blueprint made while the game runs comes with the grid)
     const decoded = decodeGrid(this.level, gs.bp);
     const g = new GridReplica(decoded, this.rects, { id: gs.g, kind: gs.kind, name: gs.name, tf: gs.tf, docked: gs.docked });
     this.grids.set(g.id, g);
@@ -169,11 +170,11 @@ export class Replica {
       case 'pm': if (g) this.moveProp(g, ev.i, ev.x, ev.z, ev.d); break;
       case 'imv': { const it = this.items.get(ev.id); if (it) { it.x = ev.x; it.z = ev.z; } break; }
       case 'pane': if (g) this.killPane(g, ev.c, ev.r, ev.d); break;
-      case 'item+': this.items.set(ev.id, { id: ev.id, s: ev.s, n: ev.n, x: ev.x, y: ev.y, z: ev.z, g: ev.g }); break;
+      case 'item+': this.items.set(ev.id, { id: ev.id, s: ev.s, n: ev.n, x: ev.x, y: ev.y, z: ev.z, g: ev.g, l: ev.l | 0 }); break;
       case 'item-': this.lastRemoved = this.items.get(ev.id) || null; this.items.delete(ev.id); break;
       case 'power': if (g) { g.power.state = ev.state; g.power.battery = ev.battery; } break;
       case 'area': if (g) { g.power.areaOn[ev.a] = ev.on; g.power.areaLights[ev.a] = ev.lights; } break;
-      case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, g: 0, x: 0, z: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
+      case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, g: 0, x: 0, z: 0, l: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
       case 'look': { const m = this.mobs.get(ev.id); if (m) m.ap = ev.ap; break; }
       case 'mob-': break;                    // the view reads the mob before it is dropped (see Game.onEvent)
       case 'self': this.self = ev; break;
@@ -206,10 +207,13 @@ export class Replica {
       const [id, gid, x, z, yaw, flags, speed, y] = row;                    // (y only for someone floating in the void)
       const m = this.mobs.get(id);
       if (!m) continue;
-      m.flags = flags; m.speed = speed; m.dead = !!(flags & 1); m.crit = !!(flags & 2); m.lying = !!(flags & 16);
-      m.buf.push({ t: now, g: gid, x, z, yaw, y: y ?? 0 });
+      const l = (flags >> 8) & 15;                                          // (bits 8 to 11: the deck it is on)
+      m.flags = flags; m.speed = speed; m.dead = !!(flags & 1); m.crit = !!(flags & 2); m.lying = !!(flags & 16); m.l = l;
+      const gw = this.grids.get(gid)?.world;
+      const h = gw && gw.levels > 1 ? l * DECK_H + gw.stairLift(x, z, l) : 0;                 // how high above the first deck's floor its feet are (up the slope, on a stair)
+      m.buf.push({ t: now, g: gid, x, z, yaw, y: y ?? 0, l, h });
       if (m.buf.length > 6) m.buf.shift();
-      if (m.fresh) { m.fresh = false; m.g = gid; m.x = x; m.z = z; m.yaw = yaw; m.y = y ?? 0; }
+      if (m.fresh) { m.fresh = false; m.g = gid; m.x = x; m.z = z; m.yaw = yaw; m.y = y ?? 0; m.l = l; m.h = h; }
     }
   }
 

@@ -1,11 +1,13 @@
-import { TILE, KIND, DV, OPP, N, S, E, W, PLAYER_R, GRIP_REACH, WALL_H } from './config.js';
+import { TILE, KIND, DV, OPP, N, S, E, W, PLAYER_R, GRIP_REACH, WALL_H, DECK_H, DECK_THICK } from './config.js';
 import { WS, WINDOWS } from './windows.js';
 import { WALLS, RW } from './walls.js';
 
 /**
  * One grid's tile store + collision + queries. Its own coordinates: x = col * TILE, z = row * TILE, y up; north is -z. Where the grid is
  * in its map (and which way it faces) is the `Grid`'s business; nothing in here knows. `levels` stacked decks share the arrays
- * (`idx(c, r, l)`); a grid has one deck until the stacked-floors stage.
+ * (`idx(c, r, l)`: deck 0's tiles, then deck 1's, ...; deck `l` stands `DECK_H * l` above deck 0). A body on deck `l` has `st.l`; everything below that takes a
+ * deck takes it last and defaults to 0, so a grid of one deck (all of them, so far) is read exactly as before. On a deck above the first, open space (`SPACE`) is a
+ * hole: open air down to the deck below, and what is over it falls.
  */
 export class World {
   constructor(assets) {
@@ -23,6 +25,7 @@ export class World {
     this.wallVar = assets.wall;
     this.ft = assets.ft;                     // what kind of floor each tile is (1 + index into level.floorTypes; 0 none)
     this.lat = assets.lat;                   // lattice over space: 1 lattice, 2 catwalk
+    this.stairs = assets.stairs || new Uint8Array(w * h * (assets.levels ?? 1));   // stairs: the direction (N S E W bit) you leave the tile in to go up one deck
     this.areas = level.areas;
     this.variants = level.walls;
 
@@ -71,26 +74,65 @@ export class World {
   }
 
   /** SS13 has_gravity(): none over open space or lattice, otherwise whatever this grid's generator is doing (a shuttle is a grid with its own). */
-  hasGravity(x, z) {
+  hasGravity(x, z, l = 0) {
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
-    if (!this.inb(c, r)) return false;
-    const k = this.kind[this.idx(c, r)];
+    if (!this.inb(c, r, l)) return false;
+    const k = this.kind[this.idx(c, r, l)];
     if (k === KIND.SPACE || k === KIND.LATTICE) return false;
     return this.gravityOn;
   }
 
-  /** Is tile (c, r) open space: a space tile that no docked grid lies over (and anything off the edge of the array)? */
-  isOpenSpace(c, r) {
-    if (!this.inb(c, r)) return true;
-    const i = this.idx(c, r);
-    return this.kind[i] === KIND.SPACE && !this.covered[i];
+  /**
+   * Is tile (c, r) of deck `l` open space: a space tile that no docked grid lies over (and anything off the edge of the array)? On a deck above the first a space
+   * tile is a hole, and it is open space only if what is under it is too, all the way down: a hole over a room is air.
+   */
+  isOpenSpace(c, r, l = 0) {
+    if (!this.inb(c, r, l)) return true;
+    const i = this.idx(c, r, l);
+    if (this.kind[i] !== KIND.SPACE || this.covered[i]) return false;
+    if (l === 0) return true;
+    const below = this.kind[i - this.W * this.H];
+    return below === KIND.SPACE ? this.isOpenSpace(c, r, l - 1) : below === KIND.LATTICE;
   }
 
   /** Something to push off from (Process_Spacemove's "backup"): lattice within a tile, or a wall / locker / window frame within arm's reach. */
-  hasGrip(x, z, ignore = null, free = false) {
+  hasGrip(x, z, ignore = null, free = false, y = 0, l = 0) {
+    void y;
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
-    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (this.kindAt(c + dc, r + dr) === KIND.LATTICE) return true;
-    return this.collides(x, z, PLAYER_R + GRIP_REACH, ignore, free);          // (the edge of the array is a wall to hold, unless you may go past it)
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (this.kindAt(c + dc, r + dr, l) === KIND.LATTICE) return true;
+    return this.collides(x, z, PLAYER_R + GRIP_REACH, ignore, free, l);          // (the edge of the array is a wall to hold, unless you may go past it)
+  }
+
+  // ------------------------------------------------------------------ decks
+  /** The deck tile index `i` is on. */
+  levelOf(i) { return Math.floor(i / (this.W * this.H)); }
+
+  /** Where something dropped at (c, r) on deck `l` comes to rest: the deck itself if its tile there is a floor (or a grating), else the next one down that is, else 0. */
+  restDeck(c, r, l) {
+    for (let k = Math.min(l, this.levels - 1); k > 0; k--) {
+      const t = this.kind[this.idx(c, r, k)];
+      if (t === KIND.FLOOR || t === KIND.LATTICE || t === KIND.WALL) return k;
+    }
+    return 0;
+  }
+
+  /** Height of the floor of deck `l`, in the grid's frame. */
+  deckY(l) { return l * DECK_H; }
+
+  /**
+   * A stair is drawn as a slope that climbs a whole deck over the length of its tile, from where you step onto it to the edge where you leave it for the deck above.
+   * This is how far up that slope (m) a body at (x, z) on deck `l` is, 0 anywhere else: the eye, and the picture of whoever is climbing, follow it, so that the step up
+   * at the end of the stair (the body changing deck) is no jump at all.
+   */
+  stairLift(x, z, l = 0) {
+    if (this.levels < 2) return 0;
+    const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
+    if (!this.inb(c, r, l)) return 0;
+    const d = this.stairs[this.idx(c, r, l)];
+    if (!d) return 0;
+    const fx = x / TILE - c, fz = z / TILE - r;
+    const t = d & E ? fx : d & W ? 1 - fx : d & S ? fz : 1 - fz;
+    return Math.max(0, Math.min(1, t)) * DECK_H;
   }
 
   /**
@@ -304,11 +346,11 @@ export class World {
   inb(c, r, l = 0) { return c >= 0 && r >= 0 && c < this.W && r < this.H && l >= 0 && l < this.levels; }
   tileOf(x) { return Math.floor(x / TILE); }
 
-  kindAt(c, r) { return this.inb(c, r) ? this.kind[this.idx(c, r)] : KIND.SPACE; }
-  isWallLike(c, r) { return this.kindAt(c, r) === KIND.WALL; }
-  opaque(c, r) { const i = this.idx(c, r); return this.inb(c, r) && this.kind[i] === KIND.WALL && !this.glass[i]; }
-  walkable(c, r) { return this.inb(c, r) && !this.solid[this.idx(c, r)]; }
-  areaAt(c, r) { return this.areas[this.areaIdx[this.idx(c, r)]]; }
+  kindAt(c, r, l = 0) { return this.inb(c, r, l) ? this.kind[this.idx(c, r, l)] : KIND.SPACE; }
+  isWallLike(c, r, l = 0) { return this.kindAt(c, r, l) === KIND.WALL; }
+  opaque(c, r, l = 0) { const i = this.idx(c, r, l); return this.inb(c, r, l) && this.kind[i] === KIND.WALL && !this.glass[i]; }
+  walkable(c, r, l = 0) { return this.inb(c, r, l) && !this.solid[this.idx(c, r, l)]; }
+  areaAt(c, r, l = 0) { return this.areas[this.areaIdx[this.idx(c, r, l)]]; }
 
   // ------------------------------------------------------------------ free-standing things
   /*
@@ -319,7 +361,8 @@ export class World {
     const T = TILE, e = 1e-4, out = [];
     const c0 = Math.floor((rec.x - rec.half) / T), c1 = Math.floor((rec.x + rec.half - e) / T);
     const r0 = Math.floor((rec.z - rec.half) / T), r1 = Math.floor((rec.z + rec.half - e) / T);
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.inb(c, r)) out.push(this.idx(c, r));
+    const l = rec.l | 0;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.inb(c, r, l)) out.push(this.idx(c, r, l));
     return out;
   }
 
@@ -327,7 +370,7 @@ export class World {
   boxAdd(rec) {
     this.boxDrop(rec);
     rec.tiles = this.boxTiles(rec);
-    rec.mid = this.idx(Math.floor(rec.x / TILE), Math.floor(rec.z / TILE));
+    rec.mid = this.idx(Math.floor(rec.x / TILE), Math.floor(rec.z / TILE), rec.l | 0);
     rec.counted = false;
     for (const i of rec.tiles) {
       let list = this.boxes.get(i);
@@ -369,26 +412,26 @@ export class World {
   }
 
   /** Mark a thin blocker on the `d` edge of tile (c, r) (mirrored on the neighbour). */
-  addEdge(c, r, d, glass = false) {
-    if (!this.inb(c, r)) return;
-    const i = this.idx(c, r);
+  addEdge(c, r, d, glass = false, l = 0) {
+    if (!this.inb(c, r, l)) return;
+    const i = this.idx(c, r, l);
     this.edge[i] |= d;
     if (glass) this.edgeGlass[i] |= d;
     const [dc, dr] = DV[d];
-    if (this.inb(c + dc, r + dr)) {
-      const j = this.idx(c + dc, r + dr);
+    if (this.inb(c + dc, r + dr, l)) {
+      const j = this.idx(c + dc, r + dr, l);
       this.edge[j] |= OPP[d];
       if (glass) this.edgeGlass[j] |= OPP[d];
     }
   }
 
-  removeEdge(c, r, d) {
-    const i = this.idx(c, r);
+  removeEdge(c, r, d, l = 0) {
+    const i = this.idx(c, r, l);
     this.edge[i] &= ~d;
     this.edgeGlass[i] &= ~d;
     const [dc, dr] = DV[d];
-    if (this.inb(c + dc, r + dr)) {
-      const j = this.idx(c + dc, r + dr);
+    if (this.inb(c + dc, r + dr, l)) {
+      const j = this.idx(c + dc, r + dr, l);
       this.edge[j] &= ~OPP[d];
       this.edgeGlass[j] &= ~OPP[d];
     }
@@ -399,25 +442,25 @@ export class World {
    * in each grid that lies over this one's open space and might be in the way (a docked shuttle's hull is solid from the station's side too).
    * The edge of the array is a wall, unless `free`: the body may go past it (it leaves the grid, see frames.js `settle`).
    */
-  collides(x, z, h, ignore = null, free = false) {
-    if (this.collidesTiles(x, z, h, ignore, !free)) return true;
+  collides(x, z, h, ignore = null, free = false, l = 0) {
+    if (this.collidesTiles(x, z, h, ignore, !free, l)) return true;
     for (const nb of this.neighbors) {
       const [x0, z0, x1, z1] = nb.rect;
       if (x + h <= x0 || x - h >= x1 || z + h <= z0 || z - h >= z1) continue;      // nowhere near that grid
-      if (nb.world.collidesTiles(nb.a * x + nb.b * z + nb.tx, nb.c * x + nb.d * z + nb.tz, h, ignore, false)) return true;
+      if (nb.world.collidesTiles(nb.a * x + nb.b * z + nb.tx, nb.c * x + nb.d * z + nb.tz, h, ignore, false, l)) return true;
     }
     return false;
   }
 
   /** This grid's own tiles only. Off the edge of the array is a wall when `edgeSolid` (your own grid), and nothing at all otherwise (it is another grid's business). */
-  collidesTiles(x, z, h, ignore, edgeSolid) {
+  collidesTiles(x, z, h, ignore, edgeSolid, l = 0) {
     const c0 = Math.floor((x - h) / TILE), c1 = Math.floor((x + h) / TILE);
     const r0 = Math.floor((z - h) / TILE), r1 = Math.floor((z + h) / TILE);
     const T = TILE, th = 0.07;
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
-        if (!this.inb(c, r)) { if (edgeSolid) return true; continue; }
-        const i = this.idx(c, r);
+        if (!this.inb(c, r, l)) { if (edgeSolid) return true; continue; }
+        const i = this.idx(c, r, l);
         if (this.solid[i]) return true;
         if (this.bcount[i]) {
           for (const b of this.boxes.get(i)) if (b !== ignore && b.dense && Math.abs(x - b.x) < b.half + h && Math.abs(z - b.z) < b.half + h) return true;
@@ -436,33 +479,38 @@ export class World {
   }
 
   /**
-   * A ball of radius `h` with its middle at (x, y, z) in this grid's frame (y up from the deck), for something that is not walking on the deck but flying
-   * about outside or through it: the walls, doors, edges and things of `collidesTiles` where it is as high as they are, and the floor under it and the roof
-   * over it (a floor is a slab at the deck, a roof one at the top of the walls where the tile has a roof).
+   * A ball of radius `h` with its middle at (x, y, z) in this grid's frame (y up from the first deck's floor), for something that is not walking on a deck but flying
+   * about outside or through it: for each deck it reaches into, the walls, doors, edges and things of `collidesTiles` where it is as high as they are, the floor under it
+   * (a slab at the deck: 0.1 thick on the first, `DECK_THICK` on the ones above it, which is also the ceiling of the deck below) and, on the top deck, the roof over it
+   * where the tile has one.
    */
   collidesTiles3(x, y, z, h, ignore = null, slabs = true) {
-    const lo = y - h, hi = y + h;
-    if (hi > -0.1 && lo < WALL_H && this.collidesTiles(x, z, h, ignore, false)) return true;
-    if (!slabs) return false;
-    const slab = lo < 0 && hi > -0.1, top = hi > WALL_H && lo < WALL_H + 0.1;
-    if (!slab && !top) return false;
     const c0 = Math.floor((x - h) / TILE), c1 = Math.floor((x + h) / TILE), r0 = Math.floor((z - h) / TILE), r1 = Math.floor((z + h) / TILE);
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
-      if (!this.inb(c, r)) continue;
-      const i = this.idx(c, r), k = this.kind[i];
-      if (k === KIND.FLOOR) { if (slab) return true; if (top && this.roof[i]) return true; }
+    for (let l = 0; l < this.levels; l++) {
+      const lo = y - h - l * DECK_H, hi = y + h - l * DECK_H;                                  // the ball, in this deck's own heights
+      if (hi < -(l ? DECK_THICK : 0.1) || lo > WALL_H + 0.1) continue;                           // not within reach of this deck at all
+      if (hi > -0.1 && lo < WALL_H && this.collidesTiles(x, z, h, ignore, false, l)) return true;
+      if (!slabs) continue;
+      const slab = lo < 0 && hi > -(l ? DECK_THICK : 0.1), top = l === this.levels - 1 && hi > WALL_H && lo < WALL_H + 0.1;
+      if (!slab && !top) continue;
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        if (!this.inb(c, r, l)) continue;
+        const i = this.idx(c, r, l), k = this.kind[i];
+        if (k === KIND.FLOOR) { if (slab) return true; if (top && this.roof[i]) return true; }
+      }
     }
     return false;
   }
 
-  /** Slide an entity with half-size h by (dx, dz); returns true if blocked on either axis. */
+  /** Slide an entity with half-size h by (dx, dz) on its deck (`pos.l`); returns true if blocked on either axis. */
   move(pos, dx, dz, h, ignore = null, free = false) {
     let blocked = false;
+    const l = pos.l | 0;
     if (dx !== 0) {
-      if (!this.collides(pos.x + dx, pos.z, h, ignore, free)) pos.x += dx; else blocked = true;
+      if (!this.collides(pos.x + dx, pos.z, h, ignore, free, l)) pos.x += dx; else blocked = true;
     }
     if (dz !== 0) {
-      if (!this.collides(pos.x, pos.z + dz, h, ignore, free)) pos.z += dz; else blocked = true;
+      if (!this.collides(pos.x, pos.z + dz, h, ignore, free, l)) pos.z += dz; else blocked = true;
     }
     return blocked;
   }
@@ -471,7 +519,7 @@ export class World {
    * Grid DDA. Returns distance to the first blocking tile along the ray (or maxDist).
    * mode 'sight': walls + closed doors block; glass does not.   mode 'shot': glass blocks too.
    */
-  raycast(ox, oz, dx, dz, maxDist, mode = 'sight') {
+  raycast(ox, oz, dx, dz, maxDist, mode = 'sight', l = 0) {
     const len = Math.hypot(dx, dz);
     if (len === 0) return maxDist;
     dx /= len; dz /= len;
@@ -483,15 +531,15 @@ export class World {
     let tMaxR = dz !== 0 ? ((dz > 0 ? (r + 1) * TILE - oz : oz - r * TILE) / Math.abs(dz)) : Infinity;
     let t = 0;
     for (let guard = 0; guard < 512; guard++) {
-      if (!this.inb(c, r)) return t;
-      const i = this.idx(c, r);
+      if (!this.inb(c, r, l)) return t;
+      const i = this.idx(c, r, l);
       if (this.blocksRay(i, mode)) { this.hit = { kind: 'tile', i, c, r }; return t; }
       let dir;
       if (tMaxC < tMaxR) { t = tMaxC; tMaxC += tDeltaC; c += stepC; dir = stepC > 0 ? W : E; }
       else { t = tMaxR; tMaxR += tDeltaR; r += stepR; dir = stepR > 0 ? N : S; }
       if (t >= maxDist) return maxDist;
       // thin edges crossed between tiles
-      const pi = (dir === W || dir === E) ? this.idx(c - stepC, r) : this.idx(c, r - stepR);
+      const pi = (dir === W || dir === E) ? this.idx(c - stepC, r, l) : this.idx(c, r - stepR, l);
       const e = this.edge[pi];
       if (e) {
         const crossed = (dir === W) ? E : (dir === E) ? W : (dir === N) ? S : N;
@@ -511,10 +559,10 @@ export class World {
   }
 
   /** Line of sight between two points (ignores glass). */
-  los(x0, z0, x1, z1) {
+  los(x0, z0, x1, z1, l = 0) {
     const dx = x1 - x0, dz = z1 - z0;
     const dist = Math.hypot(dx, dz);
     if (dist < 1e-4) return true;
-    return this.raycast(x0, z0, dx, dz, dist, 'sight') >= dist - 1e-3;
+    return this.raycast(x0, z0, dx, dz, dist, 'sight', l) >= dist - 1e-3;
   }
 }

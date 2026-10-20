@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TILE, EYE, REACH, RENDER_HEIGHT, KIND, CENTER_H } from '../shared/config.js';
+import { TILE, EYE, REACH, RENDER_HEIGHT, KIND, CENTER_H, DECK_H } from '../shared/config.js';
 import { stepMovement, floatState } from '../shared/movement.js';
 import { settle, frameYaw, Frame } from '../shared/frames.js';
 import { qTwistY, qrot, qirot, reorient, tfInvDir } from '../shared/math3.js';
@@ -69,9 +69,9 @@ export class Game {
     addEventListener('beforeunload', (e) => { if (this.inWorld() && !this.input.forced) { e.preventDefault(); e.returnValue = ''; } });
     document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) navigator.keyboard?.unlock?.(); });
     this.audio = new AudioSys();
-    this.pred = { g: 0, x: 0, z: 0, vx: 0, vz: 0, y: 0, vy: 0, q: [0, 0, 0, 1] };           // where I am: on grid `g`, in its frame (floating, `g` is the void: the map's coordinates in three dimensions, y the height of my middle, q the up I keep)
+    this.pred = { g: 0, x: 0, z: 0, l: 0, vx: 0, vz: 0, y: 0, vy: 0, q: [0, 0, 0, 1] };     // where I am: on grid `g`, in its frame, on its deck `l` (floating, `g` is the void: the map's coordinates in three dimensions, y the height of my middle, q the up I keep)
     this.corr = { x: 0, z: 0, y: 0 };    // how far the picture is from where I am (a correction easing away: x, z, and y when floating)
-    this.lift = 0;                        // the same, up and down, for arriving on a grid (you are put on the floor)
+    this.lift = 0;                        // the same, up and down, for arriving on a grid (you are put on the floor), or coming down a deck
     this.frameObj = new Frame();          // what the scene is drawn in while I float free: the map, turned as I am
     this.yaw = 0;
     this.yawG = 0;                        // the grid whose frame `yaw` is in (it follows you from grid to grid: see syncYaw)
@@ -218,7 +218,7 @@ export class Game {
     rep.on('shake', (ev) => this.shake(ev.a));
     rep.on('hurt', (ev) => { this.fx.flash(Math.min(1, 0.4 + ev.a / 20)); this.shake(Math.min(0.5, ev.a / 25)); });
     rep.on('bubble', (ev) => this.hud.addBubble(ev.id, ev.text));
-    rep.on('toss', (ev) => this.view.addToss(ev.g, ev.id, ev.a, ev.b, this.time));
+    rep.on('toss', (ev) => this.view.addToss(ev.g, ev.id, ev.a, ev.b, this.time, ev.l | 0));
     for (const m of rep.mobs.values()) this.view.addMob(m);
     this.phase = rep.myState === 'ghost' ? 'ghost' : 'lobby';
     this.lobby.update();
@@ -253,9 +253,9 @@ export class Game {
 
   /** A floor item vanished: if it was near and on screen, remember where, so it can fly into a hand. */
   noteVanished(it) {
-    if (!it || this.phase !== 'playing' || it.g !== this.pred.g) return;
+    if (!it || this.phase !== 'playing' || it.g !== this.pred.g || (it.l | 0) !== (this.pred.l | 0)) return;
     if (Math.hypot(it.x - this.pred.x, it.z - this.pred.z) > REACH + 1.5) return;
-    this.tmpV.set(it.x, it.y + 0.2, it.z).project(this.camera);
+    this.tmpV.set(it.x, it.y + (it.l | 0) * DECK_H + 0.2, it.z).project(this.camera);
     if (this.tmpV.z > 1) return;
     this.hands.noteVanished(it.id, (this.tmpV.x + 1) / 2 * innerWidth, (1 - this.tmpV.y) / 2 * innerHeight);
   }
@@ -269,7 +269,7 @@ export class Game {
     const phase = you.id ? 'playing' : rep.myState === 'ghost' ? 'ghost' : 'lobby';
     if (phase !== this.phase) this.setPhase(phase, you);
     if (this.inWorld()) this.reconcile(you, s.ack);
-    else { this.pred.g = you.g ?? this.pred.g; this.pred.x = you.x; this.pred.z = you.z; this.pred.y = you.y ?? 0; this.pred.q = you.q ? [...you.q] : [0, 0, 0, 1]; }
+    else { this.pred.g = you.g ?? this.pred.g; this.pred.x = you.x; this.pred.z = you.z; this.pred.l = you.l | 0; this.pred.y = you.y ?? 0; this.pred.q = you.q ? [...you.q] : [0, 0, 0, 1]; }
     this.syncYaw();
   }
 
@@ -277,7 +277,7 @@ export class Game {
     const was = this.phase;
     this.phase = phase;
     this.pred.g = this.yawG = you.g ?? this.pred.g;
-    this.pred.x = you.x; this.pred.z = you.z; this.pred.vx = you.vx || 0; this.pred.vz = you.vz || 0;
+    this.pred.x = you.x; this.pred.z = you.z; this.pred.l = you.l | 0; this.pred.vx = you.vx || 0; this.pred.vz = you.vz || 0;
     this.pred.y = you.y ?? 0; this.pred.vy = you.vy || 0; this.pred.q = you.q ? [...you.q] : [0, 0, 0, 1];
     this.corr.x = this.corr.z = this.corr.y = 0; this.lift = 0;
     this.pending = []; this.sendBuf = [];
@@ -364,16 +364,26 @@ export class Game {
     return this.phase === 'playing' && !!s && (s.dead || s.crit || s.stunned || s.inside);
   }
 
+  /** How far above the first deck's floor my feet are, in the grid's frame: my deck, and (on a stair) how far up its slope. */
+  eyeBase() {
+    const w = this.myGrid().world, l = this.pred.l | 0;
+    return w.levels > 1 ? l * DECK_H + w.stairLift(this.pred.x, this.pred.z, l) : 0;
+  }
+
   stepPred(inp, dt) {
     const grid = this.myGrid();
+    const before = this.eyeBase();
     // an input whose facing was made in another grid's frame (just before a handover) is turned into this one's, as the server does
     const from = inp.g !== undefined && inp.g !== grid.id ? this.rep.grids.get(inp.g) : null;
     if (from) inp = { ...inp, yaw: inp.yaw + frameYaw(from, grid) };
     if (this.frozen()) {
       // out cold: stop where you are, unless there is no gravity to stop you (then you drift, like the server says)
-      if (grid.world.hasGravity(this.pred.x, this.pred.z) || this.self.inside) this.pred.vx = this.pred.vz = 0;
+      if (grid.world.hasGravity(this.pred.x, this.pred.z, this.pred.l | 0) || this.self.inside) this.pred.vx = this.pred.vz = 0;
       else stepMovement(this.pred, { yaw: inp.yaw }, grid.world, dt, { ...this.predictCtx(), limp: true });
     } else stepMovement(this.pred, inp, grid.world, dt, this.predictCtx());
+    this.pred.fell = 0; this.pred.landed = null;                                    // (the server hurts you for a fall; here it only shows)
+    const jump = before - this.eyeBase();
+    if (Math.abs(jump) > 0.5) this.lift += jump;                                    // came down a deck (or went up one without a stair): the eye eases to the new height
     if (this.phase === 'playing') {                              // walked onto another grid (through a docking door), or off the side of one into the void? then that is yours now
       const r = settle(grid, this.pred, true);
       if (r) {
@@ -415,14 +425,15 @@ export class Game {
   reconcile(you, ack) {
     const p = this.pred;
     this.pending = this.pending.filter((i) => i.seq > ack);
-    const ox = p.x, oz = p.z, oy = p.y, og = p.g;
-    p.g = you.g ?? p.g; p.x = you.x; p.z = you.z; p.vx = you.vx || 0; p.vz = you.vz || 0;
+    const ox = p.x, oz = p.z, oy = p.y, og = p.g, ol = p.l | 0, oh = this.eyeBase();
+    p.g = you.g ?? p.g; p.x = you.x; p.z = you.z; p.l = you.l | 0; p.vx = you.vx || 0; p.vz = you.vz || 0;
     p.y = you.y ?? 0; p.vy = you.vy || 0; p.q = you.q ? [...you.q] : [0, 0, 0, 1];
     this.wind = you.wind || null;
     for (const inp of this.pending) this.stepPred(inp, inp.dt);
     this.syncYaw();
     const ex = ox - p.x, ez = oz - p.z, ey = p.g === og ? oy - p.y : 0;
     if (p.g !== og || ex * ex + ez * ez + ey * ey > 9) { this.corr.x = this.corr.z = this.corr.y = 0; } else { this.corr.x += ex; this.corr.z += ez; this.corr.y += ey; }
+    if (p.g === og && (p.l | 0) !== ol) this.lift += oh - this.eyeBase();                          // the server put me on another deck than I thought: ease over, not a pop
   }
 
   readMovement(dt) {
@@ -467,7 +478,8 @@ export class Game {
         this.stepAcc = 0;
         const w = this.myGrid().world;
         const c = Math.floor(this.pred.x / TILE), r = Math.floor(this.pred.z / TILE);
-        const surface = w.kindAt(c, r) === KIND.LATTICE ? 'catwalk' : w.areaAt(c, r)?.c === 'maintenance' ? 'plating' : 'floor';
+        const pl = this.pred.l | 0;
+        const surface = w.kindAt(c, r, pl) === KIND.LATTICE ? 'catwalk' : w.areaAt(c, r, pl)?.c === 'maintenance' ? 'plating' : 'floor';
         this.audio.footstep(!!mv.run, surface);
         this.hands.step(!!mv.run);
       }
@@ -516,7 +528,7 @@ export class Game {
       }
       return st.best;
     }
-    this.scanGrid(grid, o, f, this.pred.x, this.pred.z, st);
+    this.scanGrid(grid, o, f, this.pred.x, this.pred.z, st, this.pred.l | 0);
     for (const nb of world.neighbors) {
       const [x0, z0, x1, z1] = nb.rect, m = REACH + 1.5;
       if (this.pred.x < x0 - m || this.pred.x > x1 + m || this.pred.z < z0 - m || this.pred.z > z1 + m) continue;       // nowhere near it
@@ -525,7 +537,7 @@ export class Game {
       this.scanGrid(nb.grid, fo, ff, nb.a * this.pred.x + nb.b * this.pred.z + nb.tx, nb.c * this.pred.x + nb.d * this.pred.z + nb.tz, st);
     }
     let best = st.best;
-    if (!best) {
+    if (!best && !(this.pred.l | 0)) {                                          // (the server's work on windows, walls and floors is on the first deck: not offered from the others)
       // what is left of a window (its grille, or just the floor) and windows themselves: TG has no "broken window" object
       const br = this.breachAlong(o, f);
       if (br) best = { k: 'breach', c: br.c, r: br.r, name: world.grille[world.idx(br.c, br.r)] ? 'grille' : 'floor', d: 2 };
@@ -534,9 +546,9 @@ export class Game {
     return best;
   }
 
-  /** The best thing on grid `G` that the ray (o, f), given in G's frame, points at; (px, pz) is where you stand in G's frame. Updates `st` ({best, bs}). */
-  scanGrid(G, o, f, px, pz, st) {
-    const rep = this.rep, world = G.world, gid = G.id;
+  /** The best thing on grid `G` that the ray (o, f), given in G's frame, points at; (px, pz) is where you stand in G's frame, on its deck `pl`. Updates `st` ({best, bs}). */
+  scanGrid(G, o, f, px, pz, st, pl = 0) {
+    const rep = this.rep, world = G.world, gid = G.id, yb = pl * DECK_H;
     const consider = (ref, x, y0, z, rad, extra) => {
       const y1 = extra.y1 ?? y0;
       let bestPerp = 1e9;
@@ -554,7 +566,7 @@ export class Game {
       const score = (bestPerp / rad + hd * 0.08) * (extra.bias ?? 1);
       if (score >= st.bs) return;
       if (!extra.through) {
-        const wd = world.raycast(px, pz, x - px, z - pz, hd, 'shot');
+        const wd = world.raycast(px, pz, x - px, z - pz, hd, 'shot', pl);
         if (wd < hd - 0.55) return;
       }
       st.bs = score;
@@ -563,30 +575,30 @@ export class Game {
     const maxD2 = (REACH + 1.5) * (REACH + 1.5);
     const near = (x, z) => { const dx = x - px, dz = z - pz; return dx * dx + dz * dz <= maxD2; };
     for (const it of rep.items.values()) {
-      if (it.g !== gid || !near(it.x, it.z)) continue;
-      consider({ k: 'item', id: it.id }, it.x, it.y, it.z, 0.45, { y1: it.y + 0.4, name: it.n });
+      if (it.g !== gid || (it.l | 0) !== pl || !near(it.x, it.z)) continue;
+      consider({ k: 'item', id: it.id }, it.x, it.y + yb, it.z, 0.45, { y1: it.y + yb + 0.4, name: it.n });
     }
     for (let i = 0; i < G.doors.length; i++) {
       const d = G.doors[i];
-      if (!near(d.x, d.z)) continue;
-      consider({ k: 'door', idx: i }, d.x, 0.2, d.z, 1.05, { y1: 2.2, name: d.name, through: true, bias: 2 });
+      if ((d.l | 0) !== pl || !near(d.x, d.z)) continue;
+      consider({ k: 'door', idx: i }, d.x, yb + 0.2, d.z, 1.05, { y1: yb + 2.2, name: d.name, through: true, bias: 2 });
     }
     for (const fd of G.fdoors) {
-      if (!fd.closed || !near(fd.x, fd.z)) continue;
-      consider({ k: 'fdoor', idx: fd.idx }, fd.x, 0.2, fd.z, 1.05, { y1: 2.2, name: 'firelock', through: true, bias: 2 });
+      if (!fd.closed || (fd.l | 0) !== pl || !near(fd.x, fd.z)) continue;
+      consider({ k: 'fdoor', idx: fd.idx }, fd.x, yb + 0.2, fd.z, 1.05, { y1: yb + 2.2, name: 'firelock', through: true, bias: 2 });
     }
     for (const it of G.props.interact) {
-      if (it.gone || !near(it.x, it.z)) continue;
+      if (it.gone || (it.l | 0) !== pl || !near(it.x, it.z)) continue;
       if (it.kind === 'wm') consider({ k: 'prop', idx: it.idx }, it.x, it.y0, it.z, 0.7, { y1: it.y1, name: it.name, through: true, prop: it });
       else consider({ k: 'prop', idx: it.idx }, it.x, it.y0 + 0.1, it.z, it.half ? Math.min(0.9, it.half + 0.1) : 0.9, { y1: Math.max(it.y0 + 1.0, it.y1), name: it.name, prop: it });   // as wide as the thing really is
     }
     for (const b of G.built) {
       const bx = b.c * TILE + TILE / 2, bz = b.r * TILE + TILE / 2;
-      if (near(bx, bz)) consider({ k: 'built', id: b.id }, bx, 0.1, bz, 0.95, { y1: 1.7, name: girderLook(b.st).name });
+      if (!pl && near(bx, bz)) consider({ k: 'built', id: b.id }, bx, 0.1, bz, 0.95, { y1: 1.7, name: girderLook(b.st).name });
     }
     for (const m of rep.mobs.values()) {
-      if (m.id === rep.you?.id || m.g !== gid || !near(m.x, m.z)) continue;
-      consider({ k: 'mob', id: m.id }, m.x, 0.1, m.z, m.dead ? 0.8 : 0.7, { y1: m.dead ? 0.4 : 1.6, name: m.n, mob: m });
+      if (m.id === rep.you?.id || m.g !== gid || (m.l | 0) !== pl || !near(m.x, m.z)) continue;
+      consider({ k: 'mob', id: m.id }, m.x, yb + 0.1, m.z, m.dead ? 0.8 : 0.7, { y1: yb + (m.dead ? 0.4 : 1.6), name: m.n, mob: m });
     }
   }
 
@@ -659,27 +671,27 @@ export class Game {
    * within reach, in sight and not inside something solid.
    */
   floorPoint(o, d) {
-    const w = this.myGrid().world;
+    const w = this.myGrid().world, l = this.pred.l | 0, yb = l * DECK_H;
     if (d.y > -0.02) return null;
-    const tileH = (x, z) => { const c = Math.floor(x / TILE), r = Math.floor(z / TILE); return w.inb(c, r) ? w.tableH[w.idx(c, r)] : 0; };
+    const tileH = (x, z) => { const c = Math.floor(x / TILE), r = Math.floor(z / TILE); return w.inb(c, r, l) ? w.tableH[w.idx(c, r, l)] : 0; };
     let hit = null;
     // table tops first: step along the ray until it drops below table height over a table
-    const tFloor = -o.y / d.y;
+    const tFloor = -(o.y - yb) / d.y;
     for (let t = 0; t < tFloor; t += 0.1) {
-      const y = o.y + d.y * t;
+      const y = o.y + d.y * t - yb;
       const x = o.x + d.x * t, z = o.z + d.z * t;
       const th = tileH(x, z);
-      if (th > 0 && y <= th) { const tt = (th - o.y) / d.y; hit = { x: o.x + d.x * tt, y: th, z: o.z + d.z * tt }; break; }
+      if (th > 0 && y <= th) { const tt = (th + yb - o.y) / d.y; hit = { x: o.x + d.x * tt, y: th + yb, z: o.z + d.z * tt }; break; }
     }
-    if (!hit) hit = { x: o.x + d.x * tFloor, y: 0, z: o.z + d.z * tFloor };
+    if (!hit) hit = { x: o.x + d.x * tFloor, y: yb, z: o.z + d.z * tFloor };
     const hd = Math.hypot(hit.x - o.x, hit.z - o.z);
-    const wall = hd > 0.05 ? w.raycast(o.x, o.z, hit.x - o.x, hit.z - o.z, hd, 'shot') : hd;
+    const wall = hd > 0.05 ? w.raycast(o.x, o.z, hit.x - o.x, hit.z - o.z, hd, 'shot', l) : hd;
     if (wall < hd - 0.05) return { ...hit, ok: false, blocked: true };
     const c = Math.floor(hit.x / TILE), r = Math.floor(hit.z / TILE);
-    if (!w.inb(c, r)) return { ...hit, ok: false };
-    const i = w.idx(c, r), k = w.kind[i];
+    if (!w.inb(c, r, l)) return { ...hit, ok: false };
+    const i = w.idx(c, r, l), k = w.kind[i];
     const reach = Math.hypot(hit.x - this.pred.x, hit.z - this.pred.z);
-    const ok = reach <= DROP_REACH && (k === KIND.FLOOR || k === KIND.LATTICE) && (w.tableH[i] > 0 || !w.collides(hit.x, hit.z, 0.08));
+    const ok = reach <= DROP_REACH && (k === KIND.FLOOR || k === KIND.LATTICE) && (w.tableH[i] > 0 || !w.collides(hit.x, hit.z, 0.08, null, false, l));
     return { ...hit, ok, reach };
   }
 
@@ -819,14 +831,14 @@ export class Game {
     const ear = here.worldPoint(this.pred.x, 0, this.pred.z);                       // sounds come in the map's coordinates
     this.audio.listener.x = ear[0]; this.audio.listener.z = ear[2]; this.audio.listener.yaw = this.yaw + qTwistY(this.frameQ());
     const c = Math.floor(this.pred.x / TILE), r = Math.floor(this.pred.z / TILE);
-    const area = this.myGrid().world.areaAt(c, r);
+    const area = this.myGrid().world.areaAt(c, r, this.pred.l | 0);
     const vac = rep.env.p < 30;
     this.audio.setMuffle(this.phase === 'playing' ? (vac && !this.self?.suit ? 1 : vac ? 0.5 : 0) : 0);
     this.audio.update(dt, { cat: area ? area.c : 'space', vac, power: this.myGrid().power.state, hpFrac: (this.self?.hp?.[0] ?? 100) / (this.self?.hp?.[1] || 100), dead: !!this.self?.dead });
     this.footsteps(dt);
 
     if (this.phase === 'playing') {
-      this.view.viewOf(this.pred.g)?.lightField.sample(this.pred.x, this.pred.z, this.tmpC);
+      this.view.viewOf(this.pred.g)?.lightField.sample(this.pred.x, this.pred.z, this.tmpC, this.pred.l | 0);
       const lum = (this.tmpC[0] + this.tmpC[1] + this.tmpC[2]) / 3;
       this.bodyview.update(dt, { pitch: this.pitch, moving: this.moving, show: this.mode === 'look' && !this.panelOpen && !this.self?.inside, cam: this.camera.position, yaw: this.yaw, light: lum });
       this.hands.update(dt, { moving: this.moving, light: Math.max(lum * 1.4, torch ? 0.95 : 0), crouch: this.self?.crit ? 1 : 0 });
@@ -881,7 +893,7 @@ export class Game {
     if (this.phase === 'playing' && this.myGrid().kind === 'void') {                // floating: the scene is turned as you are, and you are at the middle of your body
       const s = qirot(this.pred.q, [px, this.pred.y + this.corr.y, pz]);
       cam.position.set(s[0] + Math.cos(this.yaw) * bobX, s[1] + (eye - CENTER_H) + bobY, s[2] - Math.sin(this.yaw) * bobX);
-    } else cam.position.set(px + Math.cos(this.yaw) * bobX, eye + bobY + this.lift + (this.inWorld() && this.phase !== 'playing' ? this.pred.y : 0), pz - Math.sin(this.yaw) * bobX);       // (a ghost flies about up and down too)
+    } else cam.position.set(px + Math.cos(this.yaw) * bobX, eye + bobY + this.lift + (this.phase === 'playing' ? this.eyeBase() : 0) + (this.inWorld() && this.phase !== 'playing' ? this.pred.y : 0), pz - Math.sin(this.yaw) * bobX);       // (a ghost flies about up and down too; on a deck above the first you are that much higher, and on a stair you climb the slope)
     cam.rotation.order = 'YXZ';
     cam.rotation.set(this.pitch, this.yaw, roll);
     if (this.shakeAmt > 0.001) {

@@ -14,7 +14,7 @@ export class Atmos {
   constructor(world, power) {
     this.power = power;
     this.world = world;
-    const n = world.W * world.H;
+    const n = world.n;
     this.o2 = new Float32Array(n);
     this.n2 = new Float32Array(n);
     this.tox = new Float32Array(n);
@@ -34,70 +34,77 @@ export class Atmos {
   /** (Re)derive which tiles hold gas, who neighbours whom, vents and leak points. */
   buildTopology(initial = false, fillNew = null) {
     const { world } = this;
-    const { W, H } = world;
-    const n = W * H;
+    const { W, H, levels } = world;
+    const WH = W * H, n = world.n;
     this.isCell.fill(0);
-    for (let i = 0; i < n; i++) if (world.kind[i] === KIND.FLOOR) this.isCell[i] = 1;
+    for (let i = 0; i < n; i++) {
+      const k = world.kind[i];
+      // a floor holds air; so does the open air over a floor on a deck above the first (a hole through to the deck below: one room, two decks high)
+      if (k === KIND.FLOOR || (i >= WH && k === KIND.SPACE && !world.covered[i] && this.isCell[i - WH])) this.isCell[i] = 1;
+    }
     const pairs = [], vents = [];
-    for (let r = 0; r < H; r++) {
-      for (let c = 0; c < W; c++) {
-        const i = r * W + c;
-        if (!this.isCell[i]) continue;
-        const indoor = world.roof[i] === 1;
-        if (initial && indoor) { this.o2[i] = STD_O2; this.n2[i] = STD_N2; }
-        if (fillNew && fillNew.has(i)) { this.o2[i] = STD_O2; this.n2[i] = STD_N2; this.tox[i] = 0; }
-        if (c + 1 < W && this.isCell[i + 1]) pairs.push(i, i + 1, E);
-        if (r + 1 < H && this.isCell[i + W]) pairs.push(i, i + W, S);
-        if (indoor && (c & 3) === 1 && (r & 3) === 1 && !world.breached.has(i)) vents.push(i);
+    for (let l = 0; l < levels; l++) {
+      for (let r = 0; r < H; r++) {
+        for (let c = 0; c < W; c++) {
+          const i = l * WH + r * W + c;
+          if (!this.isCell[i]) continue;
+          const indoor = world.roof[i] === 1;
+          if (initial && indoor) { this.o2[i] = STD_O2; this.n2[i] = STD_N2; }
+          if (fillNew && fillNew.has(i)) { this.o2[i] = STD_O2; this.n2[i] = STD_N2; this.tox[i] = 0; }
+          if (c + 1 < W && this.isCell[i + 1]) pairs.push(i, i + 1, E);
+          if (r + 1 < H && this.isCell[i + W]) pairs.push(i, i + W, S);
+          if (l + 1 < levels && this.isCell[i + WH] && world.kind[i + WH] === KIND.SPACE) pairs.push(i, i + WH, 0);      // up through the open air above it
+          if (indoor && (c & 3) === 1 && (r & 3) === 1 && !world.breached.has(i)) vents.push(i);
+        }
       }
     }
     this.pairs = Int32Array.from(pairs);
     this.vents = Int32Array.from(vents);
     this.sinkCells.clear();
-    for (let i = 0; i < n; i++) if (this.isCell[i]) this.scanSinks(i % W, Math.floor(i / W));
+    for (let i = 0; i < n; i++) if (this.isCell[i]) { const l = Math.floor(i / WH), rem = i - l * WH; this.scanSinks(rem % W, Math.floor(rem / W), l); }
   }
 
-  /** A cell touching a space tile (breach, open exterior airlock) leaks into it. */
-  scanSinks(c, r) {
+  /** A cell touching a space tile (breach, open exterior airlock) leaks into it. (On a deck above the first, open air that holds air is part of the room, not space.) */
+  scanSinks(c, r, l = 0) {
     const { world } = this;
-    const i = world.idx(c, r);
+    const i = world.idx(c, r, l);
     for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nc = c + dc, nr = r + dr;
-      if (!world.inb(nc, nr)) continue;
-      const j = world.idx(nc, nr);
+      if (!world.inb(nc, nr, l)) continue;
+      const j = world.idx(nc, nr, l);
       const k = world.kind[j];
-      if (world.isOpenSpace(nc, nr) || k === KIND.LATTICE || (world.breached.has(j) && world.ventsToSpace(j))) { this.sinkCells.add(i); return; }
+      if ((world.isOpenSpace(nc, nr, l) && !this.isCell[j]) || k === KIND.LATTICE || (world.breached.has(j) && world.ventsToSpace(j))) { this.sinkCells.add(i); return; }
     }
   }
 
   // (off the edge of the array, and in the void, there is no air at all)
-  pressureAt(c, r) {
-    if (!this.world.inb(c, r)) return 0;
-    const i = r * this.world.W + c;
+  pressureAt(c, r, l = 0) {
+    if (!this.world.inb(c, r, l)) return 0;
+    const i = this.world.idx(c, r, l);
     return this.o2[i] + this.n2[i] + this.tox[i];
   }
-  o2At(c, r) { return this.world.inb(c, r) ? this.o2[r * this.world.W + c] : 0; }
-  toxAt(c, r) { return this.world.inb(c, r) ? this.tox[r * this.world.W + c] : 0; }
-  pressureWorld(x, z) { return this.pressureAt(Math.floor(x / TILE), Math.floor(z / TILE)); }
+  o2At(c, r, l = 0) { return this.world.inb(c, r, l) ? this.o2[this.world.idx(c, r, l)] : 0; }
+  toxAt(c, r, l = 0) { return this.world.inb(c, r, l) ? this.tox[this.world.idx(c, r, l)] : 0; }
+  pressureWorld(x, z, l = 0) { return this.pressureAt(Math.floor(x / TILE), Math.floor(z / TILE), l); }
 
   /** A window was smashed or a breach welded shut: tile (c, r) joins or leaves the gas grid. */
-  tileChanged(c, r) {
-    const i = r * this.world.W + c;
+  tileChanged(c, r, l = 0) {
+    const i = this.world.idx(c, r, l);
     this.o2[i] = this.n2[i] = this.tox[i] = 0;
     this.buildTopology(false);
   }
 
-  /** Pressure-driven push (m/s) felt at a world position. */
-  windAt(x, z) {
+  /** Pressure-driven push (m/s) felt at a world position on deck `l`. */
+  windAt(x, z, l = 0) {
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
     const { world } = this;
-    if (!world.inb(c, r)) return null;
+    if (!world.inb(c, r, l)) return null;
     const p = (cc, rr) => {
-      if (!world.inb(cc, rr)) return this.pressureAt(c, r);
-      const i = world.idx(cc, rr);
+      if (!world.inb(cc, rr, l)) return this.pressureAt(c, r, l);
+      const i = world.idx(cc, rr, l);
       const k = world.kind[i];
-      if (world.isOpenSpace(cc, rr) || k === KIND.LATTICE) return world.airBlock[i] ? this.pressureAt(c, r) : 0;
-      if (!this.isCell[i] || world.airBlock[i]) return this.pressureAt(c, r);
+      if (world.isOpenSpace(cc, rr, l) || k === KIND.LATTICE) return world.airBlock[i] ? this.pressureAt(c, r, l) : 0;
+      if (!this.isCell[i] || world.airBlock[i]) return this.pressureAt(c, r, l);
       return this.o2[i] + this.n2[i] + this.tox[i];
     };
     const gx = p(c + 1, r) - p(c - 1, r), gz = p(c, r + 1) - p(c, r - 1);
@@ -107,9 +114,9 @@ export class Atmos {
     return [-gx / mag * sp, -gz / mag * sp];
   }
 
-  addGas(c, r, o2, n2, tox) {
-    if (!this.world.inb(c, r)) return;
-    const i = r * this.world.W + c;
+  addGas(c, r, o2, n2, tox, l = 0) {
+    if (!this.world.inb(c, r, l)) return;
+    const i = this.world.idx(c, r, l);
     if (!this.isCell[i]) return;
     this.o2[i] += o2; this.n2[i] += n2; this.tox[i] += tox;
   }
@@ -169,7 +176,7 @@ export class Atmos {
   computeAreaStats() {
     const { world } = this;
     const sum = new Map(), cnt = new Map();
-    for (let i = 0; i < world.W * world.H; i += 3) {
+    for (let i = 0; i < world.n; i += 3) {
       if (!this.isCell[i]) continue;
       const a = world.areaIdx[i];
       sum.set(a, (sum.get(a) || 0) + this.o2[i] + this.n2[i] + this.tox[i]);
