@@ -90,6 +90,8 @@ are not part of the build; to update them, copy them and `license.txt` from a tg
 ## Libraries
 
 * [three.js](https://threejs.org/) r170, MIT license (`vendor/three.module.js`, license in `vendor/LICENSE-three.txt`)
+* [Rapier](https://rapier.rs/) 0.21.0 (`@dimforge/rapier3d-compat`, the WebAssembly build with the binary inlined), Apache-2.0 license
+  (`vendor/rapier3d-compat.mjs`, license in `vendor/LICENSE-rapier.txt`); it moves the grids (ships, shuttles, the station)
 * [ws](https://github.com/websockets/ws), MIT license (server only, installed from npm)
 
 ## The game code
