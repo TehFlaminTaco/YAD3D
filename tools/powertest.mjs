@@ -176,7 +176,7 @@ section('solar panels, and the PACMAN', () => {
 
 section('a station on its SMES alone', () => {
   const { ps, M, step, main } = round();
-  ps.engine.running = false;
+  ok(!ps.engine.running, 'the engine is not running at the start of the round');
   for (const c of M.solarControl) { c.track = 0; c.azimuth = 0; }
   for (let t = 0; t < 1800; t += 2) ps.tick(true);                    // half an hour
   ok(ps.status() === 'normal', 'half an hour after the engine stops, the station is still lit');
@@ -185,9 +185,9 @@ section('a station on its SMES alone', () => {
   ok(ps.status() !== 'normal', `with the SMES empty too the rooms start to go dark (${M.apc.filter((a) => a.chan[1] <= 1).length} of ${M.apc.length} APCs have no lights)`);
   for (let t = 0; t < 12000; t += 2) ps.tick(true);
   ok(ps.status() === 'out', `and in the end they all do (${M.apc.filter((a) => a.chan[1] <= 1).length} of ${M.apc.length})`);
-  ps.engine.running = true;
-  for (let t = 0; t < 600; t += 2) ps.tick(true);
-  ok(ps.status() !== 'out' && main().viewavail > 0, 'the engine brings it back');
+  ps.engine.set(true);                                                // (the debug menu's engine: tanks in the collectors, everything on)
+  for (let t = 0; t < 600; t += 2) { ps.sim.time += 2; ps.tick(true); }
+  ok(ps.engine.running && ps.status() !== 'out' && main().viewavail > 0, 'the engine brings it back');
   void step;
 });
 

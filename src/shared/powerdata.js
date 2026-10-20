@@ -54,8 +54,6 @@ export const USE = [
   ['machinery/gravity_generator', CH.ENVIRON, 3000],     // gravitygenerator.dm:114
 ];
 
-/** The engine (until it is built properly) makes this much between its six collectors, while it is running. */
-export const ENGINE_WATTS = 240000;
 
 /** The sun: it goes round `base_rotation` degrees a minute, between half as fast and twice as fast, either way (sun.dm). */
 export const SUN_STEP_DEG = 6;

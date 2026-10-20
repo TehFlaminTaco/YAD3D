@@ -29,7 +29,8 @@ import { Sun } from './power/powersim.js';
 import { Lights } from './lights.js';
 import { Tanks } from './tanks.js';
 import { AI } from './ai.js';
-import { attach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, allItems } from './inventory.js';
+import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, allItems } from './inventory.js';
+import { Dispensers } from './dispensers.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -114,6 +115,7 @@ export class Sim {
     this.floors = new Floors(this);
     this.lights = new Lights(this);
     this.tanks = new Tanks(this);
+    this.dispensers = new Dispensers(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 
@@ -435,7 +437,8 @@ export class Sim {
       pw: g.powersim.state(),
       lights: g.props.lights.filter((L) => L.status).map((L) => [L.idx, L.status]),                 // the fixtures that are not whole
       gone: g.props.interact.filter((it) => it.gone && it.kind !== 'closet').map((it) => it.idx),    // things that were blown up
-      pv: g.powersim.machines.apc.filter((a) => a.v !== 0).map((a) => [a.rec.idx, a.v]),            // APCs that do not look closed and whole
+      pv: Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]),      // machines that show another picture (an APC open, an emitter running)
+      pa: [...g.anchorLog],                                                                        // props bolted down or freed
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
       gravity: g.world.gravityOn, built: [...g.built].map((b) => [b.id, b.k, b.c, b.r, b.st]),
@@ -639,6 +642,22 @@ export class Sim {
     }
     if (m.client) this.round.onPlayerDeath(m.client, cause);
     this.director.onMobDeath(m);
+  }
+
+  /**
+   * Turned to dust (the supermatter): dead, and nothing of them left: not the body, not what they carried. A player becomes a ghost as for any death. People who are
+   * invulnerable (the debug menu's god mode) are not touched.
+   */
+  dust(m, cause = 'dust') {
+    if (!m || m.body.god) return false;
+    if (!m.dead) m.body.damage('brute', 9999, cause);
+    for (const it of allItems(m)) { detach(this, it); this.items.delete(it.id); }
+    this.people.release(m);
+    if (m.pulledBy) this.people.release(m.pulledBy);
+    if (m.inside) m.inside.mobs.splice(m.inside.mobs.indexOf(m), 1);
+    for (const o of this.clients.values()) if (o.strip === m.id) this.people.closeStrip(o);
+    this.mobs.delete(m.id);
+    return true;
   }
 
   hurt(m, amount, type = 'brute', src) {

@@ -326,10 +326,12 @@ export class Debug {
         for (const s of M.smes) s.charge = 0;
         this.say(c, 'Every cell and SMES is empty.');
         break;
-      case 'engine':
-        ps.engine.running = !ps.engine.running;
-        this.say(c, `The engine is ${ps.engine.running ? 'running' : 'stopped'}.`);
+      case 'engine': {                                  // on: a plasma tank in every collector and everything switched on, the crystal warm; off: everything off
+        const on = !ps.engine.running;
+        ps.engine.set(on);
+        this.say(c, `The engine is ${on ? 'running' : 'stopped'}.`);
         break;
+      }
       case 'fail':
         for (const a of M.apc) a.energyFail(15);
         this.say(c, 'Every APC fails for half a minute.');
@@ -514,8 +516,8 @@ export class Debug {
     let n = 0;
     for (const i of [...w.breached]) { sim.patchBreach(g, i % w.W, Math.floor(i / w.W)); n++; }
     const ps = g.powersim;
-    ps.engine.running = true;
-    for (const a of ps.machines.apc) { if (a.cell) a.cell.charge = a.cell.max; a.operating = true; a.failureTimer = 0; a.broken = false; a.shorted = false; }
+    if (!ps.engine.running) ps.engine.set(true);
+    for (const a of ps.machines.apc) a.restore();
     for (const s of ps.machines.smes) s.charge = s.capacity;
     for (let a = 0; a < w.areas.length; a++) ps.setSwitch(a, true);
     this.say(c, `Hull sealed (${n} breaches), power restored.`);

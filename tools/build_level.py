@@ -362,6 +362,8 @@ GAME_ITEMS = [
     # an APC taken apart and put together again (apc.dm): the frame it hangs on, the board in it, the cells it holds
     '/obj/item/wallframe/apc', '/obj/item/electronics/apc', '/obj/item/stock_parts/cell/upgraded', '/obj/item/stock_parts/cell/upgraded/plus',
     '/obj/item/stock_parts/cell/high/plus', '/obj/item/stock_parts/cell/crap',
+    # the engine's fuel (tank_dispenser.dm, collector.dm)
+    '/obj/item/tank/internals/plasma', '/obj/item/tank/internals/oxygen',
     '/obj/item/clothing/under/color/grey', '/obj/item/clothing/shoes/sneakers/black', '/obj/item/storage/backpack',
     # what windows and grilles drop and are rebuilt from (window.dm spawnDebris, grille.dm deconstruct)
     '/obj/item/stack/rods', '/obj/item/stack/sheet/rglass', '/obj/item/stack/sheet/plasmaglass', '/obj/item/stack/sheet/plasmarglass', '/obj/item/shard',
@@ -902,8 +904,14 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                     if all(f >= 0 for f in fr) and len(set(fr)) > 1:
                         rec['fr'] = fr
                         stats['directional'] += 1
-                if r.get('anchored') in (True, 1):
-                    rec['anc'] = 1
+                if r.get('anchored') in (True, 1) or p.startswith('/obj/machinery/power/emitter/welded'):
+                    rec['anc'] = 1                                          # (a welded emitter starts anchored: emitter.dm Initialize)
+                if p.startswith('/obj/machinery/power/emitter'):
+                    # off, lit and firing, lit and short of power (emitter.dm update_icon_state): the pictures `sv`, each from the four sides
+                    rec['sv'] = [[spr.add(dir_set([(icon, es, d, None, None)], dd)) for dd in (S, N, E, W)] for es in ('emitter', 'emitter_+a', 'emitter_+u')]
+                elif p.startswith('/obj/machinery/power/rad_collector'):
+                    # empty / with a plasma tank / running / running with a tank (collector.dm update_overlays: ca or ca_on, ptank, on)
+                    rec['sv'] = [spr.add([(icon, cs_, S, None, None) for cs_ in combo]) for combo in (('ca',), ('ca', 'ptank'), ('ca_on', 'on'), ('ca_on', 'ptank', 'on'))]
                 if isinstance(r.get('drag_slowdown'), (int, float)) and r['drag_slowdown'] > 0:
                     rec['ds'] = r['drag_slowdown']
                 if p.startswith('/obj/machinery/power/smes'):                 # what the map says of a storage unit's charge and capacity (the rest is in its parts)

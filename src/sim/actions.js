@@ -291,6 +291,7 @@ export class Actions {
     if (it.mach && it.mach.click(c, m, held, alt)) return;                        // a machine with its own rules (the power machines: src/sim/power/)
     if (it.gone) return;
     if (sim.tanks.click(m, it, held)) return;                                     // a fuel or water tank: refill from it
+    if (/^\/?structure\/tank_dispenser/.test(it.path || '')) return sim.dispensers.click(c, m, it, held);
     if (it.kind === 'container') return this.openContainer(m, it);
     if (it.kind === 'wm') {
       switch (it.sub) {

@@ -463,7 +463,13 @@ export class GridView {
     const v = it.pv ?? 0;
     if (v < 0) { it.gone = true; this.stat.setAlpha(it.st.id, 0); return; }
     it.gone = false;
-    const rc = this.rects[it.sv[v]], rc0 = this.rects[it.sv[0]], b = it.base;
+    if (it.st.views) { it.st.views = it.sv[v]; it.st.vi = -1; return; }                                         // (a thing with four sides: its four pictures are swapped, the next frame picks one)
+    const rc = this.rects[it.sv[v]];
+    if (rc && !it.base) {                                                                                       // a standing thing with one picture a state (a collector)
+      this.stat.setRect(it.st.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, 0);
+      return;
+    }
+    const rc0 = this.rects[it.sv[0]], b = it.base;
     if (!rc || !rc0 || !b) return;
     this.stat.setAlpha(it.st.id, 1);
     const S = b.S, wpx = rc.w * PX * S, hpx = rc.h * PX * S;

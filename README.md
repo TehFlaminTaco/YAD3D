@@ -20,7 +20,7 @@ It plays like a round of SS13: lobby, job slots, a crew of other people, things 
 * **SS13 chat.** `T` to speak, `;` for the common radio, `:e` `:m` `:s` `:n` `:u` `:v` `:c` for department channels (needs a
   headset), `:h` for your own department, `Y` whisper, `M` emote, `O` OOC. Speech has a range and needs line of sight; what
   people say also floats over their heads for a few seconds. The dead talk to the dead.
-* **Systems.** Atmospherics with real partial pressures and decompression, a real power grid (the map's 2,800 cables, 119 APCs, SMES, solar fields and engine; cut a cable and a room goes dark; light tubes and bulbs break and are replaced, welders burn fuel and refill from tanks, a T-ray scanner shows the cables under the floor; APCs can be wrecked, taken apart and put up again), fire
+* **Systems.** Atmospherics with real partial pressures and decompression, a real power grid (the map's 2,800 cables, 119 APCs, SMES, solar fields and engine; cut a cable and a room goes dark; light tubes and bulbs break and are replaced, welders burn fuel and refill from tanks, a T-ray scanner shows the cables under the floor; APCs can be wrecked, taken apart and put up again; the supermatter engine is started by hand: plasma tanks, collectors, emitters), fire
   alarms and firelocks, access-controlled airlocks (crowbars work on dead ones), meteors that blow holes in the hull, space carp,
   characters you design (body, skin, hair, facial hair, eyes, underwear; saved in your browser) that everyone sees, with the
   clothes they really wear, a hairdresser's mirror, and your own body when you look down,
@@ -217,9 +217,10 @@ npm run test:sim      # 480 assertions on the headless simulation (spawn and out
                       #   grilles, door angles and wall mounts, chat, consoles,
                       #   drag and drop, death and ghosts)
 npm run test:level    # level mesh geometry and the character art data (no browser)
-npm run test:power    # the power grid: cables, networks, APCs, SMES, solar, PACMAN, consoles, cutting and laying cable (77 assertions)
+npm run test:power    # the power grid: cables, networks, APCs, SMES, solar, PACMAN, consoles, cutting and laying cable (78 assertions)
 npm run test:upkeep   # engineering upkeep: light fixtures, welder fuel and tanks, the T-ray scanner (42 assertions)
 npm run test:apc      # an APC taken apart and put together: cover, board, cell, wiring, frame (70 assertions)
+npm run test:engine   # the supermatter engine: emitters, reflectors, the crystal, collectors, tank dispensers (78 assertions)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, the inventory HUD, bags,

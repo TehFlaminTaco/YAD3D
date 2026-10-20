@@ -1,4 +1,4 @@
-import { CELLRATE, CHARGELEVEL, SMESRATE, SOLAR_GEN_RATE, CELLS, ENGINE_WATTS, APC_STATES } from '../../shared/powerdata.js';
+import { CELLRATE, CHARGELEVEL, SMESRATE, SOLAR_GEN_RATE, CELLS, APC_STATES } from '../../shared/powerdata.js';
 import { CH } from '../../shared/power.js';
 import { place } from '../inventory.js';
 import { consume } from '../inventory.js';
@@ -14,18 +14,32 @@ export function displayPower(w) {
 /** And an energy in cell units (DisplayEnergy: a unit is a kilojoule). */
 export function displayEnergy(u) { return displayPower(u * 1000).replace(' W', ' J').replace(' kW', ' kJ').replace(' MW', ' MJ').replace(' GW', ' GJ'); }
 
-/** A machine on the grid: it sits on a tile, and its network is the one the cable on that tile belongs to. */
-class Machine {
+/**
+ * A machine on the grid: it sits on a tile, and its network is the one the cable on that tile belongs to. One with several pictures (an APC with its cover open, a running
+ * emitter) says which in `variant()`, and `touch()` tells everyone when that changed (the `pv` event: the prop record's `sv` lists the pictures).
+ */
+export class Machine {
   constructor(ps, tile, rec) {
     this.ps = ps; this.tile = tile; this.rec = rec;
     this.c = rec.c; this.r = rec.r;
     this.broken = false;
+    this.rev = 0;                                         // counts changes, so a timed job notices the machine was worked on meanwhile
+    this.v = 0;                                           // which picture it shows
   }
 
   get net() { return this.ps.cables.net(this.tile); }
   get area() { return this.ps.world.areaIdx[this.tile]; }
   process() {}
   click() { return false; }
+  variant() { return 0; }
+
+  touch() {
+    this.rev++;
+    const v = this.variant();
+    if (v === this.v) return;
+    this.v = v;
+    this.ps.grid.emit({ e: 'pv', i: this.rec.idx, v });
+  }
 }
 
 /** The underfloor connector an SMES takes its power in through (terminal.dm): only a place on the map. */
@@ -44,14 +58,14 @@ export class Apc extends Machine {
     this.areaIdx = areaIdx;
     this.name = rec.n || 'APC';
     const max = CELLS[cellType] || CELLS.upgraded;
-    this.cell = { charge: max * 0.9, max, path: `/obj/item/stock_parts/cell/${CELLS[cellType] ? cellType : 'upgraded'}` };               // start_charge 90 (apc.dm:67)
+    this.cellType = CELLS[cellType] ? cellType : 'upgraded';
+    this.cell = { charge: max * 0.9, max, path: `/obj/item/stock_parts/cell/${this.cellType}` };               // start_charge 90 (apc.dm:67)
     this.frame = true;                                    // it hangs on the wall (cut away with a welder, put back with an APC frame)
     this.opened = 0;                                      // the cover: 0 closed, 1 open, 2 gone (APC_COVER_*)
     this.coverlocked = true;
     this.panelOpen = false;                               // the wires exposed (a screwdriver on the closed cover)
     this.electronics = 2;                                 // the board: 0 missing, 1 installed, 2 secured (APC_ELECTRONICS_*)
     this.terminal = true;                                 // wired to its terminal: without one it has no line (main 0)
-    this.rev = 0;                                         // counts changes, so a timed job notices the APC was worked on meanwhile
     this.v = 0;                                           // which picture it shows (index into APC_STATES, -1 for no frame)
     this.operating = true;
     this.chan = [3, 3, 3];                               // equipment, lighting, environment
@@ -85,15 +99,6 @@ export class Apc extends Machine {
     return APC_STATES.indexOf(s);
   }
 
-  /** Something about it changed: tell everyone if its picture did. */
-  touch() {
-    this.rev++;
-    const v = this.variant();
-    if (v === this.v) return;
-    this.v = v;
-    this.ps.grid.emit({ e: 'pv', i: this.rec.idx, v });
-  }
-
   /** apc.dm set_broken: the breaker falls open, the frame is wrecked, and its room goes dark. */
   setBroken() {
     if (this.broken || !this.frame) return false;
@@ -108,6 +113,15 @@ export class Apc extends Machine {
   /** apc.dm Destroy: the frame is cut from the wall; its cell goes with it and its room is left with no power from it. */
   takeOffWall() {
     this.frame = false; this.operating = false; this.cell = null; this.charging = 0; this.opened = 1;
+    this.publish(true);
+    this.touch();
+  }
+
+  /** Whole again, as the map had it, with a full cell and the breaker on (the debug menu's repair). */
+  restore() {
+    this.frame = true; this.opened = 0; this.coverlocked = true; this.panelOpen = false; this.electronics = 2; this.terminal = true;
+    this.broken = false; this.shorted = false; this.operating = true; this.failureTimer = 0; this.chan = [3, 3, 3];
+    this.cell = { charge: CELLS[this.cellType], max: CELLS[this.cellType], path: `/obj/item/stock_parts/cell/${this.cellType}` };
     this.publish(true);
     this.touch();
   }
@@ -378,15 +392,6 @@ export class Pacman extends Machine {
     }
     sim.terminals.open(c, 'pacman', { machine: this, grid: this.ps.grid });
     return true;
-  }
-}
-
-/** A radiation collector (collector.dm) is where the engine's power gets onto the cable. Until the engine is built properly it makes its sixth of the engine's output while the engine runs. */
-export class Collector extends Machine {
-  process() {
-    const net = this.net, e = this.ps.engine;
-    if (!net || !e.running || this.broken) return;
-    net.addAvail(ENGINE_WATTS / Math.max(1, this.ps.machines.collector.length));
   }
 }
 

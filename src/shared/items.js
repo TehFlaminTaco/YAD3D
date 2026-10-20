@@ -41,6 +41,7 @@ export const BEHAVIORS = [
   ['/obj/item/healthanalyzer', { scanner: true }],
   ['/obj/item/tank/jetpack', { jetpack: { cap: 900 } }],             // propellant, not air: a carbon dioxide jetpack is not for breathing
   ['/obj/item/clothing/shoes/magboots', { magboots: true }],
+  ['/obj/item/tank/internals/plasma', { plasmaTank: { moles: 8.73 } }],        // (3 atmospheres in 70 litres: tank/internals/plasma, not for breathing)
   ['/obj/item/tank/internals/emergency_oxygen', { tank: { cap: 300 } }],
   ['/obj/item/tank/internals', { tank: { cap: 1500 } }],
   ['/obj/item/clothing/mask/breath', { internals: true }],
@@ -116,6 +117,7 @@ export function makeItemData(db, path, extra = {}) {
   if (def.jetpack) it.gas = def.jetpack.cap;
   if (def.tool === 'welder') { it.fuel = def.fuel; it.lit = false; }
   if (def.charges) it.charges = def.charges;
+  if (def.plasmaTank) it.plasma = def.plasmaTank.moles;
   if (def.stack) it.amount = extra.amount ?? def.stack;
   if (def.storage) it.contents = [];
   return it;
@@ -128,6 +130,7 @@ export function describeState(it) {
   if (d.jetpack) return `${Math.round(it.gas / d.jetpack.cap * 100)}% gas`;
   if (d.tool === 'welder') return `fuel ${Math.ceil(it.fuel)}${it.lit ? ', lit' : ''}`;
   if (d.tray) return it.on ? 'on' : 'off';
+  if (d.plasmaTank) return `${Math.round(it.plasma / d.plasmaTank.moles * 100)}% plasma`;
   if (d.charges) return `${it.charges} charges`;
   if (it.amount !== undefined && d.stack > 1) return `x${it.amount}`;
   if (d.storage) return `${it.contents.length} item${it.contents.length === 1 ? '' : 's'}`;

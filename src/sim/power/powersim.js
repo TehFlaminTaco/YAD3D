@@ -2,7 +2,8 @@ import { TICK, LIGHT_WATTS, USE, norm, SUN_STEP_DEG, SUN_PERIOD } from '../../sh
 import { CH } from '../../shared/power.js';
 import { KIND } from '../../shared/config.js';
 import { Cables } from './powernet.js';
-import { Apc, Smes, Solar, Tracker, SolarControl, Pacman, Collector, Terminal } from './machines.js';
+import { Apc, Smes, Solar, Tracker, SolarControl, Pacman, Terminal } from './machines.js';
+import { EngineSim, Emitter, Collector, Supermatter } from './engine.js';
 
 const CELL_OF = { 'five_k': 'upgraded/plus', 'ten_k': 'high', 'fifteen_k': 'high/plus' };
 
@@ -35,8 +36,8 @@ export class PowerSim {
     this.power = grid.power;
     this.cables = new Cables(this.world);
     this.acc = 0;
-    this.engine = { running: true };                       // the engine, until it is built properly: its collectors make the power while it runs
-    this.machines = { apc: [], smes: [], solar: [], tracker: [], solarControl: [], pacman: [], collector: [], terminal: [] };
+    this.engine = new EngineSim(this);                     // the supermatter engine: emitters, its reflectors, the crystal, the collectors (engine.js)
+    this.machines = { apc: [], smes: [], solar: [], tracker: [], solarControl: [], pacman: [], collector: [], terminal: [], emitter: [], supermatter: [] };
     this.base = new Float32Array(this.world.areas.length * 3);        // what each room draws on each channel when all of it is on
     this.changed = new Set();
     if (grid.kind === 'station') this.build();
@@ -63,6 +64,8 @@ export class PowerSim {
         add('smes', new Smes(this, i, it, { capacity, charge }), it);
       } else if (path.startsWith('machinery/power/port_gen/pacman')) add('pacman', new Pacman(this, i, it), it);
       else if (path.startsWith('machinery/power/rad_collector')) add('collector', new Collector(this, i, it), it);
+      else if (path.startsWith('machinery/power/emitter')) add('emitter', new Emitter(this, i, it), it);
+      else if (path.startsWith('machinery/power/supermatter_crystal')) add('supermatter', new Supermatter(this, i, it), it);
       else if (path === 'machinery/power/solar_control') add('solarControl', new SolarControl(this, i, it), it);
     }
     // an SMES finds its terminal on a tile beside it that faces it (smes.dm Initialize); with none it is broken
@@ -147,6 +150,8 @@ export class PowerSim {
     for (const c of M.solarControl) { c.update(TICK); c.lastGen = c.gen; c.gen = 0; }
     for (const s of M.solar) s.process();
     for (const g of M.pacman) g.process();
+    for (const e of M.emitter) e.process();
+    for (const s of M.supermatter) s.process();
     for (const c of M.collector) c.process();
     for (const a of M.apc) a.process();
     for (const s of M.smes) s.process();

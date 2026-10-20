@@ -285,3 +285,10 @@ export function serializeInv(mob) {
     intent: mob.intent, throwMode: mob.throwMode, internals: mob.internals, light: mob.lightOn, open: [...mob.openContainers],
   };
 }
+
+/** put_in_hands: the free hand (the active one first), else onto the floor at your feet. */
+export function putInHands(sim, mob, item) {
+  const free = mob.hands[mob.active] ? (mob.hands[1 - mob.active] ? -1 : 1 - mob.active) : mob.active;
+  if (free >= 0) attach(sim, item, { t: 'hand', mob, i: free });
+  else place(sim, item, mob.grid, mob.x, mob.z, undefined, mob.l | 0);
+}

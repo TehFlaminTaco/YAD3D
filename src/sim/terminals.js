@@ -4,7 +4,7 @@ import { displayPower, displayEnergy, CHANNELS } from './power/machines.js';
 
 const NOTICES = [
   { t: 'NANOTRASEN STANDARD OPERATING PROCEDURE: HULL BREACH', b: 'In the event of a hull breach:\n\n  1. Do not panic.\n  2. Get to the nearest airtight door and close it behind you.\n  3. Put on a breath mask and connect an air tank.\n  4. Inform Engineering. A sheet of metal and a welding tool will patch most holes.\n\nNanotrasen accepts no liability for losses due to decompression.' },
-  { t: 'NANOTRASEN STANDARD OPERATING PROCEDURE: POWER FAILURE', b: 'If the main grid fails, the APC emergency cells will keep essential systems running for a few minutes.\n\nEngineering restarts the engine from any Power Monitor:\n  1. Purge the coolant loop\n  2. Reset the containment field\n  3. Engage the emitters\n\nDoing these out of order will scram the engine and lock the console for several seconds.' },
+  { t: 'NANOTRASEN STANDARD OPERATING PROCEDURE: POWER FAILURE', b: 'If the main grid fails, the APC emergency cells will keep essential systems running for a few minutes.\n\nTo restart the engine:\n  1. Fetch a plasma tank for every radiation collector from a tank dispenser\n  2. Put one in each collector and switch it on\n  3. Switch on the emitters (they need power from the grid: a PACMAN or the SMES will do)\n\nThe crystal will do the rest. Do not touch it.' },
   { t: 'NOTICE TO ALL STAFF: SPACE CARP', b: 'Space carp are a known hazard in this sector.\n\nSpace carp cannot open doors.\n\nDo not feed the space carp.' },
   { t: 'A REMINDER FROM HUMAN RESOURCES', b: 'Assaulting your coworkers is a violation of Space Law and of your employment contract.\n\nThe bar is open to staff who feel the need to unwind.' },
 ];
@@ -80,6 +80,7 @@ export class Terminals {
       case 'smes': return this.smes(c, t, bar);
       case 'solar': return this.solar(c, t);
       case 'pacman': return this.pacman(c, t);
+      case 'dispenser': return this.sim.dispensers.console(c, t);
       case 'airalarm': return this.airalarm(c, g, area, bar);
       case 'crew': return this.crew();
       case 'atmos': return this.atmosMap(g);

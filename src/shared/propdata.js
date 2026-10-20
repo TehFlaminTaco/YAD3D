@@ -134,7 +134,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const st = sprite({ tag: 'sprite', rect: p.s, mode: p.bb ? 0 : 1, x: cx, y, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz, l], ...(p.fr ? { views: p.fr, face: p.d } : {}) });
         // what is bolted down fills its tile; what is loose is a box of its own size that can be dragged about
         const loose = !!p.den && !p.anc;
-        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, l, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0, sc: p.sc, sk: p.sk };
+        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, l, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0, sc: p.sc, sk: p.sk, sv: p.sv, bh: p.den ? blockHalf(w) : 0 };
         if (loose) world.boxAdd(it); else if (p.den) world.solid[i] = 1;
         out.interact.push(it); out.added.interact.push(it);
         break;
@@ -204,6 +204,15 @@ export function buildPropData(world, rects, props, level, prev = null) {
   for (const d of out.added.doors) d.yaw = doorYaw(world, d.x, d.y, doorTiles, d.l | 0);
   for (const f of out.added.fdoors) f.yaw = doorYaw(world, f.x, f.y, doorTiles, f.l | 0);
   return out;
+}
+
+/** A thing that was loose is bolted down (or loose again): it fills its tile or is a box of its own, and it can or cannot be dragged. The server decides, both sides run this. */
+export function setPropAnchored(world, it, on) {
+  if (!!it.anc === !!on) return;
+  const i = world.idx(it.c, it.r, it.l | 0);
+  it.anc = !!on;
+  if (on) { it.dense = false; world.boxDrop(it); world.solid[i] = 1; it.half = 0; }
+  else { world.solid[i] = 0; it.dense = true; it.half = it.bh; world.boxAdd(it); }
 }
 
 /** A loose structure (a locker, a tank) is at (x, z), turned to `d`. The server moves it and tells everyone; both sides run this. */
