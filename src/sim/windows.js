@@ -24,31 +24,31 @@ export class Windows {
 
   // ------------------------------------------------------------------ what a click means
   /** The window behind a target record, with accessors that hide the tile / pane difference; null if it is gone. */
-  thing(t) {
-    const sim = this.sim, w = sim.world;
+  thing(g, t) {
+    const sim = this.sim, w = g.world;
     if (t.k === 'window') {
-      const i = t.r * w.W + t.c;
+      const i = w.idx(t.c, t.r);
       if (!w.glass[i]) return null;
       const info = WINDOWS[w.windowKey(i)] || WINDOWS.window;
       return {
-        k: 'window', c: t.c, r: t.r, i, info, name: info.name, amount: GLASS_PER_WINDOW, x: t.c * TILE + 1, z: t.r * TILE + 1, reach: 4.8,
+        k: 'window', grid: g, c: t.c, r: t.r, i, info, name: info.name, amount: GLASS_PER_WINDOW, x: t.c * TILE + 1, z: t.r * TILE + 1, reach: 4.8,
         alive: () => !!w.glass[i], ws: () => w.ws[i], hp: () => w.hp.get(i) ?? info.hp, maxHp: info.hp,
-        setState: (st, anchored) => { w.setWindowState(i, st, anchored); sim.tileChanged(t.c, t.r); },
+        setState: (st, anchored) => { w.setWindowState(i, st, anchored); sim.tileChanged(g, t.c, t.r); },
         heal: () => w.hp.set(i, info.hp),
-        remove: () => { w.setBreach(t.c, t.r); sim.tileChanged(t.c, t.r); },
+        remove: () => { w.setBreach(t.c, t.r); sim.tileChanged(g, t.c, t.r); },
       };
     }
     if (t.k === 'pane') {
-      const p = sim.props.paneIdx.get((t.r * w.W + t.c) * 16 + t.d);
+      const p = g.props.paneIdx.get(w.idx(t.c, t.r) * 16 + t.d);
       if (!p || p.dead) return null;
       const info = WINDOWS[p.tag] || WINDOWS.window;
       if (p.ws === undefined) p.ws = info.reinf ? WS.SECURE : WS.OUT_OF_FRAME;
       return {
-        k: 'pane', p, c: p.c, r: p.r, i: p.r * w.W + p.c, info, name: info.name, amount: 1, x: p.c * TILE + 1, z: p.r * TILE + 1, reach: 3.8,
+        k: 'pane', grid: g, p, c: p.c, r: p.r, i: w.idx(p.c, p.r), info, name: info.name, amount: 1, x: p.c * TILE + 1, z: p.r * TILE + 1, reach: 3.8,
         alive: () => !p.dead, ws: () => p.ws, hp: () => p.hp, maxHp: PANE_HP,
         setState: (st, anchored) => { p.ws = (st & WS.STATE) | (anchored ? 0 : WS.UNANCHORED); },
         heal: () => { p.hp = PANE_HP; },
-        remove: () => sim.removePane(p),
+        remove: () => sim.removePane(g, p),
       };
     }
     return null;
@@ -68,7 +68,7 @@ export class Windows {
    */
   click(m, t, held) {
     const sim = this.sim;
-    const th = this.thing(t);
+    const th = this.thing(t.grid, t);
     if (!th) return true;
     const tool = held?.def.tool;
     const the = `the ${th.name}`, theI = held ? `the ${held.name}` : '';
@@ -77,7 +77,7 @@ export class Windows {
 
     if (!held) {
       if (m.intent === 'harm') return false;
-      sim.sound('glass_hit', th.x, th.z, 0.5);
+      sim.sound('glass_hit', th, 0.5);
       this.tell(m, `You knock on ${the}.`, `${m.name} knocks on ${the}.`);
       m.cool = 0.5;
       return true;
@@ -99,7 +99,7 @@ export class Windows {
                 this.timers.push({ at: sim.time + BOLTS_COOL / 10, fn: () => {
                   if (!th.alive() || th.ws() !== WS.BOLTS_HEATED) return;
                   th.setState(WS.SECURE, true);
-                  sim.chat.visible({ x: th.x, z: th.z }, `The bolts on ${the} look like they've cooled off...`, 'notice', 8);
+                  sim.chat.visible(th, `The bolts on ${the} look like they've cooled off...`, 'notice', 8);
                 } });
               },
             });
@@ -172,7 +172,7 @@ export class Windows {
         done: () => {
           th.setState(st, !anchored);
           sim.tell(m, 'notice', `You ${!anchored ? 'fasten the window to' : 'unfasten the window from'} the floor.`);
-          if (!anchored && th.k === 'window' && sim.world.ventsToSpace(th.i)) sim.director.onPatched(true);      // an outside window that seals again
+          if (!anchored && th.k === 'window' && th.grid.world.ventsToSpace(th.i)) sim.director.onPatched(true);      // an outside window that seals again
         },
       });
       return true;
@@ -181,8 +181,8 @@ export class Windows {
       this.job(m, th, held, th.ws(), {
         label: 'taking the window apart', ds: DECON_SPEED, sfx: 'wrench', start: `You begin to disassemble ${the}...`,
         done: () => {
-          sim.stacks.spawn(th.info.sheet, th.amount, m.x, m.z);
-          sim.sound('pickup', m.x, m.z, 0.6);
+          sim.stacks.spawn(m.grid, th.info.sheet, th.amount, m.x, m.z);
+          sim.sound('pickup', m, 0.6);
           th.remove();
           sim.tell(m, 'notice', `You successfully disassemble ${the}.`);
         },
@@ -202,35 +202,35 @@ export class Windows {
   // ------------------------------------------------------------------ the grille (and what is left of the tile)
   /** A click on a smashed or taken-apart window tile: the grille, or open floor where it used to be. Returns false when this is not for us. */
   clickGrille(m, t, held) {
-    const sim = this.sim, w = sim.world;
-    const i = t.r * w.W + t.c;
+    const sim = this.sim, g = t.grid, w = g.world;
+    const i = w.idx(t.c, t.r);
     if (!w.breached.has(i)) return true;
-    const x = t.c * TILE + 1, z = t.r * TILE + 1;
+    const x = t.c * TILE + 1, z = t.r * TILE + 1, at = { grid: g, x, z };
     const grille = !!w.grille[i];
     const tool = held?.def.tool;
 
     if (grille && tool === 'wirecutters') {            // grille.dm: deconstruct(): two rods, no delay, no message
-      sim.sound('wirecutter', x, z, 0.9);
+      sim.sound('wirecutter', at, 0.9);
       w.removeGrille(t.c, t.r);
-      sim.tileChanged(t.c, t.r);
-      sim.stacks.spawn('/obj/item/stack/rods', 2, x, z);
+      sim.tileChanged(g, t.c, t.r);
+      sim.stacks.spawn(g, '/obj/item/stack/rods', 2, x, z);
       return true;
     }
     if (grille && tool === 'screwdriver') {
-      sim.sound('screwdriver', x, z, 0.9);
+      sim.sound('screwdriver', at, 0.9);
       w.ws[i] ^= WS.GRILLE_LOOSE;
       const fastened = !(w.ws[i] & WS.GRILLE_LOOSE);
       this.tell(m, `You ${fastened ? 'fasten the grille to' : 'unfasten the grille from'} the floor.`, `${m.name} ${fastened ? 'fastens' : 'unfastens'} the grille.`);
-      sim.tileChanged(t.c, t.r);
+      sim.tileChanged(g, t.c, t.r);
       return true;
     }
     if (!grille && held?.def.sheet === 'rods') {       // the stack recipe: grille, 2 rods, time 10, one per turf
       if ((held.amount ?? 1) < 2) { sim.tell(m, 'warning', `You haven't got enough ${held.name} to build the grille!`); return true; }
-      sim.actions.startTimed(m, 'building a grille', 1, () => w.breached.has(i) && !w.grille[i] && m.held === held && Math.hypot(m.x - x, m.z - z) < 4.2, () => {
+      sim.actions.startTimed(m, 'building a grille', 1, () => w.breached.has(i) && !w.grille[i] && m.held === held && sim.dist(m, at) < 4.2, () => {
         held.amount -= 2;
         if (held.amount <= 0) consume(sim, held);
         w.addGrille(t.c, t.r);
-        sim.tileChanged(t.c, t.r);
+        sim.tileChanged(g, t.c, t.r);
       }, null, { start: 'You start building a grille...' });
       sim.chat.visible(m, `${m.name} starts building a grille.`, 'notice', 10, m);
       return true;
@@ -241,11 +241,11 @@ export class Windows {
       if ((held.amount ?? 1) < GLASS_PER_WINDOW) { sim.tell(m, 'warning', 'You need at least two sheets of glass for that!'); return true; }
       if (w.ws[i] & WS.GRILLE_LOOSE) { sim.tell(m, 'warning', 'The grille needs to be fastened to the floor first!'); return true; }
       sim.tell(m, 'notice', 'You start placing the window...');
-      sim.actions.startTimed(m, 'placing the window', PLACE_WINDOW / 10, () => w.breached.has(i) && w.grille[i] && !(w.ws[i] & WS.GRILLE_LOOSE) && m.held === held && Math.hypot(m.x - x, m.z - z) < 4.2, () => {
+      sim.actions.startTimed(m, 'placing the window', PLACE_WINDOW / 10, () => w.breached.has(i) && w.grille[i] && !(w.ws[i] & WS.GRILLE_LOOSE) && m.held === held && sim.dist(m, at) < 4.2, () => {
         if (!w.restoreWindow(t.c, t.r, kind)) return;
         held.amount -= GLASS_PER_WINDOW;
         if (held.amount <= 0) consume(sim, held);
-        sim.tileChanged(t.c, t.r);
+        sim.tileChanged(g, t.c, t.r);
         sim.tell(m, 'notice', `You place the ${WINDOWS[kind].name} on the grille.`);
       }, null, { start: null });
       return true;
@@ -255,26 +255,26 @@ export class Windows {
 
   // ------------------------------------------------------------------ what a broken window leaves (window.dm spawnDebris)
   /** One shard (two for a full-tile window), and rods if it was reinforced (two for a full-tile one, else one). */
-  spill(x, z, key, fulltile) {
+  spill(g, x, z, key, fulltile) {
     const sim = this.sim, info = WINDOWS[key] || WINDOWS.window;
     const at = () => [x + (sim.rand() - 0.5) * 0.9, z + (sim.rand() - 0.5) * 0.9];
-    for (let n = fulltile ? 2 : 1; n > 0; n--) place(sim, sim.newItem('/obj/item/shard'), ...at());
-    if (info.reinf) sim.stacks.spawn('/obj/item/stack/rods', fulltile ? 2 : 1, ...at());
+    for (let n = fulltile ? 2 : 1; n > 0; n--) place(sim, sim.newItem('/obj/item/shard'), g, ...at());
+    if (info.reinf) sim.stacks.spawn(g, '/obj/item/stack/rods', fulltile ? 2 : 1, ...at());
   }
 
   // ------------------------------------------------------------------ examine
   /** window.dm examine(), and grille.dm's. */
-  examine(t) {
-    const sim = this.sim, w = sim.world;
+  examine(g, t) {
+    const w = g.world;
     if (t.k === 'breach') {
-      const i = t.r * w.W + t.c;
+      const i = w.idx(t.c, t.r);
       if (!w.breached.has(i)) return [];
       if (!w.grille[i]) return ['The floor is clear. There is nothing left of the window or its grille.'];
       return ['A flimsy framework of metal rods.', w.ws[i] & WS.GRILLE_LOOSE
         ? 'The anchoring screws are unscrewed. The rods look like they could be cut through.'
         : "It's secured in place with screws. The rods look like they could be cut through."];
     }
-    const th = this.thing(t);
+    const th = this.thing(g, t);
     if (!th) return [];
     const st = th.ws() & WS.STATE, anchored = !(th.ws() & WS.UNANCHORED);
     const out = [th.info.reinf ? 'A window that is reinforced with metal rods.' : 'A window.'];

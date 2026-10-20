@@ -60,11 +60,11 @@ export class Atmos {
   /** A cell touching a space tile (breach, open exterior airlock) leaks into it. */
   scanSinks(c, r) {
     const { world } = this;
-    const i = r * world.W + c;
+    const i = world.idx(c, r);
     for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nc = c + dc, nr = r + dr;
       if (!world.inb(nc, nr)) continue;
-      const j = nr * world.W + nc;
+      const j = world.idx(nc, nr);
       const k = world.kind[j];
       if (k === KIND.SPACE || k === KIND.LATTICE || (world.breached.has(j) && world.ventsToSpace(j))) { this.sinkCells.add(i); return; }
     }
@@ -92,7 +92,7 @@ export class Atmos {
     if (!world.inb(c, r)) return null;
     const p = (cc, rr) => {
       if (!world.inb(cc, rr)) return this.pressureAt(c, r);
-      const i = rr * world.W + cc;
+      const i = world.idx(cc, rr);
       const k = world.kind[i];
       if (k === KIND.SPACE || k === KIND.LATTICE) return world.airBlock[i] ? this.pressureAt(c, r) : 0;
       if (!this.isCell[i] || world.airBlock[i]) return this.pressureAt(c, r);

@@ -38,16 +38,17 @@ export class AI {
 
   randomName() { return FIRST[Math.floor(this.rand() * FIRST.length)] + ' ' + LAST[Math.floor(this.rand() * LAST.length)]; }
 
-  spawnCarp(x, z) {
+  spawnCarp(grid, x, z) {
     const sim = this.sim;
     if (!sim.level.mobs.carp) return null;
-    const m = sim.newMob({ kind: 'carp', set: 'carp', name: 'space carp', x, z, speed: 3.1, hp: 26, hostile: true, breathes: false, regen: 0 });
+    const m = sim.newMob({ kind: 'carp', set: 'carp', name: 'space carp', grid, x, z, speed: 3.1, hp: 26, hostile: true, breathes: false, regen: 0 });
     m.state = 'hunt';
     return m;
   }
 
+  /** Ian, Runtime and Pun Pun live on the station. */
   spawnPets() {
-    const sim = this.sim, w = sim.world;
+    const sim = this.sim, g = sim.station, w = g.world;
     const find = (re) => {
       for (let tries = 0; tries < 4000; tries++) {
         const i = Math.floor(this.rand() * w.W * w.H);
@@ -60,7 +61,7 @@ export class AI {
       if (!sim.level.mobs[set]) continue;
       const i = find(re);
       if (i < 0) continue;
-      sim.newMob({ kind: 'pet', set, name, x: (i % w.W) * TILE + 1, z: Math.floor(i / w.W) * TILE + 1, speed: 1.6, hp: 30, pet: true, regen: 0 });
+      sim.newMob({ kind: 'pet', set, name, grid: g, x: (i % w.W) * TILE + 1, z: Math.floor(i / w.W) * TILE + 1, speed: 1.6, hp: 30, pet: true, regen: 0 });
     }
   }
 
@@ -81,9 +82,9 @@ export class AI {
     const sim = this.sim;
     let tgt = null, bd = 18;
     for (const o of sim.mobs.values()) {
-      if (o === m || o.dead || o.kind !== 'human' || o.evacuated || o.inside) continue;
+      if (o === m || o.dead || o.kind !== 'human' || o.evacuated || o.inside || o.grid !== m.grid) continue;
       const d = Math.hypot(o.x - m.x, o.z - m.z);
-      if (d < bd && (d < 4 || sim.world.los(m.x, m.z, o.x, o.z))) { bd = d; tgt = o; }
+      if (d < bd && (d < 4 || m.grid.world.los(m.x, m.z, o.x, o.z))) { bd = d; tgt = o; }
     }
     if (tgt) {
       m.state = 'hunt';
@@ -91,17 +92,17 @@ export class AI {
         m.yaw = Math.atan2(-(tgt.x - m.x), -(tgt.z - m.z));
         if (m.cool <= 0) {
           m.cool = 1.15;
-          sim.sound('bite', m.x, m.z, 0.9);
+          sim.sound('bite', m, 0.9);
           sim.hurt(tgt, 7 + Math.random() * 3, 'brute', 'space carp');
           sim.chat.visible(m, `The space carp bites ${tgt.name}!`, 'danger', 12);
         }
         return;
       }
-      if (sim.world.los(m.x, m.z, tgt.x, tgt.z) && bd < 9) { this.steer(m, tgt.x, tgt.z, m.speed, dt); m.path = null; return; }
+      if (m.grid.world.los(m.x, m.z, tgt.x, tgt.z) && bd < 9) { this.steer(m, tgt.x, tgt.z, m.speed, dt); m.path = null; return; }
       m.repath -= dt;
       if (m.repath <= 0 || !m.path) {
         m.repath = 1.2;
-        if (this.budget > 0) { this.budget--; m.path = sim.nav.path(m.tile[0], m.tile[1], Math.floor(tgt.x / TILE), Math.floor(tgt.z / TILE), null, 2500); m.pathIdx = 0; }
+        if (this.budget > 0) { this.budget--; m.path = m.grid.nav.path(m.tile[0], m.tile[1], Math.floor(tgt.x / TILE), Math.floor(tgt.z / TILE), null, 2500); m.pathIdx = 0; }
       }
       if (m.path) this.follow(m, dt, m.speed);
       return;
@@ -114,7 +115,7 @@ export class AI {
     const sim = this.sim;
     // run from anything hostile
     let near = null, nd = 9;
-    for (const o of sim.mobs.values()) if (!o.dead && o.hostile) { const d = Math.hypot(o.x - m.x, o.z - m.z); if (d < nd) { nd = d; near = o; } }
+    for (const o of sim.mobs.values()) if (!o.dead && o.hostile && o.grid === m.grid) { const d = Math.hypot(o.x - m.x, o.z - m.z); if (d < nd) { nd = d; near = o; } }
     if (near) {
       m.fear = 4;
       if (m.state !== 'flee') { m.state = 'flee'; if (m.humanoid && Math.random() < 0.5) sim.chat.npcSay(m, SCREAM[Math.floor(Math.random() * SCREAM.length)]); }
@@ -124,12 +125,12 @@ export class AI {
     } else if (m.state === 'flee' && m.fear <= 0) m.state = 'idle';
 
     // head for air if the pressure is dropping
-    const [c, r] = m.tile;
-    if (sim.atmos.pressureAt(c, r) < 40 && m.humanoid) {
-      let best = null, bp = sim.atmos.pressureAt(c, r);
+    const [c, r] = m.tile, atmos = m.grid.atmos, nav = m.grid.nav;
+    if (atmos.pressureAt(c, r) < 40 && m.humanoid) {
+      let best = null, bp = atmos.pressureAt(c, r);
       for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (!sim.nav.passable(c + dc, r + dr, m)) continue;
-        const pp = sim.atmos.pressureAt(c + dc, r + dr);
+        if (!nav.passable(c + dc, r + dr, m)) continue;
+        const pp = atmos.pressureAt(c + dc, r + dr);
         if (pp > bp) { bp = pp; best = [c + dc, r + dr]; }
       }
       if (best) { this.steer(m, best[0] * TILE + 1, best[1] * TILE + 1, m.speed * 1.2, dt); return; }
@@ -154,9 +155,9 @@ export class AI {
       m.timer -= dt;
       if (m.timer <= 0 && this.budget > 0) {
         this.budget--;
-        const t = sim.nav.randomTileNear(m.home[0], m.home[1], radius, this.rand, m);
+        const t = m.grid.nav.randomTileNear(m.home[0], m.home[1], radius, this.rand, m);
         if (t) {
-          const path = sim.nav.path(m.tile[0], m.tile[1], t[0], t[1], m, 2200);
+          const path = m.grid.nav.path(m.tile[0], m.tile[1], t[0], t[1], m, 2200);
           if (path && path.length) { m.path = path; m.pathIdx = 0; m.state = 'walk'; }
         }
         m.timer = 2 + this.rand() * 7;
@@ -170,13 +171,11 @@ export class AI {
     if (!m.path || m.pathIdx >= m.path.length) { m.path = null; if (m.state === 'walk') m.state = 'idle'; return; }
     const [tc, tr] = m.path[m.pathIdx];
     const tx = tc * TILE + 1, tz = tr * TILE + 1;
-    const i = tr * sim.world.W + tc;
-    const door = sim.world.doorAt.get(i);
+    const door = m.grid.world.doorAt.get(m.grid.world.idx(tc, tr));
     if (door && !door.passable) {
       if (door.state === 'closed') {
-        const idx = sim.doors.indexOf(door);
-        const ok = m.kind !== 'carp' && door.allows(m) && sim.power.doorsWork(door);
-        if (ok && Math.hypot(tx - m.x, tz - m.z) < 2.6) sim.openDoor(idx, m); else if (!ok) { m.path = null; return; }
+        const ok = m.kind !== 'carp' && door.allows(m) && m.grid.power.doorsWork(door);
+        if (ok && Math.hypot(tx - m.x, tz - m.z) < 2.6) sim.openDoor(door, m); else if (!ok) { m.path = null; return; }
       }
       if (Math.hypot(tx - m.x, tz - m.z) < 1.2) return;
     }
@@ -192,11 +191,12 @@ export class AI {
     const vx = dx / d * speed, vz = dz / d * speed;
     m.yaw = Math.atan2(-vx, -vz);
     const pos = { x: m.x, z: m.z };
-    const blocked = sim.world.move(pos, vx * dt, vz * dt, 0.28);
+    const world = m.grid.world;
+    const blocked = world.move(pos, vx * dt, vz * dt, 0.28);
     for (const o of sim.mobs.values()) {
-      if (o === m || o.dead) continue;
+      if (o === m || o.dead || o.grid !== m.grid) continue;
       const ox = pos.x - o.x, oz = pos.z - o.z, od = Math.hypot(ox, oz);
-      if (od < 0.7 && od > 0.001) { const push = (0.7 - od) * 0.5; sim.world.move(pos, ox / od * push, oz / od * push, 0.28); }
+      if (od < 0.7 && od > 0.001) { const push = (0.7 - od) * 0.5; world.move(pos, ox / od * push, oz / od * push, 0.28); }
     }
     m.speedNow = Math.hypot(pos.x - m.x, pos.z - m.z) / Math.max(dt, 1e-4);
     m.x = pos.x; m.z = pos.z;

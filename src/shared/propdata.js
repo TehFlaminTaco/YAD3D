@@ -44,6 +44,7 @@ export const ITEM_SCALE = 0.5;               // SS13 item icons are drawn big fo
  */
 export function buildPropData(world, rects, props, level, prev = null) {
   const W = world.W;
+  const grid = world.grid;                  // stamped on the records the sim looks things up by (doors, firelocks, props): they know where they stand
   const out = prev || {
     tables: [], panes: [], lights: [], items: [], interact: [], doors: [], fdoors: [], statics: [], closets: [], girders: [],
     paneIdx: new Map(), pool: level.pool.filter((q) => q.s >= 0), lootRng: rng(1337), wmSpots: new Map(),
@@ -90,8 +91,8 @@ export function buildPropData(world, rects, props, level, prev = null) {
     const c = p.x, r = p.y, i = r * W + c;
     const [cx, cz] = center(c, r);
     switch (p.k) {
-      case 'door': { const d = { ...p, i }; out.doors.push(d); out.added.doors.push(d); break; }
-      case 'fdoor': { const f = { x: c, y: r, s: p.s, n: p.n }; out.fdoors.push(f); out.added.fdoors.push(f); break; }
+      case 'door': { const d = { ...p, i, grid }; out.doors.push(d); out.added.doors.push(d); break; }
+      case 'fdoor': { const f = { x: c, y: r, s: p.s, n: p.n, grid }; out.fdoors.push(f); out.added.fdoors.push(f); break; }
       case 'wdoor': {
         const rc = rects[p.s];
         if (!rc) break;
@@ -117,7 +118,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const st = sprite({ tag: 'sprite', rect: p.s, mode: p.bb ? 0 : 1, x: cx, y, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz], ...(p.fr ? { views: p.fr, face: p.d } : {}) });
         // what is bolted down fills its tile; what is loose is a box of its own size that can be dragged about
         const loose = !!p.den && !p.anc;
-        const it = { idx: out.interact.length, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0 };
+        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, x: cx, z: cz, y0: y, y1: y + Math.max(1.0, h), rad: 0.8, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0 };
         if (loose) world.boxAdd(it); else if (p.den) world.solid[i] = 1;
         out.interact.push(it); out.added.interact.push(it);
         break;
@@ -125,7 +126,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
       case 'closet': {
         const cs = (p.op ? CL.OPEN : 0) | (p.lk ? CL.LOCKED : 0);
         const cl = { fr: p.fr, sec: !!p.sec, pl: !!p.pl, a: p.a || [], o: p.o || [], hz: !!p.hz, dopen: !!p.do, nw: !!p.nw, bt: p.bt ?? 120 };
-        const it = { idx: out.interact.length, kind: 'closet', name: p.n || 'closet', path: p.p, c, r, x: cx, z: cz, y0: 0, rad: 0.9, cl, cs, cs0: cs, gone: false, anc: !!p.anc, ds: p.ds || 0, x0: cx, z0: cz, d: 2, d0: 2, half: 0.55 };
+        const it = { idx: out.interact.length, grid, kind: 'closet', name: p.n || 'closet', path: p.p, c, r, x: cx, z: cz, y0: 0, rad: 0.9, cl, cs, cs0: cs, gone: false, anc: !!p.anc, ds: p.ds || 0, x0: cx, z0: cz, d: 2, d0: 2, half: 0.55 };
         const sp = closetSprite(it);
         const rc = rects[sp];
         if (!rc) break;
@@ -152,7 +153,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const depth = p.ow ? TILE / 2 + 0.03 + 0.012 * k : TILE / 2 - 0.03 - 0.012 * k, lat = (p.lat || 0) * PX;
         const x = cx + sdx * depth + (sdx ? 0 : lat), z = cz + sdz * depth + (sdz ? 0 : lat);
         const st = sprite({ tag: 'wm', rect: p.s, mode: 1, x, y: yc - h / 2, z, w, h, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz], emit: p.sub === 'status_display' || p.sub === 'newscaster' ? 0.6 : 0 });
-        const it = { idx: out.interact.length, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, x, z, y0: yc - h / 2, y1: yc + h / 2, rad: 0.6, st, sd: p.sd };
+        const it = { idx: out.interact.length, grid, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, x, z, y0: yc - h / 2, y1: yc + h / 2, rad: 0.6, st, sd: p.sd };
         out.interact.push(it); out.added.interact.push(it);
         break;
       }

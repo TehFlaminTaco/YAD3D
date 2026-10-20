@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { decodeLevel, makeRects } from '../shared/leveldata.js';
+import { makeRects } from '../shared/leveldata.js';
 import { CharArt, DynAtlas } from './charart.js';
 
 const DYN_ROWS = 32;                  // cell rows in the strip for composed people: 128 x 32 cells, about 800 different people
@@ -29,7 +29,6 @@ export async function loadAssets(progress = () => {}, { withSim = false } = {}) 
     fetchJSON('assets/level.json'), fetchJSON('assets/sprites.json'),
     withSim ? fetchJSON('data/jobs.json') : null, withSim ? fetchJSON('data/contents.json') : null, withSim ? fetchJSON('data/closets.json') : null,
   ]);
-  const decoded = decodeLevel(level);
   progress('textures');
   const [terrainImg, baseSprites, charsImg, chars] = await Promise.all([loadImage('assets/terrain.png'), loadImage('assets/sprites.png'), loadImage('assets/chars.png'), fetchJSON('assets/chars.json')]);
 
@@ -75,5 +74,5 @@ export async function loadAssets(progress = () => {}, { withSim = false } = {}) 
   const rects = makeRects({ w: spriteImg.width, h: spriteImg.height, rects: sprJson.rects });
   const charart = new CharArt(chars, charsImg, new DynAtlas(spriteImg, rects, baseSprites.height, spriteTex));
   progress('done');
-  return { ...decoded, terrainTex, spriteTex, spriteImg, rects, atlas: { w: spriteImg.width, h: spriteImg.height }, jobsJson, contents, closets, chars, charart };
+  return { level, terrainTex, spriteTex, spriteImg, rects, atlas: { w: spriteImg.width, h: spriteImg.height }, jobsJson, contents, closets, chars, charart };
 }

@@ -65,7 +65,7 @@ export class PDA {
   updateSeen(dt) {
     const g = this.game;
     if (g.phase !== 'playing') return;
-    const w = g.rep.world;
+    const w = g.myGrid().world;
     if (!this.seen) this.seen = new Uint8Array(w.W * w.H);
     this.seenAcc += dt;
     if (this.seenAcc < 0.35) return;
@@ -77,7 +77,7 @@ export class PDA {
         if (!w.inb(c, r)) continue;
         const dx = c - pc, dr = r - pr;
         if (dx * dx + dr * dr > R * R) continue;
-        const i = r * w.W + c;
+        const i = w.idx(c, r);
         if (this.seen[i]) continue;
         if (Math.abs(dx) + Math.abs(dr) <= 2 || w.los(g.pred.x, g.pred.z, (c + 0.5) * 2, (r + 0.5) * 2)) this.seen[i] = 1;
       }
@@ -93,7 +93,7 @@ export class PDA {
   }
 
   draw() {
-    const g = this.game, rep = g.rep, w = rep.world;
+    const g = this.game, rep = g.rep, w = g.myGrid().world;
     // station time: shifts start at noon, like SS13's clock
     const t = Math.floor(rep.roundClock);
     const hh = 12 + Math.floor(t / 3600), mm = Math.floor(t / 60) % 60;
@@ -108,7 +108,7 @@ export class PDA {
     const cv = this.$('pda-map'), cx = cv.getContext('2d');
     const all = g.phase === 'ghost';
     let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1;
-    for (let r = 0; r < w.H; r++) for (let c = 0; c < w.W; c++) if (all ? w.kind[r * w.W + c] !== KIND.SPACE : this.seen[r * w.W + c]) { x0 = Math.min(x0, c); x1 = Math.max(x1, c); y0 = Math.min(y0, r); y1 = Math.max(y1, r); }
+    for (let r = 0; r < w.H; r++) for (let c = 0; c < w.W; c++) if (all ? w.kind[w.idx(c, r)] !== KIND.SPACE : this.seen[w.idx(c, r)]) { x0 = Math.min(x0, c); x1 = Math.max(x1, c); y0 = Math.min(y0, r); y1 = Math.max(y1, r); }
     if (x1 < 0) { x0 = pc - 20; x1 = pc + 20; y0 = pr - 15; y1 = pr + 15; }
     x0 = Math.min(x0, pc - 12); x1 = Math.max(x1, pc + 12); y0 = Math.min(y0, pr - 9); y1 = Math.max(y1, pr + 9);
     const S = Math.max(2, Math.floor(Math.min(cv.width / (x1 - x0 + 3), cv.height / (y1 - y0 + 3))));
@@ -116,7 +116,7 @@ export class PDA {
     const ox = Math.floor((cv.width - (x1 - x0 + 1) * S) / 2), oy = Math.floor((cv.height - (y1 - y0 + 1) * S) / 2);
     for (let r = y0; r <= y1; r++) {
       for (let c = x0; c <= x1; c++) {
-        const i = r * w.W + c;
+        const i = w.idx(c, r);
         if (!all && !this.seen[i]) continue;
         const k = w.kind[i];
         if (w.doorAt.get(i)) cx.fillStyle = '#c8e84a';

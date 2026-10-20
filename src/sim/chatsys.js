@@ -36,6 +36,13 @@ export class ChatSys {
   npcSay(m, text) { this.speak(m, { mode: 'say', text }); }
   npcRadio(m, text, channel = 'common') { this.speak(m, { mode: 'radio', channel, text }); }
 
+  /** Is `lm` within `range` metres of `m` and (beyond arm's length) in sight of them? Sight only reaches across one grid. */
+  canHear(m, lm, range) {
+    const d = this.sim.dist(lm, m);
+    if (d > range) return false;
+    return d <= 2 || (lm.grid === m.grid && !!m.grid && m.grid.world.los(m.x, m.z, lm.x, lm.z));
+  }
+
   hear(m, ev, range) {
     const sim = this.sim;
     ev.mob = m.id;
@@ -44,13 +51,11 @@ export class ChatSys {
       if (c.state === 'ghost' || (lm && lm.dead && c.state === 'ghost')) { c.outbox.push({ e: 'msg', ...ev, ghost: 1 }); continue; }
       if (!lm || lm.dead) continue;
       if (lm === m) { c.outbox.push({ e: 'msg', ...ev }); continue; }
-      const d2 = (lm.x - m.x) ** 2 + (lm.z - m.z) ** 2;
-      if (d2 > range * range) continue;
-      if (d2 > 4 && !sim.world.los(m.x, m.z, lm.x, lm.z)) continue;
+      if (!this.canHear(m, lm, range)) continue;
       c.outbox.push({ e: 'msg', ...ev });
     }
     // speech floats over the head of the speaker for nearby sprite views
-    sim.emit({ e: 'bubble', id: m.id, text: ev.text.slice(0, 60) }, { near: [m.x, m.z, range] });
+    sim.emit({ e: 'bubble', id: m.id, text: ev.text.slice(0, 60) }, { near: { at: m, r: range } });
   }
 
   radio(m, channel, text) {
@@ -64,10 +69,10 @@ export class ChatSys {
     for (const c of sim.clients.values()) {
       const lm = c.mob;
       if (c.state === 'ghost') { c.outbox.push({ e: 'msg', ...ev, ghost: 1 }); continue; }
-      if (!lm || lm.dead) continue;
+      if (!lm || lm.dead || sim.mapOf(lm) !== sim.mapOf(m)) continue;
       if (this.channelsOf(lm).includes(ch)) c.outbox.push({ e: 'msg', ...ev });
     }
-    sim.sound('radio_static', m.x, m.z, 0.15);
+    sim.sound('radio_static', m, 0.15);
   }
 
   emote(m, text) {
@@ -89,8 +94,7 @@ export class ChatSys {
       const lm = c.mob;
       if (c.state === 'ghost') { c.outbox.push({ e: 'msg', k: kind, text }); continue; }
       if (!lm || lm.dead || (Array.isArray(except) ? except.includes(lm) : lm === except)) continue;
-      if ((lm.x - origin.x) ** 2 + (lm.z - origin.z) ** 2 > range * range) continue;
-      if (lm !== origin && !sim.world.los(origin.x, origin.z, lm.x, lm.z)) continue;
+      if (lm !== origin && !this.canHear(origin, lm, range)) continue;
       c.outbox.push({ e: 'msg', k: kind, text });
     }
   }
@@ -100,7 +104,7 @@ export class ChatSys {
     for (const c of this.sim.clients.values()) {
       const lm = c.mob;
       if (!lm || lm.dead || (Array.isArray(except) ? except.includes(lm) : lm === except) || c.state === 'ghost') continue;
-      if ((lm.x - origin.x) ** 2 + (lm.z - origin.z) ** 2 > range * range) continue;
+      if (this.sim.dist(lm, origin) > range) continue;
       c.outbox.push({ e: 'msg', k: kind, text });
     }
   }

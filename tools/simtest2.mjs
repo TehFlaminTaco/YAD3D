@@ -140,7 +140,7 @@ section('hull breach + repair', () => {
   const wc = win % w.W, wr = Math.floor(win / w.W);
   const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([x, y]) => [wc + x, wr + y]).find(([x, y]) => sim.atmos.isCell[y * w.W + x]);
   b.x = 2; b.z = 2;
-  sim.breachTile(wc, wr, 'meteor');
+  sim.breachTile(sim.station, wc, wr, 'meteor');
   ok(w.breached.has(win) && w.kind[win] === 1 && !w.glass[win] && !w.airBlock[win] && w.ventsToSpace(win), 'meteor smashes an exterior window: it is open to space');
   step(30);
   ok(sim.atmos.pressureAt(nb[0], nb[1]) < 30, 'room decompresses through the breach');
@@ -176,13 +176,13 @@ section('broken windows only vent to space', () => {
   ok(win >= 0, 'found a window that does not touch space');
   const wc = win % W, wr = (win - wc) / W;
   b.x = 2; b.z = 2;
-  sim.breachTile(wc, wr, 'shot');
+  sim.breachTile(sim.station, wc, wr, 'shot');
   ok(w.breached.has(win) && w.kind[win] === 1 && !w.glass[win] && !w.airBlock[win] && w.solid[win], 'a shot window opens up but the frame still blocks the way');
   ok(!w.ventsToSpace(win) && !w.ventTiles().includes(win), 'it is not a hull breach');
   ok(sim.atmos.isCell[win], 'the gap joins the gas grid');
   step(40);
   ok(sides.every(([x, y]) => sim.atmos.pressureAt(x, y) > 60), 'neither room decompresses');
-  ok(!sim.terminals.alerts().html.includes('hull breach'), 'no atmosphere alarm');
+  ok(!sim.terminals.alerts(sim.station).html.includes('hull breach'), 'no atmosphere alarm');
   // weld it shut: no hull breach call-out
   const sheet = sim.newItem('/obj/item/stack/sheet/metal', { amount: 3 });
   a.x = sides[0][0] * TILE + 1; a.z = sides[0][1] * TILE + 1; a.yaw = Math.atan2(-(wc - sides[0][0]), -(wr - sides[0][1]));
@@ -199,7 +199,7 @@ section('broken windows only vent to space', () => {
 section('closets', () => {
   const { sim, A, B, a, b, step, inbox, evs, hand } = setup();
   const w = sim.world, cls = sim.closets;
-  const find = (suffix) => cls.list.find((it) => it.path.endsWith(suffix));
+  const find = (suffix) => sim.station.props.closets.find((it) => it.path.endsWith(suffix));
   const click = (c, it, alt) => { sim.handle(c, { t: 'click', target: { k: 'prop', idx: it.idx }, alt }); step(0.1); };
   const blocks = (it) => w.collides(it.x, it.z, 0.1);       // is something solid standing there (a closed locker is a box, not a tile)
   // stand on a free tile next to the closet (k picks which), where a click can reach it
@@ -218,10 +218,10 @@ section('closets', () => {
   const eng = find('secure_closet/engineering_welding');
   ok(eng && eng.contents.length === 6 && eng.cs === (CL.LOCKED) && blocks(eng), 'welding locker starts closed and locked with its 3 hoods and 3 welders');
   ok(eng.cl.sec && eng.cl.a.length === 1, 'and wants one access');
-  const em = cls.list.filter((it) => it.path.endsWith('closet/emcloset'));
+  const em = sim.station.props.closets.filter((it) => it.path.endsWith('closet/emcloset'));
   ok(em.length > 20 && em.some((it) => it.contents.length) && new Set(em.map((it) => it.contents.length)).size > 2, 'emergency closets are stocked at random (different contents each)');
   // nothing on a closed closet's tile is left outside
-  ok(![...sim.floor.values()].some((f) => cls.list.some((it) => !(it.cs & CL.OPEN) && it.contents.length < 30 && it.c === f.c && it.r === f.r)), 'items under closed closets were taken in at round start (up to 30)');
+  ok(![...sim.floor.values()].some((f) => sim.station.props.closets.some((it) => !(it.cs & CL.OPEN) && it.contents.length < 30 && it.c === f.c && it.r === f.r)), 'items under closed closets were taken in at round start (up to 30)');
 
   // access: a locker opens for the right ID, with SS13's messages
   stand(a, eng); stand(b, eng, 1);
@@ -248,7 +248,7 @@ section('closets', () => {
   click(A, eng, true);
   ok(!(eng.cs & CL.LOCKED), 'and unlocks it again');
   // a late joiner is told
-  ok(sim.worldState(A).closets.some(([i, cs]) => i === eng.idx && cs === 0), 'the welcome lists closets that are not as the map left them');
+  ok(sim.worldState(A).grids[0].closets.some(([i, cs]) => i === eng.idx && cs === 0), 'the welcome lists closets that are not as the map left them');
 
   // welding shut and open
   const t = welder(a);
@@ -286,7 +286,7 @@ section('closets', () => {
   ok(eng.gone && !blocks(eng) && [...sim.floor.values()].some((f) => f.item.path.includes('sheet/metal') && f.c === eng.c && f.r === eng.r), 'cutting an open locker apart removes it and leaves 2 metal');
 
   // personal lockers belong to whoever swipes first
-  const pl = cls.list.find((it) => it.cl.pl && freeAround(it).length);
+  const pl = sim.station.props.closets.find((it) => it.cl.pl && freeAround(it).length);
   stand(a, pl); stand(b, pl, 1);
   ok(pl.cs & CL.LOCKED, 'personal locker starts locked');
   hand(a, a.worn.id); a.worn.id = null;
@@ -297,12 +297,12 @@ section('closets', () => {
   ok(texts(inbox.b).includes('Access Denied.'), "someone else's ID is refused");
 
   // crates stay in the way when open
-  const crate = cls.list.find((it) => it.cl.hz && it.cs === 0);
+  const crate = sim.station.props.closets.find((it) => it.cl.hz && it.cs === 0);
   stand(a, crate); a.hands[0] = a.hands[1] = null;
   click(A, crate);
   ok((crate.cs & CL.OPEN) && blocks(crate), 'an open crate still blocks the tile');
 
-  function place_(item, it) { item.loc = null; sim.floor.set(item.id, { item, x: it.x + 0.3, y: 0.01, z: it.z, c: it.c, r: it.r }); item.loc = { t: 'floor' }; }
+  function place_(item, it) { item.loc = null; sim.floor.set(item.id, { item, grid: it.grid, x: it.x + 0.3, y: 0.01, z: it.z, c: it.c, r: it.r }); item.loc = { t: 'floor' }; }
 });
 
 section('looks', () => {
@@ -467,7 +467,7 @@ section('people', () => {
   ok(seen[0] === `This is ${b.name}!` && seen.some((x) => /is wearing/.test(x)) && seen.some((x) => x.endsWith('is handcuffed!')), 'examining a person lists what they wear and that they are handcuffed');
 
   // --- shut in a locker by someone else
-  const cl = sim.closets.list.find((it) => it.path.endsWith('closet/emcloset') && !(it.cs & 1));
+  const cl = sim.station.props.closets.find((it) => it.path.endsWith('closet/emcloset') && !(it.cs & 1));
   sim.people.uncuff(b); sim.closets.open(a, cl);
   const free = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dc, dr]) => [cl.c + dc, cl.r + dr]).find(([c, r]) => sim.world.kind[r * W + c] === 1 && !sim.world.solid[r * W + c]);
   a.x = free[0] * TILE + 1; a.z = free[1] * TILE + 1; b.x = a.x + 0.6; b.z = a.z; a.cool = 0; a.vx = a.vz = 0;
@@ -490,7 +490,7 @@ section('structures', () => {
   const blocks = (it) => w.collides(it.x, it.z, 0.1);
   /** Walk `m` along (dx, dz) for `metres`, a quarter metre at a time, letting the world react. */
   const walk = (m, dx, dz, metres) => { for (let k = 0; k < metres / 0.25; k++) { m.x += dx * 0.25; m.z += dz * 0.25; step(0.05); } };
-  const lockers = sim.closets.list.filter((it) => it.path.endsWith('closet/emcloset') && !it.anc && !(it.cs & CL.OPEN) && lineOf(it));
+  const lockers = sim.station.props.closets.filter((it) => it.path.endsWith('closet/emcloset') && !it.anc && !(it.cs & CL.OPEN) && lineOf(it));
   const lk = lockers[0];
   ok(lk, 'found a locker with room to be dragged');
   const [dc, dr] = lineOf(lk);
@@ -518,10 +518,10 @@ section('structures', () => {
   const pms = evs(inbox.b, 'pm');
   ok(pms.length > 5 && pms.at(-1).i === lk.idx && Math.abs(pms.at(-1).x - lk.x) < 1e-6, 'everyone is told where it goes');
   ok(!w.collides(a.x, a.z, 0.32), 'and it never traps you');
-  ok(sim.people.moved().some((m) => m[0] === lk.idx && Math.abs(m[1] - lk.x) < 1e-6), 'someone who joins later is told it moved');
+  ok(sim.people.moved(sim.station).some((m) => m[0] === lk.idx && Math.abs(m[1] - lk.x) < 1e-6), 'someone who joins later is told it moved');
   const late = [];
   sim.addClient('Carol', (m) => late.push(m));
-  ok(late.find((m) => m.t === 'welcome').moved.some((m) => m[0] === lk.idx && Math.abs(m[1] - lk.x) < 1e-6 && Math.abs(m[2] - lk.z) < 1e-6), 'the welcome carries moved structures');
+  ok(late.find((m) => m.t === 'welcome').grids[0].moved.some((m) => m[0] === lk.idx && Math.abs(m[1] - lk.x) < 1e-6 && Math.abs(m[2] - lk.z) < 1e-6), 'the welcome carries moved structures');
 
   // --- it turns to face the way it goes
   ok(lk.d === (dc > 0 ? 4 : dc < 0 ? 8 : dr > 0 ? 2 : 1), 'it faces the way you are going');
@@ -604,11 +604,11 @@ section('structures', () => {
 
   // --- what is bolted down stays put (anchored in the DM), and what is not can be dragged
   const open = (it) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([x, y]) => free(it.c + x, it.r + y));
-  const brig = sim.closets.list.find((it) => it.anc && open(it));
+  const brig = sim.station.props.closets.find((it) => it.anc && open(it));
   const rack = sim.props.interact.find((it) => it.path === 'structure/rack' && open(it));
   const chair = sim.props.interact.find((it) => it.path === 'structure/chair' && it.anc && open(it));
   const tank = sim.props.interact.find((it) => it.path === 'structure/reagent_dispensers/fueltank' && !it.anc && open(it));
-  const crate = sim.closets.list.find((it) => it.path === 'structure/closet/crate' && !it.anc && open(it));
+  const crate = sim.station.props.closets.find((it) => it.path === 'structure/closet/crate' && !it.anc && open(it));
   ok(brig && rack && chair && tank && crate, 'found a brig locker, a rack, a chair, a fuel tank and a crate');
   const beside = (it) => { const [c, r] = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([x, y]) => [it.c + x, it.r + y]).find(([c, r]) => free(c, r)); tileSpot(a, c, r); a.hauling = null; };
   for (const [name, it] of [['a brig locker', brig], ['a rack', rack], ['a chair', chair]]) {
@@ -628,7 +628,7 @@ section('structures', () => {
   // --- loose items follow you across the floor
   tileSpot(a, Math.floor(lk.x / TL) + dc, Math.floor(lk.z / TL) + dr);
   const bar = sim.newItem('/obj/item/crowbar');
-  place(sim, bar, a.x + 0.5, a.z, 0.01);
+  place(sim, bar, sim.station, a.x + 0.5, a.z, 0.01);
   clear();
   ctrlClick(A, { k: 'item', id: bar.id });
   ok(a.hauling?.k === 'item' && sim.floor.has(bar.id), 'Ctrl+click on a loose item drags it, it does not pick it up');
@@ -741,7 +741,7 @@ section('debug menu', () => {
   ok(sim.mobs.has(b.id), 'but not a player');
   dbg(A, 'delete', { target: { k: 'item', id: lit.item.id } });
   ok(!sim.floor.has(lit.item.id) && !sim.items.has(lit.item.id), 'removes a loose item');
-  const cl = sim.closets.list.find((it) => !it.gone && !(it.cs & CL.OPEN));
+  const cl = sim.station.props.closets.find((it) => !it.gone && !(it.cs & CL.OPEN));
   ok(w.collides(cl.x, cl.z, 0.1), 'a closed locker blocks');
   dbg(A, 'delete', { target: { k: 'prop', idx: cl.idx } });
   ok(cl.gone && !w.collides(cl.x, cl.z, 0.1), 'and once removed it stops blocking');
@@ -852,7 +852,7 @@ section('door angles and wall mounts', () => {
   ok(sim.props.fdoors.every((x) => Number.isFinite(x.yaw)), 'every firelock has an angle');
 
   // every wall mount hangs on a wall: beside one if it stands on a floor tile, on the open face of it if it is part of the wall (signs)
-  const level = sim.level.props.filter((p) => p.k === 'wm');
+  const level = sim.level.grids.station.props.filter((p) => p.k === 'wm');
   const DVs = { 1: [0, -1], 2: [0, 1], 4: [1, 0], 8: [-1, 0] };
   let bad = 0, onWall = 0;
   for (const p of level) {
@@ -935,7 +935,7 @@ section('drag and drop', () => {
   sim.handle(A, { t: 'inv', op: 'move', item: bar.id, to: { t: 'box', id: a.worn.back.id } });
   ok(a.worn.back.contents.includes(bar), 'a floor item can be dragged into the backpack');
   const far = sim.newItem('/obj/item/wrench');
-  const { place: placeFn } = { place: (it, x, z) => { sim.floor.set(it.id, { item: it, x, y: 0, z, c: Math.floor(x / 2), r: Math.floor(z / 2) }); it.loc = { t: 'floor' }; } };
+  const { place: placeFn } = { place: (it, x, z) => { sim.floor.set(it.id, { item: it, grid: sim.station, x, y: 0, z, c: Math.floor(x / 2), r: Math.floor(z / 2) }); it.loc = { t: 'floor' }; } };
   placeFn(far, a.x + 20, a.z);
   sim.handle(A, { t: 'inv', op: 'move', item: far.id, to: { t: 'hand', i: 0 } });
   ok(!a.hands[0] && sim.floor.has(far.id), 'cannot grab things out of reach');
@@ -1007,13 +1007,13 @@ section('zero gravity', () => {
 
   // turning gravity off tells everybody and shakes their cameras
   inbox.a.length = 0;
-  ok(sim.setGravity(false) === true && w.gravityOn === false, 'setGravity(false) switches it off');
+  ok(sim.setGravity(sim.station, false) === true && w.gravityOn === false, 'setGravity(false) switches it off');
   step(0.1);
   ok(evs(inbox.a, 'grav').some((e) => e.on === false), 'clients are told (grav event)');
   ok(evs(inbox.a, 'shake').length > 0, 'cameras shake');
-  ok(sim.setGravity(false) === false, 'switching it off twice does nothing the second time');
+  ok(sim.setGravity(sim.station, false) === false, 'switching it off twice does nothing the second time');
   ok(!w.hasGravity(rx, rz), 'a station room now has none');
-  ok(sim.worldState(A).gravity === false, 'a player who joins later is told');
+  ok(sim.worldState(A).grids[0].gravity === false, 'a player who joins later is told');
   ok(shuttle < 0 || w.hasGravity(...at(shuttle)), 'a shuttle keeps its own gravity');
 
   // floating in a big room with nothing to hold: pushing keys does nothing
@@ -1063,14 +1063,14 @@ section('zero gravity', () => {
   a.x = sx; a.z = sz; a.vx = 0; a.vz = -2.5; a.stunned = 30;
   drive(A, 700, 10, { yaw: 0 }); step(0.6);
   ok(a.z < sz - 0.8, 'a stunned body keeps drifting');
-  sim.setGravity(true);
+  sim.setGravity(sim.station, true);
   a.x = rx; a.z = rz; a.vx = 0; a.vz = -2.5; a.stunned = 30;
   drive(A, 800, 10, { yaw: 0 }); step(0.6);
   ok(Math.abs(a.z - rz) < 0.05, 'but with gravity it stops where it is');
   a.stunned = 0;
 
   // magboots hold you to a real floor; a jetpack lets you steer anywhere. Both are switched on with their keys, and need to be worn.
-  sim.setGravity(false);
+  sim.setGravity(sim.station, false);
   a.x = rx; a.z = rz; a.vx = a.vz = 0;
   sim.handle(A, { t: 'key', k: 'mag' });
   ok(!a.magOn, 'K does nothing without magboots on');
@@ -1114,7 +1114,7 @@ section('zero gravity', () => {
   detach(sim, jp);
   ok(!a.jetOn, 'taking the jetpack off switches it off');
   a.jetOn = false;
-  void sim.setGravity(true);
+  void sim.setGravity(sim.station, true);
 
   // the debug menu: gravity and "take me out"
   sim.handle(A, { t: 'dbg', op: 'gravity', on: false });
@@ -1152,14 +1152,14 @@ section('windows and grilles', () => {
 
   // ---- breaking one: TG removes the window and leaves its grille and what spawnDebris makes (a full-tile window: two shards; reinforced: two rods too)
   stand(reinf);
-  sim.breachTile(reinf.c, reinf.r, 'shot'); step(0.1);
+  sim.breachTile(sim.station, reinf.c, reinf.r, 'shot'); step(0.1);
   ok(w.breached.has(reinf.i) && !w.glass[reinf.i], 'the glass is gone');
   ok(w.grille[reinf.i] === 1 && w.solid[reinf.i] === 1, 'its grille still stands, and still blocks the way');
   ok(floorNear(reinf, '/obj/item/shard').length === 2, 'a smashed full-tile window leaves two shards');
   const rods = floorNear(reinf, '/obj/item/stack/rods');
   ok(rods.length === 1 && rods[0].item.amount === 2, 'a reinforced one leaves two rods');
-  ok(sim.windows.examine({ k: 'breach', c: reinf.c, r: reinf.r }).join(' ').startsWith('A flimsy framework of metal rods.'), 'the thing left is called a grille, with the real description');
-  ok(!sim.windows.examine({ k: 'breach', c: reinf.c, r: reinf.r }).join(' ').includes('broken window'), 'there is no "broken window"');
+  ok(sim.windows.examine(sim.station, { k: 'breach', c: reinf.c, r: reinf.r }).join(' ').startsWith('A flimsy framework of metal rods.'), 'the thing left is called a grille, with the real description');
+  ok(!sim.windows.examine(sim.station, { k: 'breach', c: reinf.c, r: reinf.r }).join(' ').includes('broken window'), 'there is no "broken window"');
   ok(evs(inbox.a, 'tile').some((e) => e.i === reinf.i && e.gr === 1 && e.brk === 1), 'clients are told the grille is still there');
   // cutting the grille: no delay, no message, two rods, and the tile is open floor
   tool('/obj/item/wirecutters');
@@ -1289,7 +1289,7 @@ section('windows and grilles', () => {
     const centre = { c: pane.c, r: pane.r, at: [pane.c * TILE + 1, pane.r * TILE + 1] };
     stand(centre);
     const pane2 = sim.props.panes.find((p) => p !== pane && !p.dead && p.tag === 'rwindow' && w.kindAt(p.c, p.r) === 1 && !w.solid[I(p.c, p.r)]);
-    sim.shatterPane(pane);
+    sim.shatterPane(sim.station, pane);
     ok(pane.dead, 'a pane breaks');
     ok(floorNear(centre, '/obj/item/shard').length === 1, 'into one shard');
     ok(floorNear(centre, '/obj/item/stack/rods').some((f) => f.item.amount === 1), 'and one rod');
@@ -1355,13 +1355,13 @@ section('walls and girders', () => {
 
   // ---- the map's own girders are real now
   ok(sim.built.size >= 5 && [...sim.built].every((b) => b.k === 'girder' && w.solid[I(b.c, b.r)] === 1), 'the map\'s girders are built structures and block you');
-  ok(sim.worldState(A).built.length === sim.built.size, 'a player who joins is told about them');
+  ok(sim.worldState(A).grids[0].built.length === sim.station.built.size, 'a player who joins is told about them');
 
   // ---- a plain wall: a welder cuts through it in 10 s, and leaves a girder, two metal sheets and bare plating
   const plain = find('wall');
   ok(!!plain, 'found a wall to work on');
   stand(plain);
-  ok(sim.walls.examine({ k: 'wall', c: plain.c, r: plain.r }).join(' ') === 'A huge chunk of metal used to separate rooms. The outer plating is welded firmly in place.', 'examining a wall');
+  ok(sim.walls.examine(sim.station, { k: 'wall', c: plain.c, r: plain.r }).join(' ') === 'A huge chunk of metal used to separate rooms. The outer plating is welded firmly in place.', 'examining a wall');
   tool('/obj/item/wrench'); click({ k: 'wall', c: plain.c, r: plain.r }); step(0.4);
   ok(!a.busy && w.wallKey(plain.i) === 'wall', 'a wrench does nothing to a wall');
   let mark = inbox.a.length;
@@ -1383,7 +1383,7 @@ section('walls and girders', () => {
   ok(evs(inbox.a, 'bs+').some((e) => e.c === plain.c && e.r === plain.r) && evs(inbox.a, 'tile').some((e) => e.i === plain.i && e.kind === 1), 'clients are told: tile and girder');
 
   // ---- the girder: unbolt (4 s), disassemble when displaced (4 s) into two sheets, bolt it down again
-  ok(sim.walls.examine({ k: 'built', id: gp.id }).join(' ').endsWith('The bolts are wrenched in place.'), 'a bolted girder says so');
+  ok(sim.walls.examine(sim.station, { k: 'built', id: gp.id }).join(' ').endsWith('The bolts are wrenched in place.'), 'a bolted girder says so');
   mark = inbox.a.length;
   tool('/obj/item/wrench'); click({ k: 'built', id: gp.id }); step(3.4);
   ok(gp.st === 0, 'unbolting takes 4 s');
@@ -1408,7 +1408,7 @@ section('walls and girders', () => {
   ok(!w.collides(px, pz, 0.32), 'you can stand on that tile');
 
   // ---- putting it back: a girder, then two sheets of metal (4 s). One sheet is not enough
-  const g2 = sim.addBuilt('girder', plain.c, plain.r, 0);
+  const g2 = sim.addBuilt(sim.station, 'girder', plain.c, plain.r, 0);
   ok(w.collides(px, pz, 0.32), 'a new girder blocks the tile');
   stand(plain);
   tool('/obj/item/stack/sheet/metal', { amount: 1 });
@@ -1428,7 +1428,7 @@ section('walls and girders', () => {
   stand(re);
   const T = { k: 'wall', c: re.c, r: re.r };
   const st = () => w.ws[re.i];
-  ok(sim.walls.examine(T).join(' ').endsWith('The outer grille is fully intact.'), 'a reinforced wall starts intact');
+  ok(sim.walls.examine(sim.station, T).join(' ').endsWith('The outer grille is fully intact.'), 'a reinforced wall starts intact');
   tool('/obj/item/weldingtool'); a.hands[0].lit = true; a.hands[0].fuel = 20; click(T); step(0.5);
   ok(!a.busy && st() === 0, 'a welder does nothing to an intact one');
   const stepTool = (path, secs, to, msg) => {
@@ -1449,7 +1449,7 @@ section('walls and girders', () => {
   // going back a step works too
   ok(stepTool('welder', 10, 5, 'You weld the support rods back together.'), 'and welds them back');
   ok(stepTool('welder', 10, 6), 'then cuts them again');
-  ok(sim.walls.examine(T).join(' ').endsWith('the outer sheath is connected loosely to the girder.'), 'the hint changes with each step');
+  ok(sim.walls.examine(sim.station, T).join(' ').endsWith('the outer sheath is connected loosely to the girder.'), 'the hint changes with each step');
   mark = inbox.a.length;
   tool('/obj/item/crowbar'); click(T); step(9.5);
   ok(w.wallKey(re.i) === 'reinforced_wall', 'prying off the sheath takes 10 s');
@@ -1464,7 +1464,7 @@ section('walls and girders', () => {
   // ---- a reinforced girder: screws (4 s), then the inner grille comes out with wirecutters (4 s) leaving a plasteel sheet and a plain girder
   tool('/obj/item/screwdriver'); click({ k: 'built', id: gr.id }); step(4.5);
   ok(gr.st === 1, 'the struts are unscrewed');
-  ok(sim.walls.examine({ k: 'built', id: gr.id }).join(' ').endsWith('The support struts are unscrewed and the inner grille is intact.'), 'and it says so');
+  ok(sim.walls.examine(sim.station, { k: 'built', id: gr.id }).join(' ').endsWith('The support struts are unscrewed and the inner grille is intact.'), 'and it says so');
   tool('/obj/item/screwdriver'); click({ k: 'built', id: gr.id }); step(4.5);
   ok(gr.st === 2, 'the screwdriver puts them back');
   tool('/obj/item/screwdriver'); click({ k: 'built', id: gr.id }); step(4.5);
@@ -1502,7 +1502,7 @@ section('walls and girders', () => {
       const gx = girderAt(out.c, out.r);
       tool('/obj/item/wrench'); click({ k: 'built', id: gx.id }); step(4.5);
       tool('/obj/item/screwdriver'); click({ k: 'built', id: gx.id }); step(4.5);
-      const g3 = sim.addBuilt('girder', out.c, out.r, 0);
+      const g3 = sim.addBuilt(sim.station, 'girder', out.c, out.r, 0);
       tool('/obj/item/stack/sheet/metal', { amount: 2 }); click({ k: 'built', id: g3.id }); step(4.5);
       ok(w.wallKey(out.i) === 'wall' && !w.ventTiles().includes(out.i), 'and plating it closes the breach');
     }
@@ -1518,7 +1518,7 @@ section('walls and girders', () => {
   // ---- a late joiner is told what the world looks like
   const C = sim.addClient('Cara', () => {});
   const ws = sim.worldState(C);
-  ok(ws.built.length === sim.built.size && ws.tiles.some((e) => e.i === plain.i), 'a later joiner gets the girders and the changed tiles');
+  ok(ws.grids[0].built.length === sim.station.built.size && ws.grids[0].tiles.some((e) => e.i === plain.i), 'a later joiner gets the girders and the changed tiles');
 });
 
 section('stacks', () => {
@@ -1550,23 +1550,23 @@ section('stacks', () => {
 
   // ---- merging: picking one up joins the one you hold (put_in_hands), up to 50
   const mine = hold(METAL, 10);
-  const pile = sim.newItem(METAL, { amount: 5 }); place(sim, pile, a.x, a.z - 0.3);
+  const pile = sim.newItem(METAL, { amount: 5 }); place(sim, pile, sim.station, a.x, a.z - 0.3);
   let mark = inbox.a.length;
   click({ k: 'item', id: pile.id });
   ok(mine.amount === 15 && !sim.floor.has(pile.id), 'clicking a stack with one in your hand joins them');
   ok(said(mark).includes('Your metal stack now contains 15 metal sheets.'), 'with the DM\'s message');
   clear();
   const nearlyFull = hold(METAL, 48);
-  const more = sim.newItem(METAL, { amount: 5 }); place(sim, more, a.x, a.z - 0.3);
+  const more = sim.newItem(METAL, { amount: 5 }); place(sim, more, sim.station, a.x, a.z - 0.3);
   click({ k: 'item', id: more.id });
   ok(nearlyFull.amount === 50 && more.amount === 3 && sim.floor.has(more.id), 'a stack holds 50: the rest stays on the floor');
   clear();
-  const lone = sim.newItem('/obj/item/stack/rods', { amount: 2 }); place(sim, lone, a.x, a.z - 0.3);
+  const lone = sim.newItem('/obj/item/stack/rods', { amount: 2 }); place(sim, lone, sim.station, a.x, a.z - 0.3);
   mark = inbox.a.length;
   const metalHeld = hold(METAL, 4, 1); a.active = 0;                  // metal in the other hand
   click({ k: 'item', id: lone.id });
   ok(a.hands[0] === lone && metalHeld.amount === 4, 'a different kind of stack is just picked up');
-  const metal2 = sim.newItem(METAL, { amount: 3 }); place(sim, metal2, a.x, a.z - 0.3);
+  const metal2 = sim.newItem(METAL, { amount: 3 }); place(sim, metal2, sim.station, a.x, a.z - 0.3);
   mark = inbox.a.length;
   click({ k: 'item', id: metal2.id });
   ok(metalHeld.amount === 7 && !sim.floor.has(metal2.id) && a.hands[0] === lone, "rods in the active hand, metal in the other: picking up metal joins the other hand's stack (put_in_hands)");
@@ -1577,9 +1577,9 @@ section('stacks', () => {
   const [sx, sz] = [spot.c * TILE + 1, spot.r * TILE + 1];
   const sweep = () => { for (const f of [...sim.floor.values()]) if (f.c === spot.c && f.r === spot.r) { sim.floor.delete(f.item.id); sim.items.delete(f.item.id); } };
   sweep();
-  sim.stacks.spawn(METAL, 20, sx, sz);
-  sim.stacks.spawn(METAL, 20, sx, sz);
-  sim.stacks.spawn(METAL, 20, sx, sz);
+  sim.stacks.spawn(sim.station, METAL, 20, sx, sz);
+  sim.stacks.spawn(sim.station, METAL, 20, sx, sz);
+  sim.stacks.spawn(sim.station, METAL, 20, sx, sz);
   ok(floorAt(sx, sz, METAL).map((f) => f.item.amount).sort((p, q) => p - q).join() === '10,50', '60 sheets on one tile make a stack of 50 and one of 10');
   for (const f of floorAt(sx, sz, METAL)) { sim.floor.delete(f.item.id); sim.items.delete(f.item.id); }
 
@@ -1658,7 +1658,7 @@ section('stacks', () => {
   // ---- what window and wall drops do: they join the pile on the tile
   sweep();
   const pre = floorAt(sx, sz, METAL).length;
-  sim.stacks.spawn(METAL, 2, sx, sz); sim.stacks.spawn(METAL, 2, sx, sz);
+  sim.stacks.spawn(sim.station, METAL, 2, sx, sz); sim.stacks.spawn(sim.station, METAL, 2, sx, sz);
   ok(floorAt(sx, sz, METAL).length - pre <= 1 && floorAt(sx, sz, METAL).some((f) => f.item.amount === 4), 'two drops of two sheets are one stack of four');
 });
 
@@ -1699,7 +1699,7 @@ section('floors, plating and lattice', () => {
   ok(said(mark).includes('You remove the floor tile.'), 'DM\'s message');
   ok(sim.atmos.isCell[fl.i] === 1 && w.kind[fl.i] === 1, 'it is still floor (and holds air)');
   ok(evs(inbox.a, 'tile').some((e) => e.i === fl.i && e.ft === w.ft[fl.i] && e.floor === T.plating), 'clients are told');
-  ok(w.floorName(fl.i) === 'plating' && sim.floors.examine({ k: 'floor', c: fl.c, r: fl.r })[0] === 'There are a few attachment holes for a new tile or reinforcement rods.', 'plating says what it will take');
+  ok(w.floorName(fl.i) === 'plating' && sim.floors.examine(sim.station, { k: 'floor', c: fl.c, r: fl.r })[0] === 'There are a few attachment holes for a new tile or reinforcement rods.', 'plating says what it will take');
 
   // ---- plating takes a tile again, at once
   const tiles = tool(PLASTEEL, { amount: 3 });
@@ -1717,7 +1717,7 @@ section('floors, plating and lattice', () => {
   step(0.7);
   ok(w.floorType(fl.i).k === 'engine' && w.floorCell[fl.i] === T.engine && rods.amount === 1, 'then it is a reinforced floor and two rods are gone');
   ok(said(mark).includes('You begin reinforcing the floor...') && said(mark).includes('You reinforce the floor.'), 'messages');
-  ok(w.floorName(fl.i) === 'reinforced floor' && sim.floors.examine({ k: 'floor', c: fl.c, r: fl.r }).join(' ') === 'Extremely sturdy. The reinforcement rods are wrenched firmly in place.', 'and says so');
+  ok(w.floorName(fl.i) === 'reinforced floor' && sim.floors.examine(sim.station, { k: 'floor', c: fl.c, r: fl.r }).join(' ') === 'Extremely sturdy. The reinforcement rods are wrenched firmly in place.', 'and says so');
   tool('/obj/item/crowbar'); click(fl.c, fl.r); step(0.2);
   ok(w.floorType(fl.i).k === 'engine', 'a crowbar cannot lift it');
   sweep(fl.c, fl.r);
@@ -1764,7 +1764,7 @@ section('floors, plating and lattice', () => {
   ok(w.kind[sp.i] === 3 && w.lat[sp.i] === 1 && r5.amount === 4 && w.floorName(sp.i) === 'lattice', 'a rod makes a lattice');
   ok(said(mark).includes('You construct a lattice.'), 'DM\'s message');
   ok(w.floorCell[sp.i] === w.latticeCell(sp.c, sp.r), 'drawn from what is around it');
-  ok(sim.floors.examine({ k: 'floor', c: sp.c, r: sp.r }).join(' ') === "A lightweight support lattice. These hold our station together. The rods look like they could be cut. There's space for more rods or a tile.", 'examining a lattice');
+  ok(sim.floors.examine(sim.station, { k: 'floor', c: sp.c, r: sp.r }).join(' ') === "A lightweight support lattice. These hold our station together. The rods look like they could be cut. There's space for more rods or a tile.", 'examining a lattice');
   // a neighbour next to it is a lattice too: both are redrawn from each other
   stand(sp.c + 1, sp.r); click(sp.c + 1, sp.r);
   ok(w.kind[I(sp.c + 1, sp.r)] === 3 && w.floorCell[sp.i] === w.latticeCell(sp.c, sp.r), 'a lattice next to it: both are drawn as neighbours');
@@ -1791,7 +1791,7 @@ section('floors, plating and lattice', () => {
   ok(w.hasGravity(...at(sp.c, sp.r)) === w.gravityOn, 'a floor out in space has gravity like any other (the generator)');
 
   // ---- a wall is not a floor
-  ok(sim.floors.floor({ c: plainWallC(), r: plainWallR() }) === null, 'a wall is not a floor target');
+  ok(sim.floors.floor(sim.station, { c: plainWallC(), r: plainWallR() }) === null, 'a wall is not a floor target');
   function plainWallC() { for (let i = 0; i < w.W * w.H; i++) if (w.wallKey(i)) return i % w.W; return 0; }
   function plainWallR() { for (let i = 0; i < w.W * w.H; i++) if (w.wallKey(i)) return Math.floor(i / w.W); return 0; }
 });

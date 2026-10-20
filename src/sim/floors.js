@@ -15,27 +15,27 @@ export class Floors {
   constructor(sim) { this.sim = sim; }
 
   /** The tile behind a `floor` target. */
-  floor(t) {
-    const sim = this.sim, w = sim.world;
+  floor(g, t) {
+    const w = g.world;
     if (!w.inb(t.c, t.r)) return null;
-    const i = t.r * w.W + t.c, kind = w.kind[i];
+    const i = w.idx(t.c, t.r), kind = w.kind[i];
     if (kind === KIND.WALL) return null;
-    return { k: 'floor', c: t.c, r: t.r, i, name: w.floorName(i), x: t.c * TILE + 1, z: t.r * TILE + 1, reach: 4.8, alive: () => true, state: () => w.kind[i] * 10000 + w.ft[i] * 10 + w.lat[i] };
+    return { k: 'floor', grid: g, c: t.c, r: t.r, i, name: w.floorName(i), x: t.c * TILE + 1, z: t.r * TILE + 1, reach: 4.8, alive: () => true, state: () => w.kind[i] * 10000 + w.ft[i] * 10 + w.lat[i] };
   }
 
   /** A tile changed: the air, the clients, and the lattice around it that is drawn from what stands next to it. */
-  changed(c, r) {
-    const sim = this.sim, w = sim.world;
+  changed(g, c, r) {
+    const sim = this.sim, w = g.world;
     const around = w.latticeAround(c, r);
-    sim.tileChanged(c, r);
-    for (const i of around) if (i !== r * w.W + c) sim.emitTile(i);
+    sim.tileChanged(g, c, r);
+    for (const i of around) if (i !== w.idx(c, r)) sim.emitTile(g, i);
   }
 
   /** The plating a floor is taken down to. */
-  toPlating(c, r) {
-    const w = this.sim.world;
+  toPlating(g, c, r) {
+    const w = g.world;
     w.setFloor(c, r, w.floorTypeId('plating'), w.level.terrain.plating);
-    this.changed(c, r);
+    this.changed(g, c, r);
   }
 
   at(th) { return [th.x + (this.sim.rand() - 0.5) * 0.8, th.z + (this.sim.rand() - 0.5) * 0.8]; }
@@ -47,7 +47,7 @@ export class Floors {
 
   /** A click on a floor, plating, lattice or open space with `held`. Returns false when nothing here answers to it. */
   click(m, t, held) {
-    const sim = this.sim, w = sim.world, th = this.floor(t);
+    const sim = this.sim, g = t.grid, w = g.world, th = this.floor(g, t);
     if (!th || !held) return true;
     const { c, r, i } = th, tool = held.def.tool, kind = w.kind[i];
     const level = w.level;
@@ -57,9 +57,9 @@ export class Floors {
       if (isRods(held)) {
         this.use(m, held, 1);
         w.makeLattice(c, r);
-        sim.sound('drop', th.x, th.z, 0.6);
+        sim.sound('drop', th, 0.6);
         sim.tell(m, 'notice', 'You construct a lattice.');
-        this.changed(c, r);
+        this.changed(g, c, r);
         return true;
       }
       if (held.path.startsWith('/obj/item/stack/tile/plasteel')) {
@@ -74,28 +74,28 @@ export class Floors {
       if (tool === 'wirecutters') {
         const catwalk = w.lat[i] === 2;
         sim.tell(m, 'notice', `Slicing ${catwalk ? 'catwalk' : 'lattice'} joints ...`);
-        sim.sound('wirecutter', th.x, th.z, 0.9);
+        sim.sound('wirecutter', th, 0.9);
         w.clearLattice(c, r);
-        sim.stacks.spawn('/obj/item/stack/rods', catwalk ? 2 : 1, ...this.at(th));
-        this.changed(c, r);
+        sim.stacks.spawn(g, '/obj/item/stack/rods', catwalk ? 2 : 1, ...this.at(th));
+        this.changed(g, c, r);
         return true;
       }
       if (isRods(held)) {
         if (w.lat[i] === 2) { sim.tell(m, 'warning', 'There is already a catwalk here!'); return true; }
         this.use(m, held, 1);
         w.makeLattice(c, r, true);
-        sim.sound('drop', th.x, th.z, 0.6);
+        sim.sound('drop', th, 0.6);
         sim.tell(m, 'notice', 'You construct a catwalk.');
-        this.changed(c, r);
+        this.changed(g, c, r);
         return true;
       }
       if (held.path.startsWith('/obj/item/stack/tile/plasteel')) {
         this.use(m, held, 1);
         w.lat[i] = 0;
         w.setFloor(c, r, w.floorTypeId('plating'), level.terrain.plating);
-        sim.sound('drop', th.x, th.z, 0.6);
+        sim.sound('drop', th, 0.6);
         sim.tell(m, 'notice', 'You build a floor.');
-        this.changed(c, r);
+        this.changed(g, c, r);
         return true;
       }
       return false;
@@ -111,8 +111,8 @@ export class Floors {
       toolJob(sim, m, th, held, th.state(), {
         label: 'removing the rods', ds: 30, sfx: 'wrench', start: 'You begin removing rods...',
         done: () => {
-          if (type.tile) sim.stacks.spawn(type.tile, 2, ...this.at(th));
-          this.toPlating(c, r);
+          if (type.tile) sim.stacks.spawn(g, type.tile, 2, ...this.at(th));
+          this.toPlating(g, c, r);
         },
       });
       return true;
@@ -120,10 +120,10 @@ export class Floors {
 
     if (type.k === 'tile') {
       if (tool === 'crowbar') {                   // pry_tile(): at once
-        sim.sound('crowbar', th.x, th.z, 0.8);
+        sim.sound('crowbar', th, 0.8);
         sim.tell(m, 'notice', 'You remove the floor tile.');
-        if (type.tile && level.itemdefs[type.tile]) sim.stacks.spawn(type.tile, 1, ...this.at(th));
-        this.toPlating(c, r);
+        if (type.tile && level.itemdefs[type.tile]) sim.stacks.spawn(g, type.tile, 1, ...this.at(th));
+        this.toPlating(g, c, r);
         return true;
       }
       if (isTile(held)) {                         // try_replace_tile(): needs a crowbar in the other hand
@@ -131,9 +131,9 @@ export class Floors {
         if (!tile || tile.ft === w.ft[i]) return true;
         const crowbar = [m.hands[0], m.hands[1]].find((h) => h?.def.tool === 'crowbar');
         if (!crowbar) return true;
-        sim.sound('crowbar', th.x, th.z, 0.8);
-        if (type.tile && level.itemdefs[type.tile]) sim.stacks.spawn(type.tile, 1, ...this.at(th));
-        this.toPlating(c, r);
+        sim.sound('crowbar', th, 0.8);
+        if (type.tile && level.itemdefs[type.tile]) sim.stacks.spawn(g, type.tile, 1, ...this.at(th));
+        this.toPlating(g, c, r);
         this.lay(m, th, held);
         return true;
       }
@@ -150,9 +150,9 @@ export class Floors {
         done: () => {
           this.use(m, held, 2);
           w.setFloor(c, r, w.floorTypeId('engine'), level.terrain.engine);
-          sim.sound('pickup', th.x, th.z, 0.8);
+          sim.sound('pickup', th, 0.8);
           sim.tell(m, 'notice', 'You reinforce the floor.');
-          this.changed(c, r);
+          this.changed(g, c, r);
         },
       });
       return true;
@@ -162,25 +162,25 @@ export class Floors {
 
   /** A tile item's path with its sub-types folded in (carpet/blue is its own; anything else is the registered entry it starts with). */
   baseTile(path) {
-    const tiles = this.sim.world.level.tiles;
+    const tiles = this.sim.level.tiles;
     return Object.keys(tiles).filter((k) => path.startsWith(k)).sort((p, q) => q.length - p.length)[0];
   }
 
   /** plating.dm attackby: a tile goes down at once. */
   lay(m, th, held) {
-    const sim = this.sim, w = sim.world, tile = w.level.tiles[this.baseTile(held.path)];
+    const sim = this.sim, w = th.grid.world, tile = w.level.tiles[this.baseTile(held.path)];
     if (!tile) return;
     this.use(m, held, 1);
     w.setFloor(th.c, th.r, tile.ft, tile.cell);
-    sim.sound('drop', th.x, th.z, 0.6);
-    this.changed(th.c, th.r);
+    sim.sound('drop', th, 0.6);
+    this.changed(th.grid, th.c, th.r);
   }
 
   // ------------------------------------------------------------------ examine
-  examine(t) {
-    const th = this.floor(t);
+  examine(g, t) {
+    const th = this.floor(g, t);
     if (!th) return [];
-    const w = this.sim.world, kind = w.kind[th.i];
+    const w = g.world, kind = w.kind[th.i];
     if (kind === KIND.SPACE) return ['Space.'];
     if (kind === KIND.LATTICE) {
       return w.lat[th.i] === 2

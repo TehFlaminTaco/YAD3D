@@ -67,7 +67,7 @@ export class Game {
     addEventListener('beforeunload', (e) => { if (this.inWorld() && !this.input.forced) { e.preventDefault(); e.returnValue = ''; } });
     document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) navigator.keyboard?.unlock?.(); });
     this.audio = new AudioSys();
-    this.pred = { x: 0, z: 0, vx: 0, vz: 0 };
+    this.pred = { g: 0, x: 0, z: 0, vx: 0, vz: 0 };           // where I am: on grid `g`, in its frame
     this.corr = { x: 0, z: 0 };
     this.yaw = 0;
     this.pitch = 0;
@@ -163,17 +163,21 @@ export class Game {
     const rep = this.rep = new Replica(this.assets, w);
     this.view = new WorldView(this.scene, this.assets, rep, this.opts);
     this.me = w.you;
-    rep.on('fdoor', (ev) => this.view.setFdoor(rep.fdoors[ev.i]));
-    rep.on('cl', (ev) => this.view.setClosetView(rep.props.interact[ev.i]));
-    rep.on('tile', (ev) => this.view.tilesChanged([[ev.i % rep.world.W, Math.floor(ev.i / rep.world.W)]]));
-    rep.on('pane', (ev) => this.view.tilesChanged([[ev.c, ev.r]]));
-    rep.on('bs+', (ev) => this.view.addBuilt(rep.built.get(ev.id)));
-    rep.on('bs~', (ev) => this.view.updateBuilt(rep.built.get(ev.id)));
-    rep.on('bs-', (ev) => this.view.removeBuilt(ev.id));
-    rep.on('evac', (ev) => this.view.onEvac(ev));
-    rep.on('pm', (ev) => this.view.propMoved(rep.props.interact[ev.i]));
-    rep.on('imv', (ev) => this.view.moveItem(ev.id));
-    rep.on('item+', (ev) => this.view.addItem(rep.items.get(ev.id)));
+    this.pred.g = rep.station.id;
+    // what the view draws is one grid (for now): events about the others change the replica and nothing else
+    const drawn = (ev) => ev.g === this.view.grid.id;
+    const grid = () => this.view.grid;
+    rep.on('fdoor', (ev) => { if (drawn(ev)) this.view.setFdoor(grid().fdoors[ev.i]); });
+    rep.on('cl', (ev) => { if (drawn(ev)) this.view.setClosetView(grid().props.interact[ev.i]); });
+    rep.on('tile', (ev) => { if (drawn(ev)) this.view.tilesChanged([[ev.i % grid().world.W, Math.floor(ev.i / grid().world.W)]]); });
+    rep.on('pane', (ev) => { if (drawn(ev)) this.view.tilesChanged([[ev.c, ev.r]]); });
+    rep.on('bs+', (ev) => { if (drawn(ev)) this.view.addBuilt(grid().built.get(ev.id)); });
+    rep.on('bs~', (ev) => { if (drawn(ev)) this.view.updateBuilt(grid().built.get(ev.id)); });
+    rep.on('bs-', (ev) => { if (drawn(ev)) this.view.removeBuilt(ev.id); });
+    rep.on('evac', (ev) => { if (ev.g === grid()) this.view.onEvac(ev); });
+    rep.on('pm', (ev) => { if (drawn(ev)) this.view.propMoved(grid().props.interact[ev.i]); });
+    rep.on('imv', (ev) => { if (drawn(ev)) this.view.moveItem(ev.id); });
+    rep.on('item+', (ev) => { if (drawn(ev)) this.view.addItem(rep.items.get(ev.id)); });
     rep.on('item-', (ev) => { this.noteVanished(rep.lastRemoved); this.view.removeItem(ev.id); });
     rep.on('mob+', (ev) => { this.view.addMob(rep.mobs.get(ev.id)); if (ev.id === rep.you?.id) this.ownLookChanged(); });
     rep.on('mob-', (ev) => this.view.removeMob(ev.id));
@@ -182,13 +186,13 @@ export class Game {
     rep.on('stack', (ev) => this.stackwin.show(ev));
     rep.on('dbg', (ev) => this.debugMenu.reply(ev));
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
-    rep.on('power', () => this.view.rebuildLights());
-    rep.on('area', () => this.view.rebuildLights());
-    rep.on('flicker', (ev) => this.view.flickerLights(ev.s, this.time));
+    rep.on('power', (ev) => { if (drawn(ev)) this.view.rebuildLights(); });
+    rep.on('area', (ev) => { if (drawn(ev)) this.view.rebuildLights(); });
+    rep.on('flicker', (ev) => { if (drawn(ev)) this.view.flickerLights(ev.s, this.time); });
     rep.on('self', (ev) => this.onSelf(ev));
     rep.on('msg', (ev) => this.chat.add(ev));
     rep.on('snd', (ev) => this.audio.play(ev.n, { x: ev.x, z: ev.z, vol: ev.v }));
-    rep.on('beam', (ev) => this.view.addBeam(ev.a, ev.b, ev.col, this.time));
+    rep.on('beam', (ev) => { if (drawn(ev)) this.view.addBeam(ev.a, ev.b, ev.col, this.time); });
     rep.on('prog', (ev) => this.hud.progress(ev.f, ev.label));
     rep.on('term', (ev) => this.term.event(ev));
     rep.on('round', () => this.lobby.update());
@@ -197,7 +201,7 @@ export class Game {
     rep.on('shake', (ev) => this.shake(ev.a));
     rep.on('hurt', (ev) => { this.fx.flash(Math.min(1, 0.4 + ev.a / 20)); this.shake(Math.min(0.5, ev.a / 25)); });
     rep.on('bubble', (ev) => this.hud.addBubble(ev.id, ev.text));
-    rep.on('toss', (ev) => this.view.addToss(ev.id, ev.a, ev.b, this.time));
+    rep.on('toss', (ev) => { if (drawn(ev)) this.view.addToss(ev.id, ev.a, ev.b, this.time); });
     for (const m of rep.mobs.values()) this.view.addMob(m);
     this.phase = rep.myState === 'ghost' ? 'ghost' : 'lobby';
     this.lobby.update();
@@ -248,12 +252,13 @@ export class Game {
     const phase = you.id ? 'playing' : rep.myState === 'ghost' ? 'ghost' : 'lobby';
     if (phase !== this.phase) this.setPhase(phase, you);
     if (this.inWorld()) this.reconcile(you, s.ack);
-    else { this.pred.x = you.x; this.pred.z = you.z; }
+    else { this.pred.g = you.g ?? this.pred.g; this.pred.x = you.x; this.pred.z = you.z; }
   }
 
   setPhase(phase, you) {
     const was = this.phase;
     this.phase = phase;
+    this.pred.g = you.g ?? this.pred.g;
     this.pred.x = you.x; this.pred.z = you.z; this.pred.vx = you.vx || 0; this.pred.vz = you.vz || 0;
     this.corr.x = this.corr.z = 0;
     this.pending = []; this.sendBuf = [];
@@ -325,11 +330,14 @@ export class Game {
     return null;
   }
 
+  /** The grid your body is on (the station while you are in the lobby or a ghost): whose tiles you collide with and whose air you breathe. */
+  myGrid() { return this.rep.grids.get(this.pred.g) || this.rep.station; }
+
   // ---------------------------------------------------------------- prediction
   predictCtx() {
     const s = this.self;
     if (this.phase === 'ghost') return { noclip: true };
-    return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind, noclip: !!s?.dbg?.noclip, ignore: s?.haul >= 0 ? this.rep.props.interact[s.haul] : null, jet: !!s?.jet, mag: !!s?.mag };   // you pass through what you drag
+    return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind, noclip: !!s?.dbg?.noclip, ignore: s?.haul >= 0 ? this.myGrid().props.interact[s.haul] : null, jet: !!s?.jet, mag: !!s?.mag };   // you pass through what you drag
   }
 
   frozen() {
@@ -340,18 +348,18 @@ export class Game {
   stepPred(inp, dt) {
     if (this.frozen()) {
       // out cold: stop where you are, unless there is no gravity to stop you (then you drift, like the server says)
-      if (this.rep.world.hasGravity(this.pred.x, this.pred.z) || this.self.inside) this.pred.vx = this.pred.vz = 0;
-      else stepMovement(this.pred, { yaw: inp.yaw }, this.rep.world, dt, { ...this.predictCtx(), limp: true });
+      if (this.myGrid().world.hasGravity(this.pred.x, this.pred.z) || this.self.inside) this.pred.vx = this.pred.vz = 0;
+      else stepMovement(this.pred, { yaw: inp.yaw }, this.myGrid().world, dt, { ...this.predictCtx(), limp: true });
       return;
     }
-    stepMovement(this.pred, inp, this.rep.world, dt, this.predictCtx());
+    stepMovement(this.pred, inp, this.myGrid().world, dt, this.predictCtx());
   }
 
   reconcile(you, ack) {
     const p = this.pred;
     this.pending = this.pending.filter((i) => i.seq > ack);
     const ox = p.x, oz = p.z;
-    p.x = you.x; p.z = you.z; p.vx = you.vx || 0; p.vz = you.vz || 0;
+    p.g = you.g ?? p.g; p.x = you.x; p.z = you.z; p.vx = you.vx || 0; p.vz = you.vz || 0;
     this.wind = you.wind || null;
     for (const inp of this.pending) this.stepPred(inp, inp.dt);
     const ex = ox - p.x, ez = oz - p.z;
@@ -389,7 +397,7 @@ export class Game {
     this.sendAcc += dt;
     if (this.sendAcc >= SEND_EVERY) this.flushInputs();
     // feet off the floor (no gravity here): no footsteps, no walking bob; the camera sways instead (placeCamera)
-    this.floating = this.phase === 'playing' && floatState(this.rep.world, this.pred, this.predictCtx()).floating;
+    this.floating = this.phase === 'playing' && floatState(this.myGrid().world, this.pred, this.predictCtx()).floating;
     const sp = this.floating ? 0 : Math.hypot(this.pred.vx, this.pred.vz);
     this.moving = sp;
     if (this.phase === 'playing') {
@@ -397,7 +405,7 @@ export class Game {
       this.stepAcc += sp * dt;
       if (this.stepAcc > (mv.run ? 2.6 : 2.0) && sp > 1) {
         this.stepAcc = 0;
-        const w = this.rep.world;
+        const w = this.myGrid().world;
         const c = Math.floor(this.pred.x / TILE), r = Math.floor(this.pred.z / TILE);
         const surface = w.kindAt(c, r) === KIND.LATTICE ? 'catwalk' : w.areaAt(c, r)?.c === 'maintenance' ? 'plating' : 'floor';
         this.audio.footstep(!!mv.run, surface);
@@ -432,7 +440,7 @@ export class Game {
 
   /** Whatever the ray (o, d) points at within reach. Mirrors what the server will accept. */
   findTarget(o, f) {
-    const rep = this.rep, world = rep.world;
+    const rep = this.rep, grid = this.myGrid(), world = grid.world, gid = grid.id;
     const px = this.pred.x, pz = this.pred.z;
     let best = null, bs = 1e9;
     const consider = (ref, x, y0, z, rad, extra) => {
@@ -461,35 +469,35 @@ export class Game {
     const maxD2 = (REACH + 1.5) * (REACH + 1.5);
     const near = (x, z) => { const dx = x - px, dz = z - pz; return dx * dx + dz * dz <= maxD2; };
     for (const it of rep.items.values()) {
-      if (!near(it.x, it.z)) continue;
+      if (it.g !== gid || !near(it.x, it.z)) continue;
       consider({ k: 'item', id: it.id }, it.x, it.y, it.z, 0.45, { y1: it.y + 0.4, name: it.n });
     }
-    for (let i = 0; i < rep.doors.length; i++) {
-      const d = rep.doors[i];
+    for (let i = 0; i < grid.doors.length; i++) {
+      const d = grid.doors[i];
       if (!near(d.x, d.z)) continue;
       consider({ k: 'door', idx: i }, d.x, 0.2, d.z, 1.05, { y1: 2.2, name: d.name, through: true, bias: 2 });
     }
-    for (const fd of rep.fdoors) {
+    for (const fd of grid.fdoors) {
       if (!fd.closed || !near(fd.x, fd.z)) continue;
       consider({ k: 'fdoor', idx: fd.idx }, fd.x, 0.2, fd.z, 1.05, { y1: 2.2, name: 'firelock', through: true, bias: 2 });
     }
-    for (const it of rep.props.interact) {
+    for (const it of grid.props.interact) {
       if (it.gone || !near(it.x, it.z)) continue;
       if (it.kind === 'wm') consider({ k: 'prop', idx: it.idx }, it.x, it.y0, it.z, 0.7, { y1: it.y1, name: it.name, through: true, prop: it });
       else consider({ k: 'prop', idx: it.idx }, it.x, it.y0 + 0.1, it.z, it.half ? Math.min(0.9, it.half + 0.1) : 0.9, { y1: Math.max(it.y0 + 1.0, it.y1), name: it.name, prop: it });   // as wide as the thing really is
     }
-    for (const b of rep.built) {
+    for (const b of grid.built) {
       const bx = b.c * TILE + TILE / 2, bz = b.r * TILE + TILE / 2;
       if (near(bx, bz)) consider({ k: 'built', id: b.id }, bx, 0.1, bz, 0.95, { y1: 1.7, name: girderLook(b.st).name });
     }
     for (const m of rep.mobs.values()) {
-      if (m.id === rep.you?.id || !near(m.x, m.z)) continue;
+      if (m.id === rep.you?.id || m.g !== gid || !near(m.x, m.z)) continue;
       consider({ k: 'mob', id: m.id }, m.x, 0.1, m.z, m.dead ? 0.8 : 0.7, { y1: m.dead ? 0.4 : 1.6, name: m.n, mob: m });
     }
     if (!best) {
       // what is left of a window (its grille, or just the floor) and windows themselves: TG has no "broken window" object
       const br = this.breachAlong(o, f);
-      if (br) best = { k: 'breach', c: br.c, r: br.r, name: rep.world.grille[br.r * rep.world.W + br.c] ? 'grille' : 'floor', d: 2 };
+      if (br) best = { k: 'breach', c: br.c, r: br.r, name: world.grille[world.idx(br.c, br.r)] ? 'grille' : 'floor', d: 2 };
       else best = this.windowAlong(o, f) || this.floorAlong(o, f);
     }
     return best;
@@ -512,12 +520,12 @@ export class Game {
   /** The tile of floor (or lattice, or open space) the ray meets within reach, with a clear line to it. Only while you hold something that works on it. */
   floorAlong(o, f) {
     if (f.y > -0.05 || !this.holdingBuilder()) return null;
-    const w = this.rep.world, t = -o.y / f.y;
+    const w = this.myGrid().world, t = -o.y / f.y;
     const x = o.x + f.x * t, z = o.z + f.z * t, hd = Math.hypot(x - o.x, z - o.z);
     if (hd > REACH + 0.6) return null;
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
     if (!w.inb(c, r)) return null;
-    const i = r * w.W + c;
+    const i = w.idx(c, r);
     if (w.kind[i] === KIND.WALL) return null;
     if (w.raycast(o.x, o.z, x - o.x, z - o.z, hd, 'shot') < hd - 0.05) return null;
     return { k: 'floor', c, r, name: w.floorName(i), d: hd };
@@ -525,7 +533,7 @@ export class Game {
 
   /** The window (a whole glass tile, or a thin pane on a tile's edge) the ray reaches first, if nothing else is in the way. */
   windowAlong(o, f) {
-    const w = this.rep.world, reach = REACH + 0.6;
+    const w = this.myGrid().world, reach = REACH + 0.6;
     const t = w.raycast(o.x, o.z, f.x, f.z, reach, 'shot');
     const h = w.hit;
     if (t >= reach || !h) return null;
@@ -539,7 +547,7 @@ export class Game {
       return { k: 'window', c: h.c, r: h.r, name: WINDOWS[w.windowKey(h.i)]?.name || 'window', d: t };
     }
     if (h.kind === 'edge') {
-      const p = this.rep.props.paneIdx.get(h.i * 16 + h.bit);
+      const p = this.myGrid().props.paneIdx.get(h.i * 16 + h.bit);
       if (!p || p.dead) return null;
       return { k: 'pane', c: p.c, r: p.r, pd: p.d, name: WINDOWS[p.tag]?.name || 'window', d: t };
     }
@@ -547,12 +555,12 @@ export class Game {
   }
 
   breachAlong(o, f) {
-    const w = this.rep.world;
+    const w = this.myGrid().world;
     const hl = Math.hypot(f.x, f.z) || 1;
     for (let t = 0.6; t < 3.4; t += 0.25) {
       const x = o.x + f.x / hl * t, z = o.z + f.z / hl * t;
       const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
-      const i = r * w.W + c;
+      const i = w.idx(c, r);
       if (w.breached.has(i)) return { c, r };
       if (w.solid[i] && !w.breached.has(i)) return null;
     }
@@ -564,9 +572,9 @@ export class Game {
    * within reach, in sight and not inside something solid.
    */
   floorPoint(o, d) {
-    const w = this.rep.world;
+    const w = this.myGrid().world;
     if (d.y > -0.02) return null;
-    const tileH = (x, z) => { const c = Math.floor(x / TILE), r = Math.floor(z / TILE); return w.inb(c, r) ? w.tableH[r * w.W + c] : 0; };
+    const tileH = (x, z) => { const c = Math.floor(x / TILE), r = Math.floor(z / TILE); return w.inb(c, r) ? w.tableH[w.idx(c, r)] : 0; };
     let hit = null;
     // table tops first: step along the ray until it drops below table height over a table
     const tFloor = -o.y / d.y;
@@ -582,20 +590,22 @@ export class Game {
     if (wall < hd - 0.05) return { ...hit, ok: false, blocked: true };
     const c = Math.floor(hit.x / TILE), r = Math.floor(hit.z / TILE);
     if (!w.inb(c, r)) return { ...hit, ok: false };
-    const i = r * w.W + c, k = w.kind[i];
+    const i = w.idx(c, r), k = w.kind[i];
     const reach = Math.hypot(hit.x - this.pred.x, hit.z - this.pred.z);
     const ok = reach <= DROP_REACH && (k === KIND.FLOOR || k === KIND.LATTICE) && (w.tableH[i] > 0 || !w.collides(hit.x, hit.z, 0.08));
     return { ...hit, ok, reach };
   }
 
+  /** What a click or an examine sends about its target: the grid it is on (items and people are found by id and need none) and where on it. */
   ref(t) {
     if (!t) return { k: 'none' };
+    const g = this.myGrid().id;
     switch (t.k) {
       case 'item': case 'mob': return { k: t.k, id: t.id };
-      case 'breach': case 'window': case 'wall': case 'floor': return { k: t.k, c: t.c, r: t.r };
-      case 'built': return { k: 'built', id: t.id };
-      case 'pane': return { k: 'pane', c: t.c, r: t.r, d: t.pd };
-      default: return { k: t.k, idx: t.idx };
+      case 'breach': case 'window': case 'wall': case 'floor': return { k: t.k, g, c: t.c, r: t.r };
+      case 'built': return { k: 'built', g, id: t.id };
+      case 'pane': return { k: 'pane', g, c: t.c, r: t.r, d: t.pd };
+      default: return { k: t.k, g, idx: t.idx };
     }
   }
 
@@ -719,10 +729,10 @@ export class Game {
 
     this.audio.listener.x = this.pred.x; this.audio.listener.z = this.pred.z; this.audio.listener.yaw = this.yaw;
     const c = Math.floor(this.pred.x / TILE), r = Math.floor(this.pred.z / TILE);
-    const area = rep.world.areaAt(c, r);
+    const area = this.myGrid().world.areaAt(c, r);
     const vac = rep.env.p < 30;
     this.audio.setMuffle(this.phase === 'playing' ? (vac && !this.self?.suit ? 1 : vac ? 0.5 : 0) : 0);
-    this.audio.update(dt, { cat: area ? area.c : 'space', vac, power: rep.power.state, hpFrac: (this.self?.hp?.[0] ?? 100) / (this.self?.hp?.[1] || 100), dead: !!this.self?.dead });
+    this.audio.update(dt, { cat: area ? area.c : 'space', vac, power: this.myGrid().power.state, hpFrac: (this.self?.hp?.[0] ?? 100) / (this.self?.hp?.[1] || 100), dead: !!this.self?.dead });
     this.footsteps(dt);
 
     if (this.phase === 'playing') {
@@ -792,7 +802,7 @@ export class Game {
   footsteps(dt) {
     if (this.phase !== 'playing') return;
     for (const m of this.rep.mobs.values()) {
-      if (m.dead || m.speed < 1 || m.kind !== 'human' || m.id === this.rep.you?.id) continue;
+      if (m.dead || m.speed < 1 || m.kind !== 'human' || m.id === this.rep.you?.id || m.g !== this.pred.g) continue;
       const dx = m.x - this.pred.x, dz = m.z - this.pred.z;
       if (dx * dx + dz * dz > 14 * 14) continue;
       m.stepAcc = (m.stepAcc || 0) + m.speed * dt;

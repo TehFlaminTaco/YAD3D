@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadSimData } from '../src/sim/load.js';
-import { decodeLevel } from '../src/shared/leveldata.js';
+import { decodeGrid } from '../src/shared/leveldata.js';
 import { World } from '../src/shared/world.js';
 import { LevelMesh } from '../src/render/level.js';
 import { TILE, KIND, DV } from '../src/shared/config.js';
@@ -11,7 +11,7 @@ import { Looks, WORN_SLOTS } from '../src/shared/looks.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const data = loadSimData(root);
-const world = new World(decodeLevel(data.level));
+const world = new World(decodeGrid(data.level, 'station'));
 const mesh = new LevelMesh(world, { level: data.level, terrainTex: null });
 let pass = 0, fail = 0;
 const ok = (cond, name) => { if (cond) pass++; else { fail++; console.log('  FAIL:', name); } };

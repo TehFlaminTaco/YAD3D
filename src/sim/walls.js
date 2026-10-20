@@ -63,18 +63,17 @@ export class Walls {
   constructor(sim) { this.sim = sim; }
 
   // ------------------------------------------------------------------ what is being clicked
-  wall(t) {
-    const sim = this.sim, w = sim.world, i = t.r * w.W + t.c, key = w.wallKey(i);
+  wall(g, t) {
+    const w = g.world, i = w.idx(t.c, t.r), key = w.wallKey(i);
     if (!key) return null;
     const info = WALLS[key];
-    return { k: 'wall', c: t.c, r: t.r, i, key, info, name: info.name, x: t.c * TILE + 1, z: t.r * TILE + 1, reach: 4.8, alive: () => w.wallKey(i) === key, state: () => w.ws[i] };
+    return { k: 'wall', grid: g, c: t.c, r: t.r, i, key, info, name: info.name, x: t.c * TILE + 1, z: t.r * TILE + 1, reach: 4.8, alive: () => w.wallKey(i) === key, state: () => w.ws[i] };
   }
 
-  girder(t) {
-    const sim = this.sim;
-    const rec = sim.built.get(t.id);
+  girder(g, t) {
+    const rec = g.built.get(t.id);
     if (!rec || rec.k !== 'girder') return null;
-    return { k: 'built', rec, id: rec.id, c: rec.c, r: rec.r, name: girderLook(rec.st).name, x: rec.c * TILE + 1, z: rec.r * TILE + 1, reach: 4.8, alive: () => sim.built.get(rec.id) === rec, state: () => rec.st };
+    return { k: 'built', grid: g, rec, id: rec.id, c: rec.c, r: rec.r, name: girderLook(rec.st).name, x: rec.c * TILE + 1, z: rec.r * TILE + 1, reach: 4.8, alive: () => g.built.get(rec.id) === rec, state: () => rec.st };
   }
 
   tell(m, text, others) {
@@ -85,13 +84,13 @@ export class Walls {
   // ------------------------------------------------------------------ walls
   /** A click on a wall with `held` (maybe nothing). False: it was only a hit (harm intent) for the caller to carry on with. */
   clickWall(m, t, held) {
-    const sim = this.sim, th = this.wall(t);
+    const sim = this.sim, th = this.wall(t.grid, t);
     if (!th) return true;
     const tool = held?.def.tool;
     if (!held) {
       if (m.intent === 'harm') return false;
       sim.tell(m, 'notice', 'You push the wall but nothing happens!');
-      sim.sound('punch', th.x, th.z, 0.25);
+      sim.sound('punch', th, 0.25);
       m.cool = 0.5;
       return true;
     }
@@ -105,16 +104,16 @@ export class Walls {
       });
       return true;
     }
-    const state = sim.world.ws[th.i];
+    const state = th.grid.world.ws[th.i];
     const step = (RSTEPS[state] || []).find((s) => s.tool === tool);
     if (!step) return false;
     if (tool === 'welder' && !sim.actions.welderReady(m, held)) return true;
     const finish = () => {
       sim.tell(m, 'notice', step.done);
-      if (step.to === 'dismantle') this.dismantle(th); else sim.world.ws[th.i] = step.to;
+      if (step.to === 'dismantle') this.dismantle(th); else th.grid.world.ws[th.i] = step.to;
     };
     if (!step.ds) {                                       // wirecutters on the outer grille: at once
-      sim.sound(SOUND[tool], th.x, th.z, 0.9);
+      sim.sound(SOUND[tool], th, 0.9);
       finish();
       return true;
     }
@@ -124,17 +123,17 @@ export class Walls {
 
   /** dismantle_wall(): the sheets, then the girder, on bare plating. */
   dismantle(th) {
-    const sim = this.sim, w = sim.world;
-    sim.stacks.spawn(th.info.sheet, th.info.amount, th.x + (sim.rand() - 0.5) * 0.8, th.z + (sim.rand() - 0.5) * 0.8);
+    const sim = this.sim, g = th.grid, w = g.world;
+    sim.stacks.spawn(g, th.info.sheet, th.info.amount, th.x + (sim.rand() - 0.5) * 0.8, th.z + (sim.rand() - 0.5) * 0.8);
     w.dismantleWall(th.c, th.r, w.level.terrain.plating);
-    sim.tileChanged(th.c, th.r);
-    sim.addBuilt('girder', th.c, th.r, th.info.girder);
-    sim.sound('welder', th.x, th.z, 1);
+    sim.tileChanged(g, th.c, th.r);
+    sim.addBuilt(g, 'girder', th.c, th.r, th.info.girder);
+    sim.sound('welder', th, 1);
   }
 
   // ------------------------------------------------------------------ girders
   clickGirder(m, t, held) {
-    const sim = this.sim, th = this.girder(t);
+    const sim = this.sim, th = this.girder(t.grid, t);
     if (!th) return true;
     if (!held) return true;
     const rec = th.rec, st = rec.st, tool = held.def.tool, the = `the ${th.name}`;
@@ -229,28 +228,27 @@ export class Walls {
 
   /** The girder is plated: it goes, and the tile becomes a wall. */
   plate(rec, key) {
-    const sim = this.sim;
+    const sim = this.sim, g = rec.grid;
     sim.removeBuilt(rec);
-    sim.world.buildWall(rec.c, rec.r, key);
-    sim.tileChanged(rec.c, rec.r);
-    sim.sound('pickup', rec.c * TILE + 1, rec.r * TILE + 1, 0.8);
+    g.world.buildWall(rec.c, rec.r, key);
+    sim.tileChanged(g, rec.c, rec.r);
+    sim.sound('pickup', { grid: g, x: rec.c * TILE + 1, z: rec.r * TILE + 1 }, 0.8);
   }
 
   spill(rec, path, amount) {
     const sim = this.sim;
-    sim.stacks.spawn(path, amount, rec.c * TILE + 1 + (sim.rand() - 0.5) * 0.6, rec.r * TILE + 1 + (sim.rand() - 0.5) * 0.6);
+    sim.stacks.spawn(rec.grid, path, amount, rec.c * TILE + 1 + (sim.rand() - 0.5) * 0.6, rec.r * TILE + 1 + (sim.rand() - 0.5) * 0.6);
   }
 
   // ------------------------------------------------------------------ examine
-  examine(t) {
-    const sim = this.sim;
+  examine(g, t) {
     if (t.k === 'wall') {
-      const th = this.wall(t);
+      const th = this.wall(g, t);
       if (!th) return [];
       if (!th.info.reinf) return ['A huge chunk of metal used to separate rooms.', 'The outer plating is welded firmly in place.'];
-      return ['A huge chunk of reinforced metal used to separate rooms.', RHINTS[sim.world.ws[th.i]] || RHINTS[RW.INTACT]];
+      return ['A huge chunk of reinforced metal used to separate rooms.', RHINTS[g.world.ws[th.i]] || RHINTS[RW.INTACT]];
     }
-    const th = this.girder(t);
+    const th = this.girder(g, t);
     if (!th) return [];
     const out = [GIRDER_DESC];
     switch (th.rec.st) {

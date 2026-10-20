@@ -14,24 +14,24 @@ export class Stacks {
 
   // ------------------------------------------------------------------ stacks lying about
   /**
-   * Make `amount` of a stack at (x, z): split into stacks of at most max_amount, and joined to any of its kind already on that tile
+   * Make `amount` of a stack at (x, z) on `grid`: split into stacks of at most max_amount, and joined to any of its kind already on that tile
    * (stack.dm Initialize). Returns the items made or grown.
    */
-  spawn(path, amount, x, z) {
+  spawn(grid, path, amount, x, z) {
     const sim = this.sim, info = stackInfo(path), out = [];
-    if (!info) { const it = sim.newItem(path); place(sim, it, x, z); return [it]; }
+    if (!info) { const it = sim.newItem(path); place(sim, it, grid, x, z); return [it]; }
     const key = stackKey(path), c = Math.floor(x / TILE), r = Math.floor(z / TILE);
     let left = amount;
     for (const f of sim.floor.values()) {
       if (left <= 0) break;
-      if (f.c !== c || f.r !== r || stackKey(f.item.path) !== key) continue;
+      if (f.grid !== grid || f.c !== c || f.r !== r || stackKey(f.item.path) !== key) continue;
       const move = Math.min(left, info.max - (f.item.amount ?? 1));
       if (move > 0) { f.item.amount = (f.item.amount ?? 1) + move; left -= move; out.push(f.item); }
     }
     while (left > 0) {
       const n = Math.min(left, info.max);
       const it = sim.newItem(path, { amount: n });
-      place(sim, it, x, z);
+      place(sim, it, grid, x, z);
       out.push(it);
       left -= n;
     }
@@ -68,7 +68,7 @@ export class Stacks {
     const free = m.hands[m.active] === item ? (m.hands[1 - m.active] ? -1 : 1 - m.active) : (m.hands[m.active] ? (m.hands[1 - m.active] ? -1 : 1 - m.active) : m.active);
     item.amount -= n;
     const part = sim.newItem(item.path, { amount: n });
-    if (free >= 0) attach(sim, part, { t: 'hand', mob: m, i: free }); else place(sim, part, m.x - Math.sin(m.yaw) * 0.6, m.z - Math.cos(m.yaw) * 0.6);
+    if (free >= 0) attach(sim, part, { t: 'hand', mob: m, i: free }); else place(sim, part, m.grid, m.x - Math.sin(m.yaw) * 0.6, m.z - Math.cos(m.yaw) * 0.6);
     if (item.amount <= 0) consume(sim, item);
     sim.tell(m, 'notice', `You take ${n} sheets out of the stack.`);
     if (m.held && stackInfo(m.held.path)) this.open(m, m.held); else this.close(m);
@@ -83,7 +83,7 @@ export class Stacks {
 
   /** stack.dm building_checks(): why this cannot be built there, or null. */
   why(m, item, R, mult, tile) {
-    const sim = this.sim, w = sim.world, info = stackInfo(item.path);
+    const sim = this.sim, w = m.grid.world, built = m.grid.built, info = stackInfo(item.path);
     const amount = item.amount ?? 1;
     if (amount < R.req * mult) {
       const the = `the ${item.name}`;
@@ -91,12 +91,13 @@ export class Stacks {
     }
     void info;
     if (!R.build) return null;
-    const [c, r] = tile, i = r * w.W + c;
+    const [c, r] = tile;
     if (!w.inb(c, r)) return `The ${R.title} must be constructed on the floor!`;
-    if (R.onePerTurf && sim.built.at(c, r)) return `There is another ${R.title} here!`;
+    const i = w.idx(c, r);
+    if (R.onePerTurf && built.at(c, r)) return `There is another ${R.title} here!`;
     if (R.onFloor) {
       if (w.kind[i] !== KIND.FLOOR) return `The ${R.title} must be constructed on the floor!`;
-      const blocker = sim.built.at(c, r) ? girderLook(sim.built.at(c, r).st).name : w.doorAt.has(i) ? 'door' : (w.solid[i] || w.dyn[i]) ? 'thing' : null;
+      const blocker = built.at(c, r) ? girderLook(built.at(c, r).st).name : w.doorAt.has(i) ? 'door' : (w.solid[i] || w.dyn[i]) ? 'thing' : null;
       if (blocker) return `Theres a ${blocker} here. You cant make a ${R.title} here!`;
     }
     if (!w.los(m.x, m.z, c * TILE + TILE / 2, r * TILE + TILE / 2)) return `The ${R.title} must be constructed on the floor!`;
@@ -117,7 +118,7 @@ export class Stacks {
       if (R.item) this.give(m, R.item, (R.res || 1) * mult);
       else if (R.build === 'girder') {
         const [c, r] = tile;
-        sim.addBuilt('girder', c, r, GIRDER.NORMAL);
+        sim.addBuilt(m.grid, 'girder', c, r, GIRDER.NORMAL);
         this.moveOut(m, c, r);
       }
       if (m.held && stackInfo(m.held.path)) this.open(m, m.held); else this.close(m);
@@ -140,7 +141,7 @@ export class Stacks {
     const sim = this.sim;
     const free = m.hands[m.active] ? (m.hands[1 - m.active] ? -1 : 1 - m.active) : m.active;
     if (free >= 0) attach(sim, sim.newItem(path, { amount }), { t: 'hand', mob: m, i: free });
-    else this.spawn(path, amount, m.x - Math.sin(m.yaw) * 0.6, m.z - Math.cos(m.yaw) * 0.6);
+    else this.spawn(m.grid, path, amount, m.x - Math.sin(m.yaw) * 0.6, m.z - Math.cos(m.yaw) * 0.6);
   }
 
   /** Something solid went up where you stand a little (the tile in front reaches back): step back out of it. */
@@ -150,7 +151,7 @@ export class Stacks {
     const dx = Math.sin(m.yaw), dz = Math.cos(m.yaw);        // back, away from where you face
     for (let k = 1; k <= 12; k++) {
       const x = m.x + dx * 0.1 * k, z = m.z + dz * 0.1 * k;
-      if (!this.sim.world.collides(x, z, R)) { m.x = x; m.z = z; m.vx = m.vz = 0; return; }
+      if (!m.grid.world.collides(x, z, R)) { m.x = x; m.z = z; m.vx = m.vz = 0; return; }
     }
   }
 }

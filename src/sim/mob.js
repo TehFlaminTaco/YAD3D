@@ -15,7 +15,9 @@ export class Mob {
     this.look = o.look || null;              // a human's chosen appearance (see shared/looks.js)
     this.ap = null;                          // cached appearance: look + what they wear
     this.apDirty = true;
-    this.x = o.x; this.z = o.z;
+    this.grid = o.grid || null;              // the grid whose frame x, z are in; null = floating free in the void of `map` (then x, z are map coordinates)
+    this.map = o.grid ? o.grid.map : o.map || null;
+    this.x = o.x; this.y = o.y || 0; this.z = o.z;
     this.yaw = o.yaw ?? Math.random() * Math.PI * 2;
     this.pitch = 0;
     this.vx = 0; this.vz = 0;

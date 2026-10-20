@@ -36,8 +36,9 @@ export class People {
 
   pron(o) { return o.look?.g === 'f' ? FEMALE : MALE; }
 
+  /** Within reach of each other with nothing solid between (this only works for two people on one grid: a doorway between grids is walked through, not reached over). */
   near(m, o, reach = REACH) {
-    return Math.hypot(o.x - m.x, o.z - m.z) <= reach && this.sim.world.los(m.x, m.z, o.x, o.z);
+    return m.grid === o.grid && !!m.grid && Math.hypot(o.x - m.x, o.z - m.z) <= reach && m.grid.world.los(m.x, m.z, o.x, o.z);
   }
 
   /** Throw everything `o` holds onto the floor at their feet. */
@@ -46,7 +47,7 @@ export class People {
       const it = o.hands[i];
       if (!it) continue;
       detach(this.sim, it);
-      place(this.sim, it, o.x + (this.sim.rand() - 0.5) * 0.9, o.z + (this.sim.rand() - 0.5) * 0.9);
+      place(this.sim, it, o.grid, o.x + (this.sim.rand() - 0.5) * 0.9, o.z + (this.sim.rand() - 0.5) * 0.9);
     }
   }
 
@@ -58,7 +59,7 @@ export class People {
     const name = held.name;
     sim.chat.visible(o, `${m.name} is trying to put ${name} on ${o.name}!`, 'danger', 12, [o]);
     sim.tell(o, 'danger', `${m.name} is trying to put ${name} on you!`);
-    sim.sound(held.def.cuff === 30 ? 'cablecuff' : 'cuff', m.x, m.z, 0.5);
+    sim.sound(held.def.cuff === 30 ? 'cablecuff' : 'cuff', m, 0.5);
     const ox = o.x, oz = o.z;
     sim.actions.startTimed(m, `putting ${name} on ${o.name}`, 3,
       () => !o.cuffed && !o.inside && this.near(m, o) && Math.hypot(o.x - ox, o.z - oz) < 0.4 && m.held === held,
@@ -101,7 +102,7 @@ export class People {
     const item = o.cuffed;
     if (!item) return;
     detach(this.sim, item);
-    place(this.sim, item, x ?? o.x, z ?? o.z);
+    place(this.sim, item, o.grid, x ?? o.x, z ?? o.z);
     o.apDirty = true; o.dirty = true;
   }
 
@@ -128,7 +129,7 @@ export class People {
       }
       m.pulling = o; o.pulledBy = m; m.grab = 0;
       m.cool = 1;
-      sim.sound('grab', m.x, m.z, 0.5);
+      sim.sound('grab', m, 0.5);
       sim.chat.visible(o, `${m.name} grabs ${o.name} passively!`, 'warning', 12, [m, o]);
       sim.tell(o, 'warning', `${m.name} grabs you passively!`);
       sim.tell(m, 'notice', `You grab ${o.name} passively!`);
@@ -136,7 +137,7 @@ export class People {
     }
     if (m.grab === 0) {                                  // the first tightening is instant
       m.grab = 1; m.cool = 1;
-      sim.sound('grab', m.x, m.z, 0.5);
+      sim.sound('grab', m, 0.5);
       sim.chat.visible(o, `${m.name} grabs ${o.name} aggressively!`, 'danger', 12, [m, o]);
       sim.tell(o, 'danger', `${m.name} grabs you aggressively!`);
       sim.tell(m, 'danger', `You grab ${o.name} aggressively!`);
@@ -154,12 +155,12 @@ export class People {
         () => {
           if (m.intent !== 'grab') { sim.tell(m, 'warning', 'You must be on grab intent to upgrade your grab further!'); return; }
           m.grab = 2;
-          sim.sound('grab', m.x, m.z, 0.5);
+          sim.sound('grab', m, 0.5);
           sim.chat.visible(o, `${m.name} grabs ${o.name} by the neck!`, 'danger', 12, [m, o]);
           sim.tell(o, 'danger', `${m.name} grabs you by the neck!`);
           sim.tell(m, 'danger', `You grab ${o.name} by the neck!`);
           o.x = m.x - Math.sin(m.yaw) * 0.7; o.z = m.z - Math.cos(m.yaw) * 0.7;      // they are pulled down in front of you
-          if (sim.world.collides(o.x, o.z, 0.28)) { o.x = m.x; o.z = m.z; }
+          if (m.grid.world.collides(o.x, o.z, 0.28)) { o.x = m.x; o.z = m.z; }
         }, null, { start: null, stop: null });
     }
   }
@@ -210,17 +211,17 @@ export class People {
 
   /** Every tick: who is downed by a neck grab, people trailing behind whoever holds them, windows to close. */
   update() {
-    const sim = this.sim, w = sim.world;
+    const sim = this.sim;
     for (const m of sim.mobs.values()) {
       if (m.humanoid) m.downed = !!(m.pulledBy && m.pulledBy.grab >= 2);
       if (m.hauling) this.haul(m);
       const o = m.pulling;
       if (!o) continue;
-      if (m.dead || m.stunned > 0 || m.cuffed || m.inside || o.inside || o.evacuated || !sim.mobs.has(o.id)) { this.release(m); continue; }
+      if (m.dead || m.stunned > 0 || m.cuffed || m.inside || o.inside || o.evacuated || !sim.mobs.has(o.id) || m.grid !== o.grid) { this.release(m); continue; }
       const d = Math.hypot(m.x - o.x, m.z - o.z);
       if (d > DRAG) {
         const k = (d - DRAG) / d, pos = { x: o.x, z: o.z };
-        w.move(pos, (m.x - o.x) * k, (m.z - o.z) * k, 0.28);
+        m.grid.world.move(pos, (m.x - o.x) * k, (m.z - o.z) * k, 0.28);
         o.x = pos.x; o.z = pos.z;
       }
       if (Math.hypot(m.x - o.x, m.z - o.z) > 3.4) this.release(m);       // they could not keep up
@@ -262,7 +263,7 @@ export class People {
     m.hauling = h;
     m.cool = 0.4;
     m.dirty = true;
-    sim.sound('grab', m.x, m.z, 0.5);
+    sim.sound('grab', m, 0.5);
   }
 
   /** Where you can get to while holding someone or something: the multiplier on your speed. */
@@ -277,11 +278,11 @@ export class People {
 
   /** Each tick: what you drag keeps up with you. Items trail; a structure steps into the tile you just left. */
   haul(m) {
-    const sim = this.sim, w = sim.world, h = m.hauling;
+    const sim = this.sim, w = m.grid.world, h = m.hauling;
     if (m.dead || m.stunned > 0 || m.cuffed || m.inside) { this.release(m); return; }
     if (h.k === 'item') {
       const rec = sim.floor.get(h.id);
-      if (!rec) { this.release(m); return; }
+      if (!rec || rec.grid !== m.grid) { this.release(m); return; }
       const d = Math.hypot(m.x - rec.x, m.z - rec.z);
       if (d > HAUL_LOSE) { this.release(m); return; }
       if (d > HAUL_ITEM) {
@@ -293,16 +294,16 @@ export class People {
     }
     const it = h.it;
     const d = Math.hypot(m.x - it.x, m.z - it.z);
-    if (it.gone || it.anc || d > it.half + HAUL_LOSE) { this.release(m); return; }
+    if (it.gone || it.anc || it.grid !== m.grid || d > it.half + HAUL_LOSE) { this.release(m); return; }
     const want = it.half + 0.32 + HAUL_GAP;                  // how far its middle trails yours
     if (d > want) this.towProp(m, it, (m.x - it.x) * (d - want) / d, (m.z - it.z) * (d - want) / d);
   }
 
   /** Can the structure `it` stand at (x, z): clear of walls, other boxes and anyone's body (except the one who drags it)? */
   propFits(m, it, x, z) {
-    if (this.sim.world.collides(x, z, it.half, it)) return false;
+    if (it.grid.world.collides(x, z, it.half, it)) return false;
     for (const o of this.sim.mobs.values()) {
-      if (o === m || o.inside || o.evacuated || o.dead) continue;
+      if (o === m || o.inside || o.evacuated || o.dead || o.grid !== it.grid) continue;
       if (Math.abs(o.x - x) < it.half + 0.3 && Math.abs(o.z - z) < it.half + 0.3) return false;
     }
     return true;
@@ -310,9 +311,9 @@ export class People {
 
   /** Put a dragged structure at (x, z) (turned toward where it went) and tell everyone. */
   placeProp(it, x, z, face) {
-    moveProp(this.sim.world, it, x, z, face);
+    moveProp(it.grid.world, it, x, z, face);
     for (const o of it.mobs || []) { o.x = it.x; o.z = it.z; o.dirty = true; }
-    this.sim.emit({ e: 'pm', i: it.idx, x, z, d: it.d });
+    it.grid.emit({ e: 'pm', i: it.idx, x, z, d: it.d });
   }
 
   /** Slide a dragged structure by (dx, dz), along walls and other things, never into anyone's body. */
@@ -336,7 +337,7 @@ export class People {
    * half the way each if there is room, otherwise whoever can move does.
    */
   eject(m, it) {
-    const sim = this.sim, w = sim.world, need = it.half + 0.32 + 0.02;
+    const w = it.grid.world, need = it.half + 0.32 + 0.02;
     const overlap = (x0, z0, x1, z1) => Math.abs(x0 - x1) < need - 0.02 && Math.abs(z0 - z1) < need - 0.02;
     if (it.gone || !overlap(m.x, m.z, it.x, it.z)) return;
     const mm = (v) => Math.round(v * 1000) / 1000;
@@ -358,8 +359,8 @@ export class People {
   }
 
   /** Late joiners need every structure that is not where the map put it. */
-  moved() {
-    return this.sim.props.interact.filter((it) => it.x0 !== undefined && (it.x !== it.x0 || it.z !== it.z0 || it.d !== it.d0)).map((it) => [it.idx, it.x, it.z, it.d]);
+  moved(g) {
+    return g.props.interact.filter((it) => it.x0 !== undefined && (it.x !== it.x0 || it.z !== it.z0 || it.d !== it.d0)).map((it) => [it.idx, it.x, it.z, it.d]);
   }
 
   // ------------------------------------------------------------------ the strip window
@@ -433,7 +434,7 @@ export class People {
         const still = hand ? o.hands[+hand[1]] === item : slot === 'cuffs' ? o.cuffed === item : o.worn[slot] === item;
         if (!still) return;
         if (slot === 'cuffs') this.uncuff(o, o.x + (sim.rand() - 0.5) * 0.6, o.z + (sim.rand() - 0.5) * 0.6);
-        else { detach(sim, item); place(sim, item, o.x + (sim.rand() - 0.5) * 0.6, o.z + (sim.rand() - 0.5) * 0.6); }
+        else { detach(sim, item); place(sim, item, o.grid, o.x + (sim.rand() - 0.5) * 0.6, o.z + (sim.rand() - 0.5) * 0.6); }
         o.dirty = true;
         this.refresh(c);
       }, null, { start: null, stop: null });
@@ -458,7 +459,7 @@ export class People {
         item.loc = { t: 'slot', mob: o, slot };
         o.worn[slot] = item;
         recalc(sim, o);
-        sim.sound('equip', o.x, o.z, 0.6);
+        sim.sound('equip', o, 0.6);
         o.dirty = true;
         this.refresh(c);
       }, null, { start: null, stop: null });
@@ -481,7 +482,7 @@ export class People {
         if (have) {
           if (o.worn[slot] !== have) return;
           detach(sim, have);
-          place(sim, have, o.x + (sim.rand() - 0.5) * 0.6, o.z + (sim.rand() - 0.5) * 0.6);
+          place(sim, have, o.grid, o.x + (sim.rand() - 0.5) * 0.6, o.z + (sim.rand() - 0.5) * 0.6);
         } else if (put && m.held === put && !o.worn[slot]) {
           detach(sim, put);
           put.loc = { t: 'slot', mob: o, slot };

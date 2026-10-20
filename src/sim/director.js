@@ -46,17 +46,20 @@ export class Director {
     this.windows = this.findExteriorWindows();
   }
 
+  /** The incident director is about the station: its windows, its hull, its air. (Other grids get their own trouble later.) */
+  get grid() { return this.sim.station; }
+
   findExteriorWindows() {
-    const w = this.sim.world;
+    const w = this.grid.world;
     const out = [];
-    for (let i = 0; i < w.W * w.H; i++) {
+    for (let i = 0; i < w.n; i++) {
       if (!w.glass[i] || w.kind[i] !== KIND.WALL) continue;
       const c = i % w.W, r = (i - c) / w.W;
       let space = false, floor = false;
       for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const k = w.kindAt(c + dc, r + dr);
         if (k === KIND.SPACE) space = true;
-        if (k === KIND.FLOOR && w.roof[(r + dr) * w.W + c + dc]) floor = true;
+        if (k === KIND.FLOOR && w.roof[w.idx(c + dc, r + dr)]) floor = true;
       }
       if (space && floor) out.push(i);
     }
@@ -88,7 +91,7 @@ export class Director {
     if (!this.powerFailed && t > POWER_FAIL_AT) {
       this.powerFailed = true;
       sim.chat.announce('Critical Power Failure', 'Abnormal activity detected in the station\'s powernet. As a precautionary measure, the station\'s power will be shut off for an indeterminate duration.');
-      sim.power.setState('battery');
+      this.grid.power.setState('battery');
       this.setLevel('red');
       this.news.push('Power: the engine tripped offline. Engineers are looking into it.');
       this.npcReact('power');
@@ -97,21 +100,21 @@ export class Director {
     if (this.strikes < STRIKE_TIMES.length && !this.pending && t > STRIKE_TIMES[this.strikes] - 18) this.scheduleStrike();
     if (this.pending && t >= this.pending.at) this.doStrike();
 
-    const holes = sim.world.ventTiles();
+    const g = this.grid, holes = g.world.ventTiles();
     if (holes.length > 0) {
       this.carpTimer -= dt;
       const alive = [...sim.mobs.values()].filter((m) => m.kind === 'carp' && !m.dead).length;
       if (this.carpTimer <= 0 && alive < 5) {
         this.carpTimer = 38 + this.rand() * 20;
         const i = holes[Math.floor(this.rand() * holes.length)];
-        const w = sim.world;
+        const w = g.world;
         const c = i % w.W, r = Math.floor(i / w.W);
         let sx = c * TILE + 1, sz = r * TILE + 1;
         for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          if (sim.atmos.isCell[(r + dr) * w.W + c + dc]) { sx += dc * TILE; sz += dr * TILE; break; }
+          if (g.atmos.isCell[w.idx(c + dc, r + dr)]) { sx += dc * TILE; sz += dr * TILE; break; }
         }
         const n = 1 + (this.rand() < 0.4 ? 1 : 0);
-        for (let k = 0; k < n; k++) sim.ai.spawnCarp(sx + (this.rand() - 0.5), sz + (this.rand() - 0.5));
+        for (let k = 0; k < n; k++) sim.ai.spawnCarp(g, sx + (this.rand() - 0.5), sz + (this.rand() - 0.5));
         if (!this.carpWarned) { this.carpWarned = true; this.autoRadio('engineering', 'Unidentified lifesigns detected near the hull breach.'); this.npcReact('carp'); }
       }
     }
@@ -122,10 +125,10 @@ export class Director {
 
   // ------------------------------------------------------------------ meteors
   scheduleStrike() {
-    const sim = this.sim, w = sim.world;
+    const sim = this.sim, g = this.grid, w = g.world;
     if (!this.windows.length) { this.strikes++; return; }
     // pick a window; the first one lands somewhere a player can hear it
-    const refs = [...sim.clients.values()].filter((c) => c.mob).map((c) => c.mob);
+    const refs = [...sim.clients.values()].filter((c) => c.mob && c.mob.grid === g).map((c) => c.mob);
     const first = this.strikes === 0;
     let best = null, bs = 1e9;
     for (let k = 0; k < 40; k++) {
@@ -142,7 +145,7 @@ export class Director {
     if (best === null) { this.strikes++; return; }
     const c = best % w.W, r = Math.floor(best / w.W);
     let room = w.areaAt(c, r).n;
-    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (sim.atmos.isCell[(r + dr) * w.W + c + dc]) { room = w.areaAt(c + dc, r + dr).n; break; }
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (g.atmos.isCell[w.idx(c + dc, r + dr)]) { room = w.areaAt(c + dc, r + dr).n; break; }
     this.pending = { at: this.t + 18, i: best, room };
     sim.chat.announce('Meteor Alert', 'Meteors have been detected on collision course with the station.');
     if (this.level === 'green') this.setLevel('blue');
@@ -150,19 +153,19 @@ export class Director {
   }
 
   doStrike() {
-    const sim = this.sim, w = sim.world;
+    const sim = this.sim, g = this.grid, w = g.world;
     const s = this.pending;
     this.pending = null;
     this.strikes++;
     const c = s.i % w.W, r = Math.floor(s.i / w.W);
-    if (!w.breached.has(s.i)) sim.breachTile(c, r, 'meteor');
+    if (!w.breached.has(s.i)) sim.breachTile(g, c, r, 'meteor');
     this.setLevel('red');
     this.autoRadio('engineering', `Hull breach detected in ${s.room}.`);
     this.news.push(`Hull breach at ${s.room}. Reports of something with teeth nearby.`);
-    const x = c * TILE + 1, z = r * TILE + 1;
+    const at = { grid: g, x: c * TILE + 1, z: r * TILE + 1 };
     for (const m of sim.mobs.values()) {
       if (m.dead) continue;
-      const d = Math.hypot(m.x - x, m.z - z);
+      const d = sim.dist(m, at);
       if (d < 6) sim.hurt(m, 14 * (1 - d / 6) + 4, 'brute', 'meteor shrapnel');
     }
     this.carpTimer = 22;
@@ -202,7 +205,7 @@ export class Director {
   canCallShuttle() {
     const sim = this.sim;
     if (this.evacState !== 'idle') return { ok: false, why: 'An emergency shuttle has already been called.' };
-    if (sim.world.ventTiles().length > 0 || sim.power.state !== 'normal' || this.t > 240) return { ok: true };
+    if (this.grid.world.ventTiles().length > 0 || this.grid.power.state !== 'normal' || this.t > 240) return { ok: true };
     return { ok: false, why: 'Central Command will not authorize an evacuation at this time.' };
   }
 
@@ -237,8 +240,8 @@ export class Director {
     sim.applyEvac();
     // somewhere for the crew to run to
     let best = null, bd = 1e9;
-    const w = sim.world;
-    for (let i = 0; i < w.W * w.H; i++) {
+    const w = this.grid.world;
+    for (let i = 0; i < w.n; i++) {
       if (w.areas[w.areaIdx[i]].n !== SHUTTLE_AREA || w.solid[i] || w.kind[i] !== KIND.FLOOR) continue;
       const c = i % w.W, r = Math.floor(i / w.W);
       const d = Math.abs(c - 200) + Math.abs(r - 118);
@@ -246,12 +249,11 @@ export class Director {
     }
     this.dockTile = best;
     sim.chat.announce('Priority Announcement', `The Emergency Shuttle has docked with the station. You have ${this.fmtTime(DOCK_SECONDS)} to board the Emergency Shuttle.`);
-    sim.sound('explosion_far', 0, 0, 0);
     sim.emit({ e: 'snd', n: 'explosion_far', v: 0.6 });
     sim.emit({ e: 'shake', a: 0.4 });
   }
 
-  inShuttle(m) { return this.sim.world.areaAt(...m.tile)?.n === SHUTTLE_AREA; }
+  inShuttle(m) { return m.grid?.world.areaAt(...m.tile)?.n === SHUTTLE_AREA; }
 
   boarding() {
     const sim = this.sim;
@@ -260,7 +262,7 @@ export class Director {
       if (m.dead || m.kind !== 'human' || m.evacuated || m.client) continue;
       if (dock && !m.evacOrdered) {
         m.evacOrdered = true;
-        const path = sim.nav.path(m.tile[0], m.tile[1], dock[0], dock[1], m, 6000);
+        const path = m.grid === this.grid ? m.grid.nav.path(m.tile[0], m.tile[1], dock[0], dock[1], m, 6000) : null;
         if (path) { m.path = path; m.pathIdx = 0; m.state = 'walk'; }
       }
       if (this.inShuttle(m)) m.evacuated = true;
@@ -283,7 +285,9 @@ export class Director {
     if (!m || m.dead) return 'There is nobody in the pod.';
     if (this.evacState === 'idle') return 'The escape pods are locked until an evacuation is called.';
     m.evacuated = true; c.escaped = true;
-    c.mob = null; c.state = 'ghost'; c.ghost.x = m.x; c.ghost.z = m.z;
+    c.mob = null; c.state = 'ghost';
+    const p = sim.worldPos(m);
+    c.ghost.x = p[0]; c.ghost.y = p[1]; c.ghost.z = p[2]; c.ghost.map = sim.mapOf(m);
     sim.emit({ e: 'snd', n: 'explosion_far', v: 0.8 }, { to: c });
     sim.tellClient(c, 'notice', 'The escape pod launches. You are now observing.');
     c.outbox.push({ e: 'ghost', cause: null, escaped: true });

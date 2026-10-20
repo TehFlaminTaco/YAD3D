@@ -32,7 +32,7 @@ export function detach(sim, item) {
   else if (l.t === 'box') l.box.contents.splice(l.box.contents.indexOf(item), 1);
   else if (l.t === 'closet') l.cl.contents.splice(l.cl.contents.indexOf(item), 1);
   else if (l.t === 'cuffs') { l.mob.cuffed = null; l.mob.apDirty = true; }
-  else if (l.t === 'floor') { sim.floor.delete(item.id); sim.emit({ e: 'item-', id: item.id }); }
+  else if (l.t === 'floor') { const rec = sim.floor.get(item.id); sim.floor.delete(item.id); sim.emit({ e: 'item-', id: item.id, g: rec?.grid.id }); }
   item.loc = null;
   const m = l.mob || (l.t === 'box' ? rootMob(l.box) : null);
   if (m) recalc(sim, m);
@@ -49,15 +49,17 @@ export function attach(sim, item, loc) {
   if (m) recalc(sim, m);
 }
 
-/** Put an item on the floor at (x, z). */
-export function place(sim, item, x, z, y) {
+/** Put an item on the floor of `grid` at (x, z) in that grid's frame. */
+export function place(sim, item, grid, x, z, y) {
+  if (!grid) throw new Error('place: which grid?');
   const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
-  const i = r * sim.world.W + c;
-  const yy = y ?? (sim.world.tableH[i] > 0 ? sim.world.tableH[i] + 0.01 : 0.01);
-  const rec = { item, x, y: yy, z, c, r };
+  const w = grid.world;
+  const i = w.inb(c, r) ? w.idx(c, r) : -1;
+  const yy = y ?? (i >= 0 && w.tableH[i] > 0 ? w.tableH[i] + 0.01 : 0.01);
+  const rec = { item, grid, x, y: yy, z, c, r };
   sim.floor.set(item.id, rec);
   item.loc = { t: 'floor' };
-  sim.emit({ e: 'item+', id: item.id, s: item.sprite, n: item.name, x, y: yy, z });
+  sim.emit({ e: 'item+', id: item.id, g: grid.id, s: item.sprite, n: item.name, x, y: yy, z });
   return rec;
 }
 
@@ -65,7 +67,7 @@ export function place(sim, item, x, z, y) {
 export function shiftItem(sim, rec, x, z) {
   rec.x = x; rec.z = z;
   rec.c = Math.floor(x / TILE); rec.r = Math.floor(z / TILE);
-  sim.emit({ e: 'imv', id: rec.item.id, x, z });
+  sim.emit({ e: 'imv', id: rec.item.id, g: rec.grid.id, x, z });
 }
 
 /** Derived state: access, internals validity, suit flags. */
@@ -128,13 +130,13 @@ export function pickup(sim, mob, rec) {
   if (stackInfo(it.path)) {
     const active = mob.hands[mob.active], inactive = mob.hands[1 - mob.active];
     const into = active && stackKey(active.path) === stackKey(it.path) ? active : (!(active && stackKey(active.path) === stackKey(it.path)) && inactive && stackKey(inactive.path) === stackKey(it.path) ? inactive : null);
-    if (into && mergeStack(sim, it, into)) { stackNote(sim, mob, into); sim.sound('pickup', mob.x, mob.z, 0.7); return true; }
+    if (into && mergeStack(sim, it, into)) { stackNote(sim, mob, into); sim.sound('pickup', mob, 0.7); return true; }
   }
   const free = mob.hands[mob.active] ? (mob.hands[1 - mob.active] ? -1 : 1 - mob.active) : mob.active;
   if (free < 0) { NOTICE(sim, mob, 'Your hands are full.'); return false; }
   detach(sim, it);
   attach(sim, it, { t: 'hand', mob, i: free });
-  sim.sound('pickup', mob.x, mob.z, 0.7);
+  sim.sound('pickup', mob, 0.7);
   return true;
 }
 
@@ -143,9 +145,9 @@ export function dropFromHand(sim, mob, hand = mob.active) {
   if (!it) return false;
   detach(sim, it);
   let x = mob.x - Math.sin(mob.yaw) * 0.9, z = mob.z - Math.cos(mob.yaw) * 0.9;
-  if (sim.world.collides(x, z, 0.2)) { x = mob.x; z = mob.z; }
-  place(sim, it, x, z);
-  sim.sound('drop', mob.x, mob.z, 0.7);
+  if (mob.grid.world.collides(x, z, 0.2)) { x = mob.x; z = mob.z; }
+  place(sim, it, mob.grid, x, z);
+  sim.sound('drop', mob, 0.7);
   return true;
 }
 
@@ -158,7 +160,7 @@ export function quickEquip(sim, mob) {
     const src = [mob.worn.belt, mob.worn.suit_store, mob.worn.back];
     for (const s of src) {
       if (!s) continue;
-      if (s.contents?.length) { const c = s.contents[0]; detach(sim, c); attach(sim, c, { t: 'hand', mob, i: mob.active }); sim.sound('equip', mob.x, mob.z, 0.6); return true; }
+      if (s.contents?.length) { const c = s.contents[0]; detach(sim, c); attach(sim, c, { t: 'hand', mob, i: mob.active }); sim.sound('equip', mob, 0.6); return true; }
       if (s.def.tank === undefined && !s.def.storage && s !== mob.worn.back) { detach(sim, s); attach(sim, s, { t: 'hand', mob, i: mob.active }); return true; }
     }
     NOTICE(sim, mob, 'You have nothing to draw.', 'notice');
@@ -182,7 +184,7 @@ export function equipTo(sim, mob, item, slot) {
   if (mob.worn[slot]) { NOTICE(sim, mob, `You are already wearing something there.`); return false; }
   detach(sim, item);
   attach(sim, item, { t: 'slot', mob, slot });
-  sim.sound('equip', mob.x, mob.z, 0.6);
+  sim.sound('equip', mob, 0.6);
   return true;
 }
 
@@ -200,7 +202,7 @@ export function storeIn(sim, mob, box, item) {
   if (why) { NOTICE(sim, mob, `The ${item.name} ${why}.`); return false; }
   detach(sim, item);
   attach(sim, item, { t: 'box', box });
-  sim.sound('equip', mob.x, mob.z, 0.5);
+  sim.sound('equip', mob, 0.5);
   return true;
 }
 
@@ -221,8 +223,8 @@ export function moveItem(sim, mob, item, to) {
   if (to.t === 'floor') {
     detach(sim, item);
     let x = mob.x - Math.sin(mob.yaw) * 0.9, z = mob.z - Math.cos(mob.yaw) * 0.9;
-    if (sim.world.collides(x, z, 0.2)) { x = mob.x; z = mob.z; }
-    place(sim, item, x, z);
+    if (mob.grid.world.collides(x, z, 0.2)) { x = mob.x; z = mob.z; }
+    place(sim, item, mob.grid, x, z);
     return true;
   }
   return false;

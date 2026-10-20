@@ -1,29 +1,42 @@
 import { TILE, KIND } from '../shared/config.js';
-import { World } from '../shared/world.js';
-import { DoorCore } from '../shared/door.js';
+import { Grid } from '../shared/grid.js';
+import { GameMap } from '../shared/gamemap.js';
+import { decodeGrid } from '../shared/leveldata.js';
 import { buildPropData, moveProp } from '../shared/propdata.js';
 import { setClosetState } from '../shared/closets.js';
 import { BuiltSet } from '../shared/built.js';
 
+/** A grid as the client holds it: the shared `Grid` (tiles, props, doors, pose) plus what the server has told us about it. */
+export class GridReplica extends Grid {
+  constructor(decoded, rects, o) {
+    super(decoded, rects, o);
+    const world = this.world;
+    this.fdoors = this.props.fdoors.map((p, idx) => ({
+      idx, grid: this, c: p.x, r: p.y, i: world.idx(p.x, p.y), x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, closed: false, name: p.n || 'firelock', s: p.s, yaw: p.yaw,
+    }));
+    const na = world.areas.length;
+    this.power = { state: 'normal', battery: 1, areaOn: new Uint8Array(na).fill(1), areaLights: new Uint8Array(na).fill(1) };
+    this.built = new BuiltSet(world);        // girders and the like that players have built (shared/built.js)
+    this.evacApplied = false;
+    this.pendingEvac = null;
+    this.evacTiles = null;
+  }
+}
+
 /**
- * The client's copy of the world: the same tile grid, doors and prop tables the server has (built from the
- * same level data by the same code), kept in step by the events the server sends. No game rules live here.
+ * The client's copy of the world: the same grids (tiles, doors, props) the server has, built from the same blueprints by the same code, kept in
+ * step by the events the server sends. No game rules live here.
  */
 export class Replica {
   constructor(assets, welcome) {
     this.assets = assets;
     this.level = assets.level;
     this.rects = assets.rects;
-    const world = this.world = new World(assets);
-    this.props = buildPropData(world, this.rects, this.level.props, this.level);
-    this.doors = this.props.doors.map((p) => new DoorCore(world, p, p.fr.length - 2));
-    this.fdoors = this.props.fdoors.map((p, idx) => ({
-      idx, c: p.x, r: p.y, i: p.y * world.W + p.x, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, closed: false, name: p.n || 'firelock', s: p.s, yaw: p.yaw,
-    }));
-    const na = world.areas.length;
-    this.power = { state: 'normal', battery: 1, areaOn: new Uint8Array(na).fill(1), areaLights: new Uint8Array(na).fill(1) };
-    this.items = new Map();                  // floor items: id -> {id, s, n, x, y, z}
-    this.mobs = new Map();                   // id -> {id, n, job, set, kind, x, z, yaw, flags, speed, buf}
+    this.map = new GameMap(welcome.map, welcome.name);
+    this.grids = new Map();                  // id -> GridReplica
+    this.station = null;
+    this.items = new Map();                  // floor items: id -> {id, s, n, x, y, z, g}
+    this.mobs = new Map();                   // id -> {id, n, job, set, kind, g, x, z, yaw, flags, speed, buf}
     this.round = welcome.round;
     this.roundAt = performance.now();
     this.jobs = welcome.jobs;
@@ -34,8 +47,7 @@ export class Replica {
     this.you = null;                         // last authoritative position
     this.env = { p: 101, o2: 21, tox: 0, area: 0 };
     this.alert = 'green';
-    this.evacApplied = false;
-    this.built = new BuiltSet(world);        // girders and the like that players have built (shared/built.js)
+    this.compat = {};                        // uses of the station shortcuts below (the move to explicit grids; stays zero once it is done)
     this.listeners = {};
     this.applyWelcome(welcome);
   }
@@ -43,63 +55,83 @@ export class Replica {
   on(type, fn) { (this.listeners[type] ||= []).push(fn); }
   emit(type, ev) { const l = this.listeners[type]; if (l) for (const fn of l) fn(ev); }
 
+  // The station's parts, for code that has not yet been told which grid it is about.
+  get world() { return this.useStation('world').world; }
+  get props() { return this.useStation('props').props; }
+  get doors() { return this.useStation('doors').doors; }
+  get fdoors() { return this.useStation('fdoors').fdoors; }
+  get power() { return this.useStation('power').power; }
+  get built() { return this.useStation('built').built; }
+  useStation(what) { this.compat[what] = (this.compat[what] || 0) + 1; return this.station; }
+
   // ------------------------------------------------------------------ initial state
   applyWelcome(w) {
-    this.power.state = w.power.state; this.power.battery = w.power.battery;
-    w.areaOn.forEach((v, i) => { this.power.areaOn[i] = v; });
-    w.areaLights.forEach((v, i) => { this.power.areaLights[i] = v; });
-    this.world.gravityOn = w.gravity !== false;
-    for (const [id, k, c, r, st] of w.built || []) this.built.add({ id, k, c, r, st });
-    for (const ev of w.tiles) this.setTile(ev);
-    for (const [c, r, d] of w.panes) this.killPane(c, r, d);
-    for (const [i, cs, g] of w.closets || []) this.setCloset(i, cs, !!g);
-    for (const [i, x, z, d] of w.moved || []) this.moveProp(i, x, z, d);
-    if (w.evac) this.applyEvac(true);
-    w.doors.forEach((st, i) => { if (st !== 'closed') this.doors[i]?.setState(st); });
-    w.fdoors.forEach((c, i) => { if (c && this.fdoors[i]) this.setFdoor(this.fdoors[i], true); });
-    for (const [id, s, n, x, y, z] of w.items) this.items.set(id, { id, s, n, x, y, z });
+    for (const gs of w.grids) this.addGrid(gs);
+    for (const [id, s, n, x, y, z, g] of w.items) this.items.set(id, { id, s, n, x, y, z, g });
+  }
+
+  /** A grid exists: build it from its blueprint and bring it up to the state the server describes. */
+  addGrid(gs) {
+    const decoded = decodeGrid(this.level, gs.bp);
+    const g = new GridReplica(decoded, this.rects, { id: gs.g, kind: gs.kind, name: gs.name, tf: gs.tf });
+    this.grids.set(g.id, g);
+    this.map.add(g);
+    if (!this.station && g.kind === 'station') this.station = g;
+    g.power.state = gs.power.state; g.power.battery = gs.power.battery;
+    gs.areaOn.forEach((v, i) => { g.power.areaOn[i] = v; });
+    gs.areaLights.forEach((v, i) => { g.power.areaLights[i] = v; });
+    g.world.gravityOn = gs.gravity !== false;
+    for (const [id, k, c, r, st] of gs.built || []) g.built.add({ id, k, c, r, st, grid: g });
+    for (const ev of gs.tiles) this.setTile(g, ev);
+    for (const [c, r, d] of gs.panes) this.killPane(g, c, r, d);
+    for (const [i, cs, gone] of gs.closets || []) this.setCloset(g, i, cs, !!gone);
+    for (const [i, x, z, d] of gs.moved || []) this.moveProp(g, i, x, z, d);
+    if (gs.evac) this.applyEvac(g, true);
+    gs.doors.forEach((st, i) => { if (st !== 'closed') g.doors[i]?.setState(st); });
+    gs.fdoors.forEach((c, i) => { if (c && g.fdoors[i]) this.setFdoor(g, g.fdoors[i], true); });
+    return g;
   }
 
   // ------------------------------------------------------------------ helpers
-  setTile(ev) {
-    const w = this.world, i = ev.i;
+  setTile(g, ev) {
+    const w = g.world, i = ev.i;
     w.kind[i] = ev.kind; w.wallVar[i] = ev.wall; w.glass[i] = ev.glass; w.solid[i] = ev.solid; w.airBlock[i] = ev.air;
     w.floorCell[i] = ev.floor; w.roof[i] = ev.roof; w.areaIdx[i] = ev.area;
     if (ev.brk) w.breached.add(i); else w.breached.delete(i);
     w.grille[i] = ev.gr ?? w.grille[i]; w.ws[i] = ev.ws ?? w.ws[i]; w.ft[i] = ev.ft ?? w.ft[i]; w.lat[i] = ev.lat ?? w.lat[i];
   }
 
-  setCloset(i, cs, gone) {
-    const it = this.props.interact[i];
-    if (it?.kind === 'closet') setClosetState(this.world, it, cs, gone);
+  setCloset(g, i, cs, gone) {
+    const it = g.props.interact[i];
+    if (it?.kind === 'closet') setClosetState(g.world, it, cs, gone);
   }
 
-  moveProp(i, x, z, d) {
-    const it = this.props.interact[i];
-    if (it) moveProp(this.world, it, x, z, d);
+  moveProp(g, i, x, z, d) {
+    const it = g.props.interact[i];
+    if (it) moveProp(g.world, it, x, z, d);
   }
 
-  killPane(c, r, d) {
-    const p = this.props.paneIdx.get((r * this.world.W + c) * 16 + d);
+  killPane(g, c, r, d) {
+    const p = g.props.paneIdx.get(g.world.idx(c, r) * 16 + d);
     if (!p || p.dead) return null;
     p.dead = true;
-    this.world.removeEdge(c, r, d);
+    g.world.removeEdge(c, r, d);
     return p;
   }
 
-  setFdoor(f, closed) {
-    const { world } = this;
+  setFdoor(g, f, closed) {
+    const { world } = g;
     f.closed = closed;
     const d = world.doorAt.get(f.i);
     if (closed) { world.solid[f.i] = 1; world.airBlock[f.i] = 1; }
     else { world.solid[f.i] = d && !d.passable ? 1 : 0; world.airBlock[f.i] = d && !d.isOpen ? 1 : 0; }
   }
 
-  /** The emergency shuttle docks: stamp its tiles and props into the world (same code path as the server). */
-  applyEvac(initial = false) {
-    if (this.evacApplied) return;
-    this.evacApplied = true;
-    const w = this.world, ov = this.level.evac;
+  /** The emergency shuttle docks: stamp its tiles and props into the grid (same code path as the server). */
+  applyEvac(g, initial = false) {
+    if (g.evacApplied) return;
+    g.evacApplied = true;
+    const w = g.world, ov = g.evac;
     const tiles = [];
     for (const [i, kind, floor, wall, area, roof] of ov.tiles) {
       w.kind[i] = kind; w.floorCell[i] = floor; w.wallVar[i] = wall; w.areaIdx[i] = area; w.roof[i] = roof;
@@ -110,16 +142,16 @@ export class Replica {
       }
       tiles.push([i % w.W, Math.floor(i / w.W)]);
     }
-    buildPropData(w, this.rects, ov.props, this.level, this.props);
-    for (const p of this.props.added.doors) this.doors.push(new DoorCore(w, p, p.fr.length - 2));
-    this.evacTiles = tiles;
-    if (!initial) this.emit('evac', { tiles, added: this.props.added });
-    else this.pendingEvac = { tiles, added: this.props.added };
+    buildPropData(w, this.rects, ov.props, this.level, g.props);
+    g.addDoors(g.props.added.doors);
+    g.evacTiles = tiles;
+    if (!initial) this.emit('evac', { g, tiles, added: g.props.added });
+    else g.pendingEvac = { tiles, added: g.props.added };
   }
 
   // ------------------------------------------------------------------ per-frame
   tick(dt) {
-    for (const d of this.doors) if (d.state === 'opening' || d.state === 'closing') d.tick(dt);
+    for (const g of this.grids.values()) for (const d of g.doors) if (d.state === 'opening' || d.state === 'closing') d.tick(dt);
   }
 
   get roundClock() {
@@ -129,29 +161,30 @@ export class Replica {
 
   // ------------------------------------------------------------------ events
   apply(ev) {
+    const g = ev.g !== undefined ? this.grids.get(ev.g) : null;
     switch (ev.e) {
-      case 'door': this.doors[ev.i]?.setState(ev.st); break;
-      case 'fdoor': { const f = this.fdoors[ev.i]; if (f) this.setFdoor(f, !!ev.c); break; }
-      case 'tile': this.setTile(ev); break;
-      case 'cl': this.setCloset(ev.i, ev.cs, !!ev.g); break;
-      case 'pm': this.moveProp(ev.i, ev.x, ev.z, ev.d); break;
+      case 'door': g?.doors[ev.i]?.setState(ev.st); break;
+      case 'fdoor': { const f = g?.fdoors[ev.i]; if (f) this.setFdoor(g, f, !!ev.c); break; }
+      case 'tile': if (g) this.setTile(g, ev); break;
+      case 'cl': if (g) this.setCloset(g, ev.i, ev.cs, !!ev.gn); break;
+      case 'pm': if (g) this.moveProp(g, ev.i, ev.x, ev.z, ev.d); break;
       case 'imv': { const it = this.items.get(ev.id); if (it) { it.x = ev.x; it.z = ev.z; } break; }
-      case 'pane': this.killPane(ev.c, ev.r, ev.d); break;
-      case 'item+': this.items.set(ev.id, { id: ev.id, s: ev.s, n: ev.n, x: ev.x, y: ev.y, z: ev.z }); break;
+      case 'pane': if (g) this.killPane(g, ev.c, ev.r, ev.d); break;
+      case 'item+': this.items.set(ev.id, { id: ev.id, s: ev.s, n: ev.n, x: ev.x, y: ev.y, z: ev.z, g: ev.g }); break;
       case 'item-': this.lastRemoved = this.items.get(ev.id) || null; this.items.delete(ev.id); break;
-      case 'power': this.power.state = ev.state; this.power.battery = ev.battery; break;
-      case 'area': this.power.areaOn[ev.a] = ev.on; this.power.areaLights[ev.a] = ev.lights; break;
-      case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, x: 0, z: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
+      case 'power': if (g) { g.power.state = ev.state; g.power.battery = ev.battery; } break;
+      case 'area': if (g) { g.power.areaOn[ev.a] = ev.on; g.power.areaLights[ev.a] = ev.lights; } break;
+      case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, g: 0, x: 0, z: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
       case 'look': { const m = this.mobs.get(ev.id); if (m) m.ap = ev.ap; break; }
       case 'mob-': break;                    // the view reads the mob before it is dropped (see Game.onEvent)
       case 'self': this.self = ev; break;
       case 'round': this.round = ev; this.roundAt = performance.now(); break;
       case 'alert': this.alert = ev.level; break;
-      case 'grav': this.world.gravityOn = !!ev.on; break;
-      case 'bs+': this.built.add({ id: ev.id, k: ev.k, c: ev.c, r: ev.r, st: ev.st }); break;
-      case 'bs~': { const b = this.built.get(ev.id); if (b) b.st = ev.st; break; }
-      case 'bs-': this.built.remove(ev.id); break;
-      case 'evac': this.applyEvac(); return;
+      case 'grav': if (g) g.world.gravityOn = !!ev.on; break;
+      case 'bs+': g?.built.add({ id: ev.id, k: ev.k, c: ev.c, r: ev.r, st: ev.st, grid: g }); break;
+      case 'bs~': { const b = g?.built.get(ev.id); if (b) b.st = ev.st; break; }
+      case 'bs-': g?.built.remove(ev.id); break;
+      case 'evac': if (g) this.applyEvac(g); return;
       default: break;
     }
     this.emit(ev.e, ev);
@@ -163,13 +196,13 @@ export class Replica {
     this.you = snap.you;
     if (snap.env) this.env = snap.env;
     for (const row of snap.mobs) {
-      const [id, x, z, yaw, flags, speed] = row;
+      const [id, gid, x, z, yaw, flags, speed] = row;
       const m = this.mobs.get(id);
       if (!m) continue;
       m.flags = flags; m.speed = speed; m.dead = !!(flags & 1); m.crit = !!(flags & 2); m.lying = !!(flags & 16);
-      m.buf.push({ t: now, x, z, yaw });
+      m.buf.push({ t: now, g: gid, x, z, yaw });
       if (m.buf.length > 6) m.buf.shift();
-      if (m.fresh) { m.fresh = false; m.x = x; m.z = z; m.yaw = yaw; }
+      if (m.fresh) { m.fresh = false; m.g = gid; m.x = x; m.z = z; m.yaw = yaw; }
     }
   }
 

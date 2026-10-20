@@ -14,7 +14,7 @@ export class BuiltSet {
 
   add(rec) {
     const { world } = this;
-    const i = rec.r * world.W + rec.c;
+    const i = world.idx(rec.c, rec.r);
     this.byId.set(rec.id, rec);
     this.byTile.set(i, rec);
     world.solid[i] = 1;
@@ -25,7 +25,7 @@ export class BuiltSet {
     const rec = this.byId.get(id);
     if (!rec) return null;
     const { world } = this;
-    const i = rec.r * world.W + rec.c;
+    const i = world.idx(rec.c, rec.r);
     this.byId.delete(id);
     if (this.byTile.get(i) === rec) this.byTile.delete(i);
     if (world.kind[i] !== KIND.WALL) world.solid[i] = 0;          // the tile is walkable again unless something else stands there

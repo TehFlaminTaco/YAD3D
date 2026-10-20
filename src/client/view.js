@@ -53,14 +53,18 @@ export function viewIndex(fx, fz, vx, vz, camRx, camRz) {
   return dot > 0.62 ? 1 : dot < -0.62 ? 0 : side > 0 ? 2 : 3;
 }
 
-/** Everything you can see: terrain mesh, sprite batches (props, doors, items, mobs), lights. Reads the Replica, never writes it. */
+/**
+ * Everything you can see: terrain mesh, sprite batches (props, doors, items, mobs), lights. Reads the Replica, never writes it.
+ * It draws one grid, the station, for now (`this.grid`); the stage that puts shuttles in the picture makes this a view per grid.
+ */
 export class WorldView {
   constructor(scene, assets, rep, opts = {}) {
     this.scene = scene;
     this.assets = assets;
     this.rep = rep;
+    this.grid = rep.station;
     this.rects = assets.rects;
-    const { world, props } = rep;
+    const { world, props } = this.grid;
     const mat = spriteMaterial(assets.spriteTex);
     this.stat = new SpriteBatch(20000, mat);
     this.dyn = new SpriteBatch(3000, mat);
@@ -79,16 +83,16 @@ export class WorldView {
     for (const it of props.closets) this.setClosetView(it);     // the welcome may have told us some are open
 
     this.doorViews = [];
-    for (const d of rep.doors) this.addDoorView(d);
-    this.fdoorViews = rep.fdoors.map((f) => this.addFdoorView(f));
+    for (const d of this.grid.doors) this.addDoorView(d);
+    this.fdoorViews = this.grid.fdoors.map((f) => this.addFdoorView(f));
     this.mirrors = this.addMirrors();
     this.builtView = new Map();                  // built structure id -> its sprite slot
     this.builtFree = [];
-    for (const b of rep.built) this.addBuilt(b);
+    for (const b of this.grid.built) this.addBuilt(b);
 
     this.itemSlot = new Map();                   // item id -> sprite id
     this.itemFree = [];
-    for (const it of rep.items.values()) this.addItem(it);
+    for (const it of rep.items.values()) if (it.g === this.grid.id) this.addItem(it);
 
     this.mobViews = new Map();
     this.mobFree = [];
@@ -142,7 +146,7 @@ export class WorldView {
    */
   addMirrors() {
     const out = [];
-    for (const it of this.rep.props.interact) {
+    for (const it of this.grid.props.interact) {
       if (it.kind !== 'wm' || it.sub !== 'mirror' || !it.st) continue;
       const st = it.st;
       const n = { x: Math.sin(st.yaw), z: Math.cos(st.yaw) };          // out of the wall, into the room
@@ -273,7 +277,7 @@ export class WorldView {
     if (!rc) return null;
     const yaw = f.yaw ?? 0;
     // a firelock in an airlock's doorway is drawn a little to one side of it: two closed doors in one plane would flicker through each other
-    const off = this.rep.world.doorAt.has(f.i) ? 0.2 : 0;
+    const off = this.grid.world.doorAt.has(f.i) ? 0.2 : 0;
     const fx = f.x + Math.sin(yaw) * off, fz = f.z + Math.cos(yaw) * off;
     const id = this.dyn.add({ x: fx, y: 0, z: fz, mode: 1, w: rc.w * PX, h: rc.h * PX * SY, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.fh - rc.oy - rc.h) * PX * SY, yaw, rect: rc, alpha: f.closed ? 1 : 0 });
     this.lit.push({ batch: this.dyn, id, sx: f.x, sz: f.z });
@@ -450,12 +454,14 @@ export class WorldView {
   interpolate(m, rt) {
     const b = m.buf;
     if (!b.length) return;
-    if (rt <= b[0].t) { m.x = b[0].x; m.z = b[0].z; m.yaw = b[0].yaw; return; }
+    if (rt <= b[0].t) { m.g = b[0].g; m.x = b[0].x; m.z = b[0].z; m.yaw = b[0].yaw; return; }
     const last = b[b.length - 1];
-    if (rt >= last.t) { m.x = last.x; m.z = last.z; m.yaw = last.yaw; return; }
+    if (rt >= last.t) { m.g = last.g; m.x = last.x; m.z = last.z; m.yaw = last.yaw; return; }
     for (let i = b.length - 2; i >= 0; i--) {
       if (b[i].t <= rt) {
         const a = b[i], c = b[i + 1];
+        if (a.g !== c.g) { m.g = c.g; m.x = c.x; m.z = c.z; m.yaw = c.yaw; return; }      // stepped onto another grid: no blending between two frames
+        m.g = a.g;
         const k = (rt - a.t) / Math.max(1e-4, c.t - a.t);
         m.x = a.x + (c.x - a.x) * k; m.z = a.z + (c.z - a.z) * k;
         let dy = c.yaw - a.yaw;
@@ -473,6 +479,7 @@ export class WorldView {
       const m = v.m;
       if (mid === selfId) { this.dyn.setAlpha(v.id, 0); continue; }
       this.interpolate(m, rt);
+      if (m.g !== this.grid.id) { this.dyn.setAlpha(v.id, 0); continue; }                      // on a grid this view does not draw
       let sid, still;
       if ((m.dead || m.lying) && (m.dead ? v.set.dead : v.set.lie ?? v.set.dead) >= 0) still = sid = m.dead ? v.set.dead : v.set.lie ?? v.set.dead;       // dead, stunned or held down: on their side
       else {
@@ -508,10 +515,10 @@ export class WorldView {
 
   // ------------------------------------------------------------------ lighting
   rebuildLights() {
-    const { rep, lightField: lf } = this;
-    const { world, props, power } = rep;
+    const { grid, lightField: lf } = this;
+    const { world, props, power } = grid;
     lf.clear(this.ambient);
-    for (let i = 0; i < world.W * world.H; i++) {
+    for (let i = 0; i < world.n; i++) {
       const k = world.kind[i];
       if (k === KIND.SPACE || k === KIND.LATTICE) { lf.r[i] = 0.11; lf.g[i] = 0.12; lf.b[i] = 0.16; }
     }
@@ -572,10 +579,10 @@ export class WorldView {
 
   onEvac(ev) {
     const { added } = ev;
-    for (const t of added.tables) this.levelMesh.tableAt.set(t.r * this.rep.world.W + t.c, t);
-    this.levelMesh.extras.panes = this.rep.props.panes;
+    for (const t of added.tables) this.levelMesh.tableAt.set(this.grid.world.idx(t.c, t.r), t);
+    this.levelMesh.extras.panes = this.grid.props.panes;
     this.addStatics(added.statics);
-    for (let k = this.doorViews.length; k < this.rep.doors.length; k++) this.addDoorView(this.rep.doors[k]);
+    for (let k = this.doorViews.length; k < this.grid.doors.length; k++) this.addDoorView(this.grid.doors[k]);
     this.levelMesh.rebuildTiles(ev.tiles);
     this.rebuildLights();
   }

@@ -15,7 +15,7 @@ export class Terminals {
   open(c, type, ctx = {}) {
     const m = c.mob;
     if (!m) return;
-    c.term = { type, ctx, page: 0, msg: '', x: m.x, z: m.z, fns: [], last: -9, mapAt: -9 };
+    c.term = { type, ctx, grid: ctx.grid || m.grid, page: 0, msg: '', x: m.x, z: m.z, fns: [], last: -9, mapAt: -9 };
     this.sim.soundTo(c, 'terminal_on', 0.8);
     this.render(c, true);
   }
@@ -44,7 +44,7 @@ export class Terminals {
       const t = c.term;
       if (!t) continue;
       const m = c.mob;
-      if (!m || m.dead || Math.hypot(m.x - t.x, m.z - t.z) > 4.5) { this.close(c); continue; }
+      if (!m || m.dead || m.grid !== t.grid || Math.hypot(m.x - t.x, m.z - t.z) > 4.5) { this.close(c); continue; }
       if (t.pending && sim.time >= t.pending.at) { const p = t.pending; t.pending = null; p.fn(); this.render(c, true); continue; }
       if (sim.time - t.last > 1) this.render(c, false);
     }
@@ -71,24 +71,24 @@ export class Terminals {
 
   program(c, t) {
     const sim = this.sim;
-    const m = c.mob;
-    const area = sim.world.areas[t.ctx.area ?? sim.world.areaIdx[m.tile[1] * sim.world.W + m.tile[0]]];
+    const m = c.mob, g = t.grid, w = g.world;
+    const area = w.areas[t.ctx.area ?? w.areaIdx[w.idx(m.tile[0], m.tile[1])]];
     const bar = (frac, n = 24) => '█'.repeat(Math.round(frac * n)) + '░'.repeat(n - Math.round(frac * n));
     switch (t.type) {
-      case 'apc': return this.apc(c, area, bar);
-      case 'airalarm': return this.airalarm(c, area, bar);
+      case 'apc': return this.apc(g, area, bar);
+      case 'airalarm': return this.airalarm(c, g, area, bar);
       case 'crew': return this.crew();
-      case 'atmos': return this.atmosMap();
-      case 'alerts': return this.alerts();
+      case 'atmos': return this.atmosMap(g);
+      case 'alerts': return this.alerts(g);
       case 'comms': return this.comms(c);
-      case 'power': return this.powerMon(c, bar);
+      case 'power': return this.powerMon(c, g, bar);
       case 'shuttle': return this.shuttle();
       case 'pod': return this.pod(c);
       case 'records': return this.records();
       case 'cargo': return { title: 'Cargo Ordering', html: '<span class="h">SUPPLY REQUISITION</span>\n\nBudget: <span class="b">0 cr</span>\n\nInsufficient funds. Please contact the Quartermaster.', buttons: [] };
       case 'rc': return { title: 'Requests Console', html: `<span class="h">${esc(area.n)}</span>\n\nNo new messages.`, buttons: [] };
       case 'news': return { title: 'Newscaster', html: `<span class="h">STATION NEWS NETWORK</span>\n\n${sim.director.newsItems().map((n) => '- ' + esc(n)).join('\n\n')}`, buttons: [] };
-      case 'status': return this.status();
+      case 'status': return this.status(g);
       case 'arcade': return { title: 'Arcade', html: '<span class="h">THE ORION TRAIL</span>\n\nYou have died of dysentery.\n\n<span class="d">INSERT COIN</span><span class="cursor"></span>', buttons: [] };
       default: return this.generic(t);
     }
@@ -105,29 +105,29 @@ export class Terminals {
     };
   }
 
-  apc(c, area, bar) {
-    const sim = this.sim, P = sim.power;
-    const i = sim.world.areas.indexOf(area);
+  apc(g, area, bar) {
+    const sim = this.sim, P = g.power;
+    const i = g.world.areas.indexOf(area);
     const on = P.areaOn[i], lights = P.areaLights[i];
     return {
       title: 'Area Power Controller', live: true,
       html: `<span class="h">${esc(area.n)}</span>\n\nMain grid        ${P.state === 'normal' ? '<span class="c">Nominal</span>' : P.state === 'battery' ? '<span class="w">Emergency cells</span>' : '<span class="b">Offline</span>'}\nArea breaker     ${on ? '<span class="c">On</span>' : '<span class="b">Off</span>'}\nLighting         ${lights ? '<span class="c">On</span>' : '<span class="b">Off</span>'}\nEmergency cells  ${bar(P.battery)} ${Math.round(P.battery * 100)}%`,
       buttons: [
-        { label: on ? 'Breaker off' : 'Breaker on', fn: () => sim.setAreaPower(i, !on, undefined) },
-        { label: lights ? 'Lights off' : 'Lights on', fn: () => sim.setAreaPower(i, undefined, !lights) },
+        { label: on ? 'Breaker off' : 'Breaker on', fn: () => sim.setAreaPower(g, i, !on, undefined) },
+        { label: lights ? 'Lights off' : 'Lights on', fn: () => sim.setAreaPower(g, i, undefined, !lights) },
       ],
     };
   }
 
-  airalarm(c, area, bar) {
-    const sim = this.sim, a = sim.atmos, m = c.mob;
+  airalarm(c, g, area, bar) {
+    const a = g.atmos, m = c.mob;
     const [tc, tr] = m.tile;
-    const p = a.pressureAt(tc, tr), o2 = a.o2At(tc, tr), n2 = a.n2[tr * sim.world.W + tc], tox = a.toxAt(tc, tr);
-    const aidx = sim.world.areas.indexOf(area);
+    const p = a.pressureAt(tc, tr), o2 = a.o2At(tc, tr), n2 = a.n2[g.world.idx(tc, tr)], tox = a.toxAt(tc, tr);
+    const aidx = g.world.areas.indexOf(area);
     const avg = a.areaStats.get(aidx);
     return {
       title: 'Air Alarm', live: true,
-      html: `<span class="h">${esc(area.n)}</span>\n\nStatus        ${p < 30 ? '<span class="b">DANGER: low pressure</span>' : p < 80 ? '<span class="w">Warning: thin atmosphere</span>' : '<span class="c">Optimal</span>'}\nPressure      ${p.toFixed(1)} kPa   ${bar(Math.min(1, p / 101.3))}\nOxygen        ${o2.toFixed(1)} kPa\nNitrogen      ${n2.toFixed(1)} kPa\nToxins        ${tox.toFixed(2)} kPa ${tox > 0.5 ? '<span class="b">HAZARD</span>' : ''}\nArea average  ${avg !== undefined ? avg.toFixed(1) + ' kPa' : 'n/a'}\nVents         ${a.ventsOn ? '<span class="c">On</span>' : '<span class="b">Off</span>'} ${sim.power.areaPowered(aidx) ? '' : '<span class="b">(no power)</span>'}`,
+      html: `<span class="h">${esc(area.n)}</span>\n\nStatus        ${p < 30 ? '<span class="b">DANGER: low pressure</span>' : p < 80 ? '<span class="w">Warning: thin atmosphere</span>' : '<span class="c">Optimal</span>'}\nPressure      ${p.toFixed(1)} kPa   ${bar(Math.min(1, p / 101.3))}\nOxygen        ${o2.toFixed(1)} kPa\nNitrogen      ${n2.toFixed(1)} kPa\nToxins        ${tox.toFixed(2)} kPa ${tox > 0.5 ? '<span class="b">HAZARD</span>' : ''}\nArea average  ${avg !== undefined ? avg.toFixed(1) + ' kPa' : 'n/a'}\nVents         ${a.ventsOn ? '<span class="c">On</span>' : '<span class="b">Off</span>'} ${g.power.areaPowered(aidx) ? '' : '<span class="b">(no power)</span>'}`,
       buttons: [{ label: a.ventsOn ? 'Vents off' : 'Vents on', fn: () => { a.ventsOn = !a.ventsOn; } }],
     };
   }
@@ -136,7 +136,7 @@ export class Terminals {
     const sim = this.sim;
     const crew = [...sim.mobs.values()].filter((m) => m.kind === 'human' && !m.evacuated);
     const rows = crew.map((m) => {
-      const area = sim.world.areaAt(...m.tile);
+      const area = m.grid?.world.areaAt(...m.tile);
       const st = m.dead ? '<span class="b">Deceased</span>' : m.body.crit ? '<span class="b">Critical</span>' : m.body.health < 60 ? '<span class="w">Injured</span>' : '<span class="c">Stable</span>';
       return `<div class="row"><span>${esc(m.name)} <span class="d">${esc(sim.jobs.get(m.job)?.title || '')}</span></span><span>${st} ${esc(area ? area.n : '?')}</span></div>`;
     });
@@ -147,17 +147,17 @@ export class Terminals {
     };
   }
 
-  alerts() {
-    const sim = this.sim;
+  alerts(g) {
+    const w = g.world;
     const L = [];
-    for (const i of sim.world.ventTiles()) L.push(`<span class="b">Atmosphere alarm</span>  hull breach, ${esc(sim.world.areaAt(i % sim.world.W, Math.floor(i / sim.world.W))?.n || 'unknown')}`);
-    if (sim.power.state !== 'normal') L.push(`<span class="w">Power alarm</span>  main grid ${sim.power.state === 'out' ? 'offline' : 'on emergency cells'}`);
-    for (const f of sim.firedoors.list) if (f.closed) L.push(`<span class="w">Fire alarm</span>  firelock sealed, ${esc(sim.world.areaAt(f.c, f.r)?.n || '')}`);
+    for (const i of w.ventTiles()) L.push(`<span class="b">Atmosphere alarm</span>  hull breach, ${esc(w.areaAt(i % w.W, Math.floor(i / w.W))?.n || 'unknown')}`);
+    if (g.power.state !== 'normal') L.push(`<span class="w">Power alarm</span>  main grid ${g.power.state === 'out' ? 'offline' : 'on emergency cells'}`);
+    for (const f of g.firedoors.list) if (f.closed) L.push(`<span class="w">Fire alarm</span>  firelock sealed, ${esc(w.areaAt(f.c, f.r)?.n || '')}`);
     return { title: 'Station Alerts', live: true, html: `<span class="h">ACTIVE ALARMS</span>\n\n${L.length ? L.slice(0, 24).join('\n') : '<span class="c">All systems nominal.</span>'}`, buttons: [] };
   }
 
-  powerMon(c, bar) {
-    const sim = this.sim, P = sim.power;
+  powerMon(c, g, bar) {
+    const sim = this.sim, P = g.power;
     const t = c.term;
     const labels = ['Purge coolant loop', 'Reset containment field', 'Engage emitters'];
     const step = P.restartStep;
@@ -224,14 +224,13 @@ export class Terminals {
     return { title: 'Records', html: `<span class="h">CREW MANIFEST</span>\n\n${rows.join('')}`, buttons: [] };
   }
 
-  status() {
+  status(g) {
     const sim = this.sim, d = sim.director;
-    return { title: 'Status Display', live: true, html: `<span class="h">STATION STATUS</span>\n\nShuttle   ${d.evacState === 'idle' ? 'no active order' : d.evacState === 'called' ? 'ETA ' + Math.ceil(d.evacTimer) + ' s' : d.evacState === 'docked' ? 'docked ' + Math.ceil(d.evacTimer) + ' s' : 'departed'}\nGrid      ${sim.power.state}\nBreaches  ${sim.world.ventTiles().length}\nAlert     ${d.level}`, buttons: [] };
+    return { title: 'Status Display', live: true, html: `<span class="h">STATION STATUS</span>\n\nShuttle   ${d.evacState === 'idle' ? 'no active order' : d.evacState === 'called' ? 'ETA ' + Math.ceil(d.evacTimer) + ' s' : d.evacState === 'docked' ? 'docked ' + Math.ceil(d.evacTimer) + ' s' : 'departed'}\nGrid      ${g.power.state}\nBreaches  ${g.world.ventTiles().length}\nAlert     ${d.level}`, buttons: [] };
   }
 
-  atmosMap() {
-    const sim = this.sim;
-    const w = sim.world, a = sim.atmos;
+  atmosMap(g) {
+    const w = g.world, a = g.atmos;
     const x0 = 24, x1 = 232, y0 = 56, y1 = 192;
     return {
       title: 'Atmospherics Monitor', live: false,
@@ -240,7 +239,7 @@ export class Terminals {
       map: () => {
         let s = '';
         for (let r = y0; r < y1; r++) for (let c = x0; c < x1; c++) {
-          const i = r * w.W + c;
+          const i = w.idx(c, r);
           if (w.breached.has(i)) { s += 'B'; continue; }
           if (w.kind[i] === KIND.WALL) { s += w.glass[i] ? 'G' : 'W'; continue; }
           if (!a.isCell[i]) { s += ' '; continue; }

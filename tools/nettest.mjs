@@ -67,7 +67,7 @@ try {
     for (let k = 0; k < 8; k++) {
       const yaw = k * Math.PI / 4;
       let d = 0;
-      while (d < 6 && !yad.rep.world.collides(yad.pred.x - Math.sin(yaw) * d, yad.pred.z - Math.cos(yaw) * d, 0.34)) d += 0.2;
+      while (d < 6 && !yad.myGrid().world.collides(yad.pred.x - Math.sin(yaw) * d, yad.pred.z - Math.cos(yaw) * d, 0.34)) d += 0.2;
       if (d > best) { best = d; by = yaw; }
     }
     yad.yaw = by;

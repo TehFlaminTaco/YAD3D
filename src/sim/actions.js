@@ -72,13 +72,13 @@ export class Actions {
 
   toggleInternals(m) {
     const sim = this.sim;
-    if (m.internals) { m.internals = false; sim.tell(m, 'notice', 'You are no longer running on internals.'); sim.sound('hiss', m.x, m.z, 0.4); return; }
+    if (m.internals) { m.internals = false; sim.tell(m, 'notice', 'You are no longer running on internals.'); sim.sound('hiss', m, 0.4); return; }
     if (!m.worn.mask?.def.internals) { sim.tell(m, 'warning', 'You are not wearing a suitable mask or helmet.'); return; }
     const src = internalsSource(m);
     if (!src) { sim.tell(m, 'warning', 'You have no tank to connect to.'); return; }
     m.internals = true;
     sim.tell(m, 'notice', 'You are now running on internals.');
-    sim.sound('hiss', m.x, m.z, 0.5);
+    sim.sound('hiss', m, 0.5);
   }
 
   /** jetpack.dm: toggle_jetpack(). The one on your back; its stabilizers are always on (let go of the keys and it brakes you). */
@@ -87,7 +87,7 @@ export class Actions {
     if (!jp) { sim.tell(m, 'warning', 'You have no jetpack on your back.'); return; }
     m.jetOn = !m.jetOn;
     sim.tell(m, 'notice', `You turn the jetpack ${m.jetOn ? 'on' : 'off'}.`);
-    sim.sound('hiss', m.x, m.z, 0.3);
+    sim.sound('hiss', m, 0.3);
     m.dirty = true;
   }
 
@@ -97,7 +97,7 @@ export class Actions {
     if (!m.worn.shoes?.def.magboots) { sim.tell(m, 'warning', 'You are not wearing magboots.'); return; }
     m.magOn = !m.magOn;
     sim.tell(m, 'notice', `You ${m.magOn ? 'enable' : 'disable'} the mag-pulse traction system.`);
-    sim.sound('beep', m.x, m.z, 0.3);
+    sim.sound('beep', m, 0.3);
     m.dirty = true;
   }
 
@@ -112,7 +112,7 @@ export class Actions {
     const it = this.lightItem(m);
     if (!it) { sim.tell(m, 'warning', 'You have no light source.'); return; }
     m.lightOn = !m.lightOn;
-    sim.sound('beep', m.x, m.z, 0.3);
+    sim.sound('beep', m, 0.3);
     sim.tell(m, 'notice', m.lightOn ? `You turn on the ${it.name}.` : `You turn off the ${it.name}.`);
   }
 
@@ -127,7 +127,7 @@ export class Actions {
     if (d.tool === 'welder') {
       if (it.fuel <= 0) { sim.tell(m, 'warning', 'The welding tool is out of fuel.'); return; }
       it.lit = !it.lit; m.dirty = true;
-      sim.sound(it.lit ? 'welder_on' : 'beep', m.x, m.z, 0.5);
+      sim.sound(it.lit ? 'welder_on' : 'beep', m, 0.5);
       sim.tell(m, 'notice', it.lit ? 'You turn on the welding tool.' : 'You turn off the welding tool.');
       return;
     }
@@ -145,32 +145,38 @@ export class Actions {
   }
 
   // ------------------------------------------------------------------ clicking
+  /**
+   * What a click's target refers to, with the grid it is on (`grid`) and its place in that grid's frame (`x`, `z`). Targets that are
+   * indexes or tiles belong to the grid the client names (`t.g`), else the one you are standing on; items and people know their own.
+   */
   resolve(m, t) {
     const sim = this.sim;
     if (!t || t.k === 'none') return null;
+    const g = sim.grids.get(t.g) || m.grid;
     switch (t.k) {
-      case 'item': { const rec = sim.floor.get(t.id); return rec ? { k: 'item', rec, x: rec.x, z: rec.z } : undefined; }
-      case 'door': { const d = sim.doors[t.idx]; return d ? { k: 'door', d, idx: t.idx, x: d.x, z: d.z } : undefined; }
-      case 'fdoor': { const f = sim.firedoors.list[t.idx]; return f ? { k: 'fdoor', f, x: f.x, z: f.z } : undefined; }
-      case 'prop': { const it = sim.props.interact[t.idx]; return it ? { k: 'prop', it, x: it.x, z: it.z } : undefined; }
-      case 'mob': { const o = sim.mobs.get(t.id); return o && o !== m ? { k: 'mob', o, x: o.x, z: o.z } : undefined; }
-      case 'breach': { const i = t.r * sim.world.W + t.c; return sim.world.breached.has(i) ? { k: 'breach', c: t.c, r: t.r, x: t.c * TILE + 1, z: t.r * TILE + 1 } : undefined; }
+      case 'item': { const rec = sim.floor.get(t.id); return rec ? { k: 'item', rec, grid: rec.grid, x: rec.x, z: rec.z } : undefined; }
+      case 'door': { const d = g.doors[t.idx]; return d ? { k: 'door', d, idx: t.idx, grid: g, x: d.x, z: d.z } : undefined; }
+      case 'fdoor': { const f = g.firedoors.list[t.idx]; return f ? { k: 'fdoor', f, grid: g, x: f.x, z: f.z } : undefined; }
+      case 'prop': { const it = g.props.interact[t.idx]; return it ? { k: 'prop', it, grid: g, x: it.x, z: it.z } : undefined; }
+      case 'mob': { const o = sim.mobs.get(t.id); return o && o !== m ? { k: 'mob', o, grid: o.grid, x: o.x, z: o.z } : undefined; }
+      case 'breach': { const i = g.world.idx(t.c, t.r); return g.world.breached.has(i) ? { k: 'breach', c: t.c, r: t.r, grid: g, x: t.c * TILE + 1, z: t.r * TILE + 1 } : undefined; }
       case 'window': case 'pane': {
-        const th = sim.windows.thing(t);
-        return th ? { k: t.k, c: t.c, r: t.r, d: t.d, x: th.x, z: th.z } : undefined;
+        const th = sim.windows.thing(g, t);
+        return th ? { k: t.k, c: t.c, r: t.r, d: t.d, grid: g, x: th.x, z: th.z } : undefined;
       }
-      case 'floor': { const th = sim.floors.floor(t); return th ? { k: 'floor', c: t.c, r: t.r, x: th.x, z: th.z } : undefined; }
-      case 'wall': { const th = sim.walls.wall(t); return th ? { k: 'wall', c: t.c, r: t.r, x: th.x, z: th.z } : undefined; }
-      case 'built': { const th = sim.walls.girder(t); return th ? { k: 'built', id: t.id, x: th.x, z: th.z } : undefined; }
+      case 'floor': { const th = sim.floors.floor(g, t); return th ? { k: 'floor', c: t.c, r: t.r, grid: g, x: th.x, z: th.z } : undefined; }
+      case 'wall': { const th = sim.walls.wall(g, t); return th ? { k: 'wall', c: t.c, r: t.r, grid: g, x: th.x, z: th.z } : undefined; }
+      case 'built': { const th = sim.walls.girder(g, t); return th ? { k: 'built', id: t.id, grid: g, x: th.x, z: th.z } : undefined; }
       default: return undefined;
     }
   }
 
   inReach(m, t) {
-    const d = Math.hypot(t.x - m.x, t.z - m.z);
+    const d = this.sim.dist(m, t);
     if (d > REACH + (t.k === 'mob' ? 0.5 : t.k === 'window' || t.k === 'pane' || t.k === 'breach' || t.k === 'wall' || t.k === 'built' || t.k === 'floor' ? 1.3 : 0)) return false;       // a window's middle is a metre behind its face
     if (t.k === 'door' || t.k === 'breach' || t.k === 'window' || t.k === 'pane' || t.k === 'wall' || (t.k === 'prop' && t.it.kind === 'wm')) return true;
-    const wd = this.sim.world.raycast(m.x, m.z, t.x - m.x, t.z - m.z, d, 'shot');
+    if (t.grid !== m.grid) return true;               // across a doorway between two grids there are no tiles to look along: arm's length is all that counts
+    const wd = m.grid.world.raycast(m.x, m.z, t.x - m.x, t.z - m.z, d, 'shot');
     return wd >= d - 0.8;
   }
 
@@ -191,8 +197,8 @@ export class Actions {
     if (msg.ctrl && ['mob', 'item', 'prop'].includes(t.k)) return sim.people.drag(m, t);        // Ctrl+click is SS13's pull
     switch (t.k) {
       case 'item': return this.clickItem(m, t.rec, held);
-      case 'door': return this.clickDoor(m, t.idx, held);
-      case 'fdoor': sim.firedoors.manualOpen(t.f, m); return;
+      case 'door': return this.clickDoor(m, t.d, held);
+      case 'fdoor': t.grid.firedoors.manualOpen(t.f, m); return;
       case 'prop': return this.clickProp(c, m, t.it, held, !!msg.alt);
       case 'mob': return this.clickMob(m, t.o, held, !!msg.alt);
       case 'breach': return this.clickBreachTile(m, t, held);
@@ -213,39 +219,38 @@ export class Actions {
     const sim = this.sim;
     // a stack in your hand and another of its kind on the floor: the floor one joins yours (stack.dm attackby)
     if (held && stackInfo(held.path) && stackKey(held.path) === stackKey(rec.item.path)) {
-      if (mergeStack(sim, rec.item, held)) { stackNote(sim, m, held); sim.sound('pickup', m.x, m.z, 0.5); }
+      if (mergeStack(sim, rec.item, held)) { stackNote(sim, m, held); sim.sound('pickup', m, 0.5); }
       return;
     }
     // a held container takes the item in
     if (held?.def.storage && m.intent === 'help') {
       const why = storageReason(held, rec.item);
-      if (!why) { detach(sim, rec.item); attach(sim, rec.item, { t: 'box', box: held }); sim.sound('equip', m.x, m.z, 0.5); return; }
+      if (!why) { detach(sim, rec.item); attach(sim, rec.item, { t: 'box', box: held }); sim.sound('equip', m, 0.5); return; }
     }
     pickup(sim, m, rec);
   }
 
-  clickDoor(m, idx, held) {
-    const sim = this.sim;
-    const d = sim.doors[idx];
-    if (held?.def.tool === 'crowbar' && d.state === 'closed' && !sim.power.doorsWork(d) && !d.bolted) {
-      this.startTimed(m, 'prying the door open', 2.8, () => d.state === 'closed' && Math.hypot(m.x - d.x, m.z - d.z) < 3.2 && m.held === held, () => {
-        d.pried = true; sim.openDoor(idx, m, true); sim.sound('door_forced', d.x, d.z, 0.9);
+  clickDoor(m, d, held) {
+    const sim = this.sim, power = d.grid.power;
+    if (held?.def.tool === 'crowbar' && d.state === 'closed' && !power.doorsWork(d) && !d.bolted) {
+      this.startTimed(m, 'prying the door open', 2.8, () => d.state === 'closed' && sim.dist(m, d) < 3.2 && m.held === held, () => {
+        d.pried = true; sim.openDoor(d, m, true); sim.sound('door_forced', d, 0.9);
         sim.tell(m, 'notice', 'You pry the door open.');
       }, 'crowbar');
       return;
     }
-    if (!sim.power.doorsWork(d)) {
+    if (!power.doorsWork(d)) {
       sim.tell(m, 'warning', 'The airlock has no power.');
       return;
     }
-    if (d.bolted) { sim.tell(m, 'warning', "The airlock's bolts prevent it from being opened."); sim.sound('door_denied', d.x, d.z, 0.7); return; }
-    if (d.state === 'open' || d.state === 'opening') { sim.closeDoor(idx); return; }
+    if (d.bolted) { sim.tell(m, 'warning', "The airlock's bolts prevent it from being opened."); sim.sound('door_denied', d, 0.7); return; }
+    if (d.state === 'open' || d.state === 'opening') { sim.closeDoor(d); return; }
     if (!d.allows(m)) {
-      sim.sound('door_denied', d.x, d.z, 0.8);
+      sim.sound('door_denied', d, 0.8);
       sim.tell(m, 'warning', 'Access denied.');
       return;
     }
-    sim.openDoor(idx, m);
+    sim.openDoor(d, m);
   }
 
   /** A smashed or taken-apart window: the grille's tools first (wirecutters, screwdriver, rods, glass), then a metal plate welded over the hole. */
@@ -253,7 +258,7 @@ export class Actions {
     const sim = this.sim;
     if (sim.windows.clickGrille(m, t, held)) return;
     if (held?.def.sheet === 'metal') return this.clickBreach(m, t, held);
-    const lines = sim.windows.examine(t);
+    const lines = sim.windows.examine(t.grid, t);
     if (lines.length) sim.tell(m, 'info', lines.join(' '));
   }
 
@@ -265,30 +270,30 @@ export class Actions {
     if (!welder) { sim.tell(m, 'warning', 'You need a welding tool to weld the plate on.'); return; }
     if (!welder.lit) { sim.tell(m, 'warning', 'You need to turn the welding tool on first.'); return; }
     if (welder.fuel < 4) { sim.tell(m, 'warning', 'You need more welding fuel to complete this task.'); return; }
-    this.startTimed(m, 'welding the plate', 3.2, () => sim.world.breached.has(t.r * sim.world.W + t.c) && m.held === held && welder.lit && Math.hypot(m.x - t.x, m.z - t.z) < 3.6, () => {
+    this.startTimed(m, 'welding the plate', 3.2, () => t.grid.world.breached.has(t.grid.world.idx(t.c, t.r)) && m.held === held && welder.lit && sim.dist(m, t) < 3.6, () => {
       welder.fuel -= 4;
       held.amount = (held.amount ?? 1) - 1;
       if (held.amount <= 0) consume(sim, held);
-      sim.patchBreach(t.c, t.r);
+      sim.patchBreach(t.grid, t.c, t.r);
       sim.tell(m, 'notice', 'You weld the plate over the hole.');
     }, 'welder');
   }
 
   clickProp(c, m, it, held, alt = false) {
     const sim = this.sim;
-    const area = sim.world.areaIdx[it.r * sim.world.W + it.c];
+    const g = it.grid, area = g.world.areaIdx[g.world.idx(it.c, it.r)];
     if (it.kind === 'closet') return sim.closets.click(c, m, it, held, alt);
     if (it.kind === 'container') return this.openContainer(m, it);
     if (it.kind === 'wm') {
       switch (it.sub) {
-        case 'light_switch': sim.setAreaPower(area, undefined, !sim.power.areaLights[area]); sim.sound('terminal_key', it.x, it.z, 0.5); return;
-        case 'apc': sim.terminals.open(c, 'apc', { area }); return;
-        case 'airalarm': sim.terminals.open(c, 'airalarm', { area }); return;
-        case 'requests_console': sim.terminals.open(c, 'rc', { area }); return;
-        case 'newscaster': sim.terminals.open(c, 'news', { area }); return;
-        case 'status_display': case 'ai_status_display': sim.terminals.open(c, 'status', { area }); return;
-        case 'firealarm': sim.sound('alarm', it.x, it.z, 0.6); sim.firedoors.fireAlarm(45); sim.chat.visible(m, `${m.name} pulls the fire alarm.`, 'notice', 10); return;
-        case 'button': sim.sound('terminal_key', it.x, it.z, 0.6); return;
+        case 'light_switch': sim.setAreaPower(g, area, undefined, !g.power.areaLights[area]); sim.sound('terminal_key', it, 0.5); return;
+        case 'apc': sim.terminals.open(c, 'apc', { area, grid: g }); return;
+        case 'airalarm': sim.terminals.open(c, 'airalarm', { area, grid: g }); return;
+        case 'requests_console': sim.terminals.open(c, 'rc', { area, grid: g }); return;
+        case 'newscaster': sim.terminals.open(c, 'news', { area, grid: g }); return;
+        case 'status_display': case 'ai_status_display': sim.terminals.open(c, 'status', { area, grid: g }); return;
+        case 'firealarm': sim.sound('alarm', it, 0.6); g.firedoors.fireAlarm(45); sim.chat.visible(m, `${m.name} pulls the fire alarm.`, 'notice', 10); return;
+        case 'button': sim.sound('terminal_key', it, 0.6); return;
         case 'mirror': if (m.look) c.outbox.push({ e: 'mirror', look: m.look }); return;
         default: return this.examineProp(m, it);
       }
@@ -297,7 +302,7 @@ export class Actions {
     if (/computer/.test(p)) {
       let type = 'generic';
       for (const [k, v] of COMPUTER_TYPES) if (p.includes(k)) { type = v; break; }
-      sim.terminals.open(c, type, { name: it.name, area });
+      sim.terminals.open(c, type, { name: it.name, area, grid: g });
       return;
     }
     if (/vending/.test(p)) {
@@ -307,9 +312,9 @@ export class Actions {
       for (const [k, path, label] of VEND) if (p.includes(k)) { pick = { path, label }; break; }
       if (!pick) pick = { path: '/obj/item/reagent_containers/food/snacks/chips', label: 'a bag of chips' };
       const item = sim.newItem(pick.path);
-      sim.sound('vend', it.x, it.z, 0.8);
+      sim.sound('vend', it, 0.8);
       const [vx, vz] = this.frontOf(it, m, 1.1);
-      place(sim, item, vx, vz);
+      place(sim, item, it.grid, vx, vz);
       sim.tell(m, 'notice', `The ${it.name} dispenses ${pick.label}.`);
       return;
     }
@@ -320,14 +325,14 @@ export class Actions {
   frontOf(it, m, dist) {
     const dx = m.x - it.x, dz = m.z - it.z, dl = Math.hypot(dx, dz) || 1;
     const x = it.x + dx / dl * dist, z = it.z + dz / dl * dist;
-    return this.sim.world.collides(x, z, 0.12) ? [m.x, m.z] : [x, z];
+    return it.grid.world.collides(x, z, 0.12) ? [m.x, m.z] : [x, z];
   }
 
   openContainer(m, it) {
     const sim = this.sim;
     if (it.opened) { sim.tell(m, 'notice', `The ${it.name} is empty.`); return; }
     it.opened = true;
-    sim.sound('closet_open', it.x, it.z, 0.8);
+    sim.sound('closet_open', it, 0.8);
     const path = it.path || '';
     let list = ['/obj/item/flashlight'];
     for (const [k, l] of LOOT) if (path.includes(k)) { list = l; break; }
@@ -340,9 +345,9 @@ export class Actions {
       const item = sim.newItem(ip);
       const side = (Math.random() - 0.5) * 1.1, fwd = 1.15 + Math.random() * 0.35;
       let x = it.x + fx * fwd - fz * side, z = it.z + fz * fwd + fx * side;
-      if (sim.world.collides(x, z, 0.12)) { x = it.x + fx * 1.2; z = it.z + fz * 1.2; }
-      if (sim.world.collides(x, z, 0.12)) { x = m.x; z = m.z; }
-      place(sim, item, x, z);
+      if (it.grid.world.collides(x, z, 0.12)) { x = it.x + fx * 1.2; z = it.z + fz * 1.2; }
+      if (it.grid.world.collides(x, z, 0.12)) { x = m.x; z = m.z; }
+      place(sim, item, it.grid, x, z);
       n++;
     }
     sim.tell(m, 'notice', n ? `You open the ${it.name}.` : `You open the ${it.name}. It is empty.`);
@@ -373,11 +378,11 @@ export class Actions {
       case 'grab': return sim.people.grab(m, o);
       case 'disarm': {
         m.cool = 0.6;
-        sim.sound('miss', o.x, o.z, 0.5);
+        sim.sound('miss', o, 0.5);
         o.stunned = Math.max(o.stunned, 1.0);
         if (o.humanoid && o.held && Math.random() < 0.6) {
           const it = o.held; detach(sim, it);
-          place(sim, it, o.x + (Math.random() - 0.5), o.z + (Math.random() - 0.5));
+          place(sim, it, o.grid, o.x + (Math.random() - 0.5), o.z + (Math.random() - 0.5));
           sim.chat.visible(m, `${m.name} has disarmed ${o.name}!`, 'danger', 10);
         } else sim.chat.visible(m, `${m.name} has pushed ${o.name}!`, 'warning', 10);
         o.fear = 6; o.target = m;
@@ -398,7 +403,7 @@ export class Actions {
     sim.hurt(o, dmg, type, m.name);
     o.fear = 6; o.target = m;
     if (d?.stun) o.stunned = Math.max(o.stunned, d.stun);
-    sim.sound(d?.stun ? 'baton' : held ? 'baton' : 'punch', o.x, o.z, 1);
+    sim.sound(d?.stun ? 'baton' : held ? 'baton' : 'punch', o, 1);
     const how = held ? `has ${d?.stun ? 'stunned' : 'hit'} ${o.name} with the ${held.name}` : `has punched ${o.name}`;
     sim.chat.visible(m, `${m.name} ${how}!`, 'danger', 12);
     if (!held) { /* fists */ }
@@ -410,25 +415,25 @@ export class Actions {
     const d = held?.def;
     const reach = d?.reach ?? 2.1;
     m.cool = d?.cooldown ?? 0.55;
-    const f = this.aim(m);
-    const wall = sim.world.raycast(m.x, m.z, f.x, f.z, reach, 'shot');
+    const f = this.aim(m), world = m.grid.world;
+    const wall = world.raycast(m.x, m.z, f.x, f.z, reach, 'shot');
     const hit = this.rayMobs(m, f, Math.min(reach, wall + 0.2));
     if (hit) { if (!hit.mob.dead) this.attackMob(m, hit.mob, held); return; }
     if (wall < reach) {
-      const h = sim.world.hit;
-      if (h && ((h.kind === 'tile' && sim.world.glass[h.i]) || h.kind === 'edge')) {
+      const h = world.hit;
+      if (h && ((h.kind === 'tile' && world.glass[h.i]) || h.kind === 'edge')) {
         const force = held ? held.force : 0;
         if (force >= 9 || d?.breaks) {
-          const r = sim.damageHull(h, Math.max(force, 6) * 1.1);
+          const r = sim.damageHull(m.grid, h, Math.max(force, 6) * 1.1);
           if (r) sim.chat.visible(m, `${m.name} smashes the glass with the ${held?.name || 'fists'}!`, 'warning', 12);
           return;
         }
-        sim.sound('glass_hit', m.x, m.z, 0.5);
+        sim.sound('glass_hit', m, 0.5);
         sim.tell(m, 'notice', 'You tap the glass. It holds.');
         return;
       }
     }
-    sim.sound('miss', m.x, m.z, 0.5);
+    sim.sound('miss', m, 0.5);
   }
 
   aim(m) { return { x: -Math.sin(m.yaw) * Math.cos(m.pitch), y: Math.sin(m.pitch), z: -Math.cos(m.yaw) * Math.cos(m.pitch) }; }
@@ -436,7 +441,7 @@ export class Actions {
   rayMobs(m, f, maxDist, ox = m.x, oy = EYE, oz = m.z) {
     let best = null, bd = maxDist;
     for (const o of this.sim.mobs.values()) {
-      if (o === m || o.evacuated) continue;
+      if (o === m || o.evacuated || o.grid !== m.grid) continue;
       const h = o.dead ? 0.5 : o.kind === 'carp' ? 1.0 : o.pet ? 0.9 : 1.75;
       const rad = o.dead ? 0.7 : o.kind === 'carp' ? 0.65 : 0.4;
       const mx = o.x - ox, mz = o.z - oz;
@@ -456,48 +461,48 @@ export class Actions {
   fire(m, gun) {
     const sim = this.sim;
     const g = gun.def.gun;
-    if (gun.shots <= 0) { sim.sound('beep', m.x, m.z, 0.4); sim.tell(m, 'warning', '*click*'); m.cool = 0.3; return; }
+    if (gun.shots <= 0) { sim.sound('beep', m, 0.4); sim.tell(m, 'warning', '*click*'); m.cool = 0.3; return; }
     gun.shots--;
     m.dirty = true;
     m.cool = g.cooldown;
-    sim.sound(g.snd, m.x, m.z, 0.9);
+    sim.sound(g.snd, m, 0.9);
     const spread = 0.012;
     const f = this.aim(m);
     const dx = f.x + (Math.random() - 0.5) * spread, dy = f.y + (Math.random() - 0.5) * spread, dz = f.z + (Math.random() - 0.5) * spread;
-    const range = 60;
-    const wall = sim.world.raycast(m.x, m.z, dx, dz, range, 'shot');
-    const wallHit = sim.world.hit;
+    const range = 60, world = m.grid.world;
+    const wall = world.raycast(m.x, m.z, dx, dz, range, 'shot');
+    const wallHit = world.hit;
     const hit = this.rayMobs(m, { x: dx, y: dy, z: dz }, wall);
     let end = wall;
     if (hit) {
       end = hit.dist;
       sim.hurt(hit.mob, g.dmg, g.type, m.name);
       hit.mob.fear = 6; hit.mob.target = m;
-      sim.sound('sparks', hit.mob.x, hit.mob.z, 0.5);
+      sim.sound('sparks', hit.mob, 0.5);
       sim.chat.visible(m, `${m.name} shoots ${hit.mob.name} with the ${gun.name}!`, 'danger', 14);
     } else if (wall < range && wallHit) {
-      if ((wallHit.kind === 'tile' && sim.world.glass[wallHit.i]) || wallHit.kind === 'edge') sim.damageHull(wallHit, g.dmg * 0.8);
-      else sim.sound('sparks', m.x + dx * wall, m.z + dz * wall, 0.4);
+      if ((wallHit.kind === 'tile' && world.glass[wallHit.i]) || wallHit.kind === 'edge') sim.damageHull(m.grid, wallHit, g.dmg * 0.8);
+      else sim.sound('sparks', { grid: m.grid, x: m.x + dx * wall, z: m.z + dz * wall }, 0.4);
     }
-    sim.emit({ e: 'beam', a: [m.x + Math.cos(m.yaw) * 0.22, EYE - 0.22, m.z - Math.sin(m.yaw) * 0.22], b: [m.x + dx * end, EYE + dy * end, m.z + dz * end], col: 0xff4040 }, { near: [m.x, m.z, 50] });
+    m.grid.emit({ e: 'beam', a: [m.x + Math.cos(m.yaw) * 0.22, EYE - 0.22, m.z - Math.sin(m.yaw) * 0.22], b: [m.x + dx * end, EYE + dy * end, m.z + dz * end], col: 0xff4040 }, { near: { at: m, r: 50 } });
   }
 
   throwItem(m, item) {
     const sim = this.sim;
     const f = this.aim(m);
     const maxd = clamp(9 - item.w * 1.3, 3, 9);
-    const wall = sim.world.raycast(m.x, m.z, f.x, f.z, maxd, 'shot');
+    const wall = m.grid.world.raycast(m.x, m.z, f.x, f.z, maxd, 'shot');
     const hit = this.rayMobs(m, f, Math.min(maxd, wall));
     const dist = Math.min(maxd, wall) - 0.4;
     detach(sim, item);
     // floating with nothing to brace on, the throw pushes you the other way (carbon.dm throw_item: newtonian_move(get_dir(target, src)))
-    if (floatState(sim.world, m, sim.moveCtx(m)).adrift) { m.vx -= f.x * THROW_KICK; m.vz -= f.z * THROW_KICK; }
+    if (floatState(m.grid.world, m, sim.moveCtx(m)).adrift) { m.vx -= f.x * THROW_KICK; m.vz -= f.z * THROW_KICK; }
     const x = m.x + f.x * Math.max(0.5, hit ? hit.dist - 0.5 : dist), z = m.z + f.z * Math.max(0.5, hit ? hit.dist - 0.5 : dist);
-    const rec = place(sim, item, x, z);
+    const rec = place(sim, item, m.grid, x, z);
     // everyone nearby sees it sail from the thrower's hand to where it lands
     const hx = m.x - Math.sin(m.yaw) * 0.45 + Math.cos(m.yaw) * 0.25, hz = m.z - Math.cos(m.yaw) * 0.45 - Math.sin(m.yaw) * 0.25;
-    sim.emit({ e: 'toss', id: item.id, a: [+hx.toFixed(2), +(EYE - 0.35).toFixed(2), +hz.toFixed(2)], b: [+x.toFixed(2), +rec.y.toFixed(2), +z.toFixed(2)] }, { near: [m.x, m.z, 40] });
-    sim.sound('drop', x, z, 0.6);
+    m.grid.emit({ e: 'toss', id: item.id, a: [+hx.toFixed(2), +(EYE - 0.35).toFixed(2), +hz.toFixed(2)], b: [+x.toFixed(2), +rec.y.toFixed(2), +z.toFixed(2)] }, { near: { at: m, r: 40 } });
+    sim.sound('drop', rec, 0.6);
     m.cool = 0.5;
     sim.chat.visible(m, `${m.name} has thrown the ${item.name}.`, 'notice', 10);
     if (hit && !hit.mob.dead) { sim.hurt(hit.mob, Math.max(1, item.w * 2), 'brute', m.name); hit.mob.fear = 4; }
@@ -513,7 +518,7 @@ export class Actions {
     for (const k of ['brute', 'burn', 'tox', 'oxy']) if (h[k] && b[k] > 0.5) { b.heal(k, h[k]); did = true; }
     if (!did) { sim.tell(m, 'notice', o === m ? 'You have no injuries to treat.' : `${o.name} does not need that.`); m.cool = 0.4; return; }
     m.cool = 0.7;
-    sim.sound('pickup', m.x, m.z, 0.5);
+    sim.sound('pickup', m, 0.5);
     sim.chat.visible(m, o === m ? `${m.name} treats their wounds with the ${it.name}.` : `${m.name} treats ${o.name} with the ${it.name}.`, 'notice', 8);
     it.amount = (it.amount ?? 1) - 1;
     if (it.amount <= 0) { consume(sim, it); sim.tell(m, 'notice', `You use up the ${it.name}.`); }
@@ -524,7 +529,7 @@ export class Actions {
     const sim = this.sim;
     const b = o.body;
     sim.tell(m, 'info', `Analyzing results for ${o.name}: Overall status: ${b.dead ? 'Deceased' : Math.round(b.health / b.max * 100) + '% healthy'}. Brute: ${Math.round(b.brute)}, burn: ${Math.round(b.burn)}, toxin: ${Math.round(b.tox)}, suffocation: ${Math.round(b.oxy)}.`);
-    sim.sound('beep', m.x, m.z, 0.4);
+    sim.sound('beep', m, 0.4);
     m.cool = 0.5;
   }
 
@@ -533,7 +538,7 @@ export class Actions {
     const c = it.def.consume;
     if (c.heal) m.body.heal('brute', c.heal);
     sim.tell(m, 'notice', c.msg || 'You consume it.');
-    sim.sound('pickup', m.x, m.z, 0.4);
+    sim.sound('pickup', m, 0.4);
     consume(sim, it);
     m.cool = 0.6;
   }
@@ -542,10 +547,10 @@ export class Actions {
     const sim = this.sim;
     if (it.charges <= 0) { sim.tell(m, 'warning', 'The extinguisher is empty.'); m.cool = 0.4; return; }
     it.charges--;
-    sim.sound('spray', m.x, m.z, 0.7);
+    sim.sound('spray', m, 0.7);
     m.cool = 0.5;
     const [c, r] = m.tile;
-    sim.atmos.addGas(c, r, 0, 0, -sim.atmos.toxAt(c, r) * 0.4);
+    m.grid.atmos.addGas(c, r, 0, 0, -m.grid.atmos.toxAt(c, r) * 0.4);
   }
 
   recharge(m, cell) {
@@ -554,7 +559,7 @@ export class Actions {
     if (!gun?.def.gun || gun.shots >= gun.def.gun.shots) { sim.tell(m, 'notice', 'You need an energy weapon in your other hand.'); return; }
     gun.shots = gun.def.gun.shots;
     consume(sim, cell);
-    sim.sound('pickup', m.x, m.z, 0.6);
+    sim.sound('pickup', m, 0.6);
     sim.tell(m, 'notice', `The ${gun.name} is fully charged.`);
   }
 
@@ -562,7 +567,7 @@ export class Actions {
   mirror(c, msg) {
     const sim = this.sim, m = c.mob;
     if (!m || m.dead || !m.look || m.inside) return;
-    if (!sim.props.interact.some((it) => it.kind === 'wm' && it.sub === 'mirror' && Math.hypot(it.x - m.x, it.z - m.z) < 3.4)) return;
+    if (!m.grid.props.interact.some((it) => it.kind === 'wm' && it.sub === 'mirror' && Math.hypot(it.x - m.x, it.z - m.z) < 3.4)) return;
     const l = sim.looks.sanitize({ ...m.look, ...msg.look });
     m.look = { ...m.look, h: l.h, hc: l.hc, f: l.f, fc: l.fc };
     m.apDirty = true;
@@ -604,7 +609,7 @@ export class Actions {
       if (!b) continue;
       if (m.dead || m.stunned > 0 || !b.valid()) { this.cancelBusy(m, 'invalid'); continue; }
       b.t += dt; b.snd -= dt;
-      if (b.snd <= 0) { b.snd = 0.7; if (b.sfx) sim.sound(b.sfx, m.x, m.z, 0.6); }
+      if (b.snd <= 0) { b.snd = 0.7; if (b.sfx) sim.sound(b.sfx, m, 0.6); }
       if (m.client && sim.tick % 2 === 0) m.client.outbox.push({ e: 'prog', f: b.t / b.dur, label: b.label });
       if (b.t >= b.dur) { m.busy = null; if (m.client) m.client.outbox.push({ e: 'prog', f: -1 }); b.done(); }
     }
@@ -654,12 +659,12 @@ export class Actions {
   // ------------------------------------------------------------------ dragging things around the world
   /** Can `m` put something down at (x, z)? Within reach, in sight, on open floor or a table top. */
   reachablePoint(m, x, z) {
-    const w = this.sim.world;
+    const w = m.grid.world;
     const d = Math.hypot(x - m.x, z - m.z);
     if (!Number.isFinite(d) || d > REACH) return false;
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
     if (!w.inb(c, r)) return false;
-    const i = r * w.W + c;
+    const i = w.idx(c, r);
     const k = w.kind[i];
     if (k !== KIND.FLOOR && k !== KIND.LATTICE) return false;
     if (w.tableH[i] <= 0 && w.collides(x, z, 0.08)) return false;
@@ -671,8 +676,8 @@ export class Actions {
     const sim = this.sim;
     if (!this.reachablePoint(m, x, z)) { sim.tell(m, 'warning', "You can't reach there."); return false; }
     detach(sim, item);
-    place(sim, item, x, z);
-    sim.sound('drop', x, z, 0.5);
+    place(sim, item, m.grid, x, z);
+    sim.sound('drop', { grid: m.grid, x, z }, 0.5);
     return true;
   }
 
@@ -681,19 +686,19 @@ export class Actions {
     const sim = this.sim;
     const rec = sim.floor.get(item.id);
     if (!rec) return false;
-    if (!this.inReach(m, { k: 'item', x: rec.x, z: rec.z })) { sim.tell(m, 'warning', "You can't reach that."); return false; }
+    if (!this.inReach(m, { k: 'item', grid: rec.grid, x: rec.x, z: rec.z })) { sim.tell(m, 'warning', "You can't reach that."); return false; }
     if (to.t === 'floor') {
       if (!this.reachablePoint(m, to.x, to.z)) { sim.tell(m, 'warning', "You can't reach there."); return false; }
       detach(sim, item);
-      place(sim, item, to.x, to.z);
-      sim.sound('drop', to.x, to.z, 0.4);
+      place(sim, item, m.grid, to.x, to.z);
+      sim.sound('drop', { grid: m.grid, x: to.x, z: to.z }, 0.4);
       return true;
     }
     if (to.t === 'hand') {
       const i = to.i === 1 ? 1 : 0;
       if (m.hands[i]) { sim.tell(m, 'warning', 'That hand is already holding something.'); return false; }
       detach(sim, item); attach(sim, item, { t: 'hand', mob: m, i });
-      sim.sound('pickup', m.x, m.z, 0.7);
+      sim.sound('pickup', m, 0.7);
       return true;
     }
     if (to.t === 'slot') return equipTo(sim, m, item, to.slot);
@@ -721,6 +726,7 @@ export class Actions {
     const t = msg.target;
     if (!t) return;
     const lines = [];
+    const g = sim.gridFor(t.g, c);
     if (t.k === 'item') {
       const it = sim.floor.get(t.id)?.item || sim.items.get(t.id);
       if (it) lines.push(...this.itemText(it));
@@ -732,19 +738,20 @@ export class Actions {
       }
       if (o) lines.push(...this.mobText(o));
     } else if (t.k === 'door') {
-      const d = sim.doors[t.idx];
+      const d = g?.doors[t.idx];
       if (d) {
         lines.push(`This is the ${d.name}.`);
         const need = [...d.a, ...d.o].map((n) => sim.jobs.accessName(n));
         lines.push(need.length ? `It requires ${[...new Set(need)].join(' or ')} access.` : 'It opens for anyone.');
-        lines.push(sim.power.doorsWork(d) ? 'The status light is green.' : 'It has no power.');
+        lines.push(g.power.doorsWork(d) ? 'The status light is green.' : 'It has no power.');
       }
     } else if (t.k === 'prop') {
-      const it = sim.props.interact[t.idx];
+      const it = g?.props.interact[t.idx];
       if (it) lines.push(...this.propText(it));
-    } else if (t.k === 'breach' || t.k === 'window' || t.k === 'pane') lines.push(...sim.windows.examine(t));
-    else if (t.k === 'wall' || t.k === 'built') lines.push(...sim.walls.examine(t));
-    else if (t.k === 'floor') lines.push(...sim.floors.examine(t));
+    } else if (!g) return;
+    else if (t.k === 'breach' || t.k === 'window' || t.k === 'pane') lines.push(...sim.windows.examine(g, t));
+    else if (t.k === 'wall' || t.k === 'built') lines.push(...sim.walls.examine(g, t));
+    else if (t.k === 'floor') lines.push(...sim.floors.examine(g, t));
     if (m && lines.length) sim.tellClient(c, 'info', lines.join(' '));
   }
 

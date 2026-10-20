@@ -147,7 +147,8 @@ export class Round {
     c.mob = null;
     m.client = null;
     c.state = 'ghost';
-    c.ghost.x = m.x; c.ghost.z = m.z; c.ghost.yaw = m.yaw;
+    const p = sim.worldPos(m);
+    c.ghost.x = p[0]; c.ghost.y = p[1]; c.ghost.z = p[2]; c.ghost.map = sim.mapOf(m); c.ghost.yaw = m.yaw;
     c.outbox.push({ e: 'ghost', cause: typeof cause === 'string' ? cause : 'injuries' });
     sim.tellClient(c, 'deadsay', 'You have died.');
     this.broadcast();
@@ -165,8 +166,9 @@ export class Round {
     lines.push(`Round length: ${Math.floor(this.time / 60)} minutes ${Math.floor(this.time % 60)} seconds.`);
     lines.push('');
     lines.push('Station status');
-    lines.push(`  Hull breaches: ${sim.world.ventTiles().length} open, ${d.stats.patched} repaired`);
-    lines.push(`  Power: ${sim.power.state === 'normal' ? 'main grid online' : sim.power.state === 'battery' ? 'emergency cells only' : 'offline'}`);
+    const hull = sim.station.world, power = sim.station.power;
+    lines.push(`  Hull breaches: ${hull.ventTiles().length} open, ${d.stats.patched} repaired`);
+    lines.push(`  Power: ${power.state === 'normal' ? 'main grid online' : power.state === 'battery' ? 'emergency cells only' : 'offline'}`);
     lines.push(`  Space carp killed: ${d.stats.carpKilled}`);
     lines.push('');
     lines.push(`Crew: ${crew.length} total, ${escaped.length} escaped, ${left.length} stranded on the station, ${dead.length} dead`);

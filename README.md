@@ -162,11 +162,12 @@ changing intent.
 ## How it is put together
 
 ```
-assets/        generated: level.json (BoxStation + shuttles), terrain/sprite atlases, sounds,
+assets/        generated: level.json (shared art and item tables, the BoxStation grid, the map that places it), terrain/sprite atlases, sounds,
                ui.png + ui.json (SS13 HUD icons), overlays/ (SS13 full-screen overlays); fonts/ (copied, see ATTRIBUTION.md)
 data/          generated: jobs.json (jobs, slots, access, outfits), contents.json
 tools/         Python data pipeline (DMI/DMM/DM readers), test harnesses, screenshot helper
-src/shared/    rules both sides run: world & collision, movement, doors, atmos, power, items, chat rules
+src/shared/    rules both sides run: grids (a tile map, its props and doors, its pose in a map) & collision, movement, doors, atmos, power, items, chat rules,
+               transform maths, the physics adapter (Rapier)
 src/sim/       the authoritative game: Sim, rounds, jobs, inventory, actions, chat, AI, director, consoles
 src/render/    Three.js terrain mesh, instanced sprites, lighting
 src/client/    transports, replica of the world, view, prediction, and the interface (below)

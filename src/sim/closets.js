@@ -11,14 +11,17 @@ const the = (it) => `the ${it.name}`;
 
 /**
  * Closets, lockers and crates (SS13 /obj/structure/closet, closets.dm). Each is a record from buildPropData
- * (`sim.props.closets`) with live state `cs` (see shared/closets.js), `contents` (items) and `mobs` (people inside).
+ * (`grid.props.closets`) with live state `cs` (see shared/closets.js), `contents` (items) and `mobs` (people inside), and knows its `grid`.
  */
 export class Closets {
   constructor(sim, data = {}) {
     this.sim = sim;
     this.data = data;
-    this.list = sim.props.closets;
-    for (const it of this.list) this.init(it);
+  }
+
+  /** A grid has come into being with its floor items: fill its closets, and let them take in what lies on them. */
+  initGrid(g) {
+    for (const it of g.props.closets) this.init(it);
   }
 
   init(it) {
@@ -36,7 +39,7 @@ export class Closets {
   }
 
   /** Is this floor item lying where the closet stands (a free-standing box, so not a matter of tiles)? */
-  under(it, rec) { return Math.abs(rec.x - it.x) < 0.8 && Math.abs(rec.z - it.z) < 0.8; }
+  under(it, rec) { return rec.grid === it.grid && Math.abs(rec.x - it.x) < 0.8 && Math.abs(rec.z - it.z) < 0.8; }
 
   /** PopulateContents(): rows are [item path, count, chance %, stack amount] or {pick: [[weight, rows]]}. */
   populate(it) {
@@ -66,8 +69,8 @@ export class Closets {
 
   /** Everyone is told the new state; each side applies it to the tile with setClosetState. */
   set(it, cs, gone = false) {
-    setClosetState(this.sim.world, it, cs, gone);
-    this.sim.emit({ e: 'cl', i: it.idx, cs, g: gone ? 1 : 0 });
+    setClosetState(it.grid.world, it, cs, gone);
+    it.grid.emit({ e: 'cl', i: it.idx, cs, gn: gone ? 1 : 0 });
   }
 
   /** `self` is shown to the actor, `others` to everyone who can see them, `heard` to those who can only hear. */
@@ -92,7 +95,7 @@ export class Closets {
     if (it.gone || (it.cs & CL.OPEN)) return false;
     if (!force && (it.cs & (CL.WELDED | CL.LOCKED))) return false;
     this.set(it, (it.cs | CL.OPEN) & ~(CL.WELDED | CL.LOCKED));
-    this.sim.sound('closet_open', it.x, it.z, 0.8);
+    this.sim.sound('closet_open', it, 0.8);
     this.dump(it, m);
     return true;
   }
@@ -101,7 +104,7 @@ export class Closets {
     if (it.gone || !(it.cs & CL.OPEN)) return false;
     this.take(it);
     this.set(it, it.cs & ~CL.OPEN);
-    this.sim.sound('closet_close', it.x, it.z, 0.9);
+    this.sim.sound('closet_close', it, 0.9);
     return true;
   }
 
@@ -114,7 +117,7 @@ export class Closets {
     for (const item of items) {
       item.loc = null;
       const x = it.x + (sim.rand() - 0.5) * (TILE - 0.9), z = it.z + (sim.rand() - 0.5) * (TILE - 0.9);
-      place(sim, item, x, z);
+      place(sim, item, it.grid, x, z);
     }
     for (const mob of it.mobs.splice(0)) {
       mob.inside = null;
@@ -126,7 +129,7 @@ export class Closets {
 
   /** Where someone leaving the closet stands: its own tile, or beside it if the open closet still blocks (crates). */
   exitSpot(it, mob, opener) {
-    const w = this.sim.world;
+    const w = it.grid.world;
     if (!it.cl.dopen) return [it.x, it.z];
     const first = opener && opener !== mob ? Math.atan2(opener.z - it.z, opener.x - it.x) : 0;
     for (let k = 0; k < 8; k++) {
@@ -147,7 +150,7 @@ export class Closets {
     for (const mob of sim.mobs.values()) {
       if (it.mobs.length >= MOB_CAP) break;
       if (mob.kind !== 'human' || mob.inside || mob.evacuated || (it.cl.hz && !mob.dead)) continue;
-      if (Math.abs(mob.x - it.x) >= 0.7 || Math.abs(mob.z - it.z) >= 0.7) continue;
+      if (mob.grid !== it.grid || Math.abs(mob.x - it.x) >= 0.7 || Math.abs(mob.z - it.z) >= 0.7) continue;
       this.putInside(it, mob);
     }
   }
@@ -194,8 +197,8 @@ export class Closets {
       if (held) {                                    // put what you hold down on the closet's floor
         const x = it.x + (sim.rand() - 0.5) * (TILE - 0.9), z = it.z + (sim.rand() - 0.5) * (TILE - 0.9);
         detach(sim, held);
-        place(sim, held, x, z);
-        sim.sound('drop', it.x, it.z, 0.6);
+        place(sim, held, it.grid, x, z);
+        sim.sound('drop', it, 0.6);
         return;
       }
       this.close(m, it);
@@ -217,7 +220,7 @@ export class Closets {
     if (!acts.welderReady(m, tool)) return;
     const welded = !!(it.cs & CL.WELDED);
     acts.startTimed(m, `${welded ? 'unwelding' : 'welding'} the ${it.name}`, 4,
-      () => !it.gone && !(it.cs & CL.OPEN) && tool.lit && m.held === tool && Math.hypot(m.x - it.x, m.z - it.z) < 3.4,
+      () => !it.gone && !(it.cs & CL.OPEN) && tool.lit && m.held === tool && this.sim.dist(m, it) < 3.4,
       () => {
         const now = !(it.cs & CL.WELDED);
         this.set(it, now ? it.cs | CL.WELDED : it.cs & ~CL.WELDED);
@@ -229,13 +232,13 @@ export class Closets {
     const sim = this.sim, acts = sim.actions;
     if (!acts.welderReady(m, tool)) return;
     acts.startTimed(m, `cutting ${the(it)} apart`, 4,
-      () => !it.gone && (it.cs & CL.OPEN) && tool.lit && m.held === tool && Math.hypot(m.x - it.x, m.z - it.z) < 3.4,
+      () => !it.gone && (it.cs & CL.OPEN) && tool.lit && m.held === tool && sim.dist(m, it) < 3.4,
       () => {
         this.say(m, `You cut ${the(it)} apart with the ${tool.name}.`, `${m.name} slices apart ${the(it)}.`, 'notice', 'You hear welding.');
         this.dump(it, m);
         this.set(it, it.cs, true);
         const sheets = sim.newItem('/obj/item/stack/sheet/metal', { amount: 2 });
-        place(sim, sheets, it.x, it.z);
+        place(sim, sheets, it.grid, it.x, it.z);
       }, 'welder', { start: `You begin cutting ${the(it)} apart...` });
   }
 
@@ -277,7 +280,7 @@ export class Closets {
     const sim = this.sim;
     if (it.gone || !(it.cs & CL.OPEN) || !o || o === m || o.kind !== 'human' || o.inside || m.inside || m.cuffed || m.busy) return;
     if (it.mobs.length >= MOB_CAP || (it.cl.hz && !o.dead)) return;
-    const close = (mob) => Math.hypot(mob.x - it.x, mob.z - it.z) < 3.6;
+    const close = (mob) => sim.dist(mob, it) < 3.6;
     if (!sim.people.near(m, o) || !close(m)) return;
     this.say(m, `You try to stuff ${o.name} into ${the(it)}.`, `${m.name} tries to stuff ${o.name} into ${the(it)}.`, 'warning', 'You hear clanging.');
     const ox = o.x, oz = o.z;
@@ -294,8 +297,8 @@ export class Closets {
   }
 
   /** Late joiners need every closet that is not as the map left it. */
-  changed() {
-    return this.list.filter((it) => it.cs !== it.cs0 || it.gone).map((it) => [it.idx, it.cs, it.gone ? 1 : 0]);
+  changed(g) {
+    return g.props.closets.filter((it) => it.cs !== it.cs0 || it.gone).map((it) => [it.idx, it.cs, it.gone ? 1 : 0]);
   }
 
   examineLines(it) {

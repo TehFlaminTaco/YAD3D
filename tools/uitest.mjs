@@ -135,7 +135,7 @@ await ev(async () => {
       return null;
     },
     /** Lay a fresh item on the floor at (x, z). */
-    spawn(path, x, z) { const it = sim.newItem(path); inv.place(sim, it, x, z); return { id: it.id, n: it.name, s: it.sprite }; },
+    spawn(path, x, z) { const it = sim.newItem(path); inv.place(sim, it, T.mob.grid, x, z); return { id: it.id, n: it.name, s: it.sprite }; },
     /** Lay a fresh item on the floor `d` metres in front of you (`side` metres to the right). */
     spawnAhead(path, d, side = 0) {
       const m = T.mob, yaw = yad.yaw;
@@ -614,7 +614,7 @@ await section('PDA (Tab)', async () => {
   // no PDA, no PDA screen
   const pda = await ev(() => yad.self.inv.worn.lpocket);
   ok(pda?.tg?.includes('pda'), 'the engineer carries a PDA in a pocket');
-  await ev((id) => { const it = T.sim.items.get(id); T.inv.detach(T.sim, it); T.inv.place(T.sim, it, yad.pred.x, yad.pred.z); T.mob.dirty = true; }, pda.id);
+  await ev((id) => { const it = T.sim.items.get(id); T.inv.detach(T.sim, it); T.inv.place(T.sim, it, T.mob.grid, yad.pred.x, yad.pred.z); T.mob.dirty = true; }, pda.id);
   await wait(() => !yad.pda.find());
   await key('Tab');
   await until('without a PDA, Tab just tells you so', () => [...document.querySelectorAll('#chatlog > div')].slice(-2).some((d) => /don't have a PDA/.test(d.textContent)));

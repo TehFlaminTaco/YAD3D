@@ -8,7 +8,7 @@ export class DoorCore {
   constructor(world, proto, frames = 0) {
     this.world = world;
     this.c = proto.x; this.r = proto.y;
-    this.i = proto.y * world.W + proto.x;
+    this.i = world.idx(proto.x, proto.y);
     this.name = proto.n || 'airlock';
     this.a = proto.a || [];             // all of these access numbers are required
     this.o = proto.o || [];             // any one of these is enough

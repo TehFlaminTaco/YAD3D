@@ -109,7 +109,7 @@ export class Hud {
       const dist = Math.hypot(m.x - g.pred.x, m.z - g.pred.z);
       // sits just above the top of the picture as it is drawn (a corgi, a person lying down and a carp are not 2 m tall)
       this.v.set(m.x, (g.view.mobViews.get(id)?.top ?? 1.8) + RUNE_GAP, m.z).project(g.camera);
-      const vis = this.v.z < 1 && Math.abs(this.v.x) < 1.1 && this.v.y > -1.1 && this.v.y < 3 && dist < RUNE_RANGE && g.rep.world.los(g.pred.x, g.pred.z, m.x, m.z);
+      const vis = this.v.z < 1 && Math.abs(this.v.x) < 1.1 && this.v.y > -1.1 && this.v.y < 3 && dist < RUNE_RANGE && m.g === g.pred.g && g.myGrid().world.los(g.pred.x, g.pred.z, m.x, m.z);
       sp.box.style.display = vis ? 'block' : 'none';
       if (!vis) continue;
       // up close the head is above the top of the screen: keep the words on it

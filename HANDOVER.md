@@ -15,7 +15,8 @@ browser. It works end to end. **Not everything is committed or pushed** (below).
 * **Git state (2026-10-20):** committed and pushed; PR #1 has everything. `99cef4d` is one commit holding the work of two sessions that ran side by side (the debug menu 13, the inventory HUD 14,
   the observer and rune fixes, zero gravity 15, windows and grilles 17, door angles and wall mounts 18, the TG notes and `tools/tg*.py` 16): their edits share files (`sim.js`, `world.js`,
   `movement.js`, `hud.js`, `simtest2.mjs`) and could not be split. Check `git status -sb` for anything newer.
-* **Tests (all pass now):** `node tools/simtest2.mjs` 480/480, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
+* **Tests (all pass now):** `node tools/simtest2.mjs` 480/480, `node tools/gridtest.mjs` 58/58 (grids and maps, section 20), `node tools/physicstest.mjs` 29/29, `node tools/leveltest.mjs` 18/18,
+  `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
   (191 assertions, about 4 min) and `node tools/nettest.mjs` (29) were last run before the window work, were **edited for the new HUD but never run** (they hard-code a Playwright path that
   only exists in the Linux container, see section 3), and could not be run in the Windows sessions since: re-run both before you say "all green". The multiplayer suite is the one most worth
   running (tile, `look`, `pm`, `imv`, `strip` and `grav` events and the debug flag are all new since it last ran).
@@ -104,12 +105,14 @@ Full description is in `README.md` ("How it is put together"). What you need to 
   at 20 Hz; the browser runs the same class for a local round (`LocalConnection` in `src/client/net.js`, with an optional
   artificial `lag`). The client only sees `send(msg)` / `poll()`. `src/shared/*` is code **both sides run** (world and
   collision, `stepMovement`, doors, atmos, power, item rules, chat rules, `buildPropData`).
-* **Determinism contract:** `buildPropData` (shared) derives doors, firelocks, props, lights, tables, panes from the level
-  JSON in a fixed order, so index `i` means the same door/prop on server and client. Click targets use those indexes
-  (`{k:'door', idx}`, `{k:'prop', idx}`). The emergency-shuttle overlay *appends* in the same order on both sides.
-  Never reorder those lists.
+* **Determinism contract:** `buildPropData` (shared) derives doors, firelocks, props, lights, tables, panes from a grid's blueprint
+  in a fixed order, so index `i` means the same door/prop of **that grid** on server and client. Click targets use those indexes
+  with the grid they are on (`{k:'door', g, idx}`, `{k:'prop', g, idx}`; a target with no `g` means the grid you stand on). The emergency-shuttle overlay *appends* in the same order on both sides.
+  Never reorder those lists. **The world is a set of grids in maps (section 20):** everything standing on a grid has `.grid` and coordinates in that grid's own frame.
 * **Protocol** (client→server): `hello, input, click, key, inv, say, term, examine, lobby, ghost, mirror, strip, stuff` (+ `ping`; `dbg` is ignored unless the sim was started with
-  `debug`). (server→client): `welcome` (world state, `moved` structures, `gravity`, `debug`), `snap` (10 Hz mob positions, `ack`, `you`, `env`) and `ev` batches (`door, fdoor, tile, cl, pane,
+  `debug`). (server→client): `welcome` (`map`, `grids: [one entry per grid: g, bp, kind, tf, power, doors, tiles, panes, closets, moved, gravity, built, evac]`, floor `items`, `jobs`, `debug`), `snap` (10 Hz mob rows
+  `[id, g, x, z, yaw, flags, speed]`, `ack`, `you` with its grid `g`, `env`; the positions are in the frame of grid `g`) and `ev` batches (**events about a grid carry its id as `g`**, and are only sent to players in its map; the closet event's
+  "gone" flag is `gn`): (`door, fdoor, tile, cl, pane,
   item+, item-, imv, pm, toss, mob+, mob-, look, mirror, strip, self, msg, bubble, snd, beam, power, area, flicker, prog, term, round, alert, report, ghost, evac, grav, shake, hurt, dbg`).
   Events have scopes (all / one client / near a point / ghosts). **A `snap` is sent before the same step's `ev` batch**, so the client must tolerate a snapshot that mentions a mob it hasn't
   heard of yet, and `self` being null for a tick after spawning.
@@ -131,7 +134,8 @@ Full description is in `README.md` ("How it is put together"). What you need to 
   `{w,used}` weight).
 * **Prediction:** the client runs the same `stepMovement`, replays unacked inputs on each snapshot, and smooths the
   correction (`game.corr`). With a simulated 300 ms RTT the correction stayed under 1 mm.
-* **Coordinates:** 1 tile = 2 m (`TILE`), world x = col·2, z = row·2, north = −z, yaw 0 faces north (forward = (−sin, −cos)).
+* **Coordinates:** 1 tile = 2 m (`TILE`), **a grid's own frame** x = col*2, z = row*2, north = -z, yaw 0 faces north (forward = (-sin, -cos)). BYOND direction bitflags N=1 S=2 E=4 W=8. Eye height 1.45 m.
+  Where a grid is in its map is `grid.tf` (`{p: [x, y, z], q: [x, y, z, w]}`, `src/shared/math3.js`); only `Sim.worldPos/dist` and `Grid.worldPoint/localPoint` use it. The station sits at the origin, so its frame is the map's.
   BYOND direction bitflags N=1 S=2 E=4 W=8. Eye height 1.45 m.
 * **Rendering:** custom shaders; terrain from a texture array; three instanced `SpriteBatch`es (`stat` 20000, `dyn` 3000,
   `itemB` 6000; **`SpriteBatch.add` throws when full**, freed slots are recycled via free-lists); per-vertex baked light from
@@ -199,6 +203,8 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 | Long soak | `node tools/simtest.mjs 12 --player` | a 12-minute simulated shift, ~4 s |
 | Browser UI (local round) | `node tools/uitest.mjs` | needs :8123 static server; ~4 min; `BASE=`, `SHOTS=` env; drives the real mouse/keyboard |
 | Closets, people (in simtest2) | `node tools/simtest2.mjs` | the `closets` section: DM contents, locks, welding, breakout, personal lockers; the `people` section: handcuffs, strip window, pockets, grabs, examine, stuffing |
+| Grids and maps | `node tools/gridtest.mjs` | 58 assertions: a second grid and a second map in one real `Sim`, the client `Replica`, and a scan that fails if any file under `src/` uses the station shortcuts (section 20). `tools/gridkit.mjs` builds test grids from ASCII |
+| Physics adapter | `node tools/physicstest.mjs` | 29 assertions: the transform maths and Rapier (compound bodies, locks, collisions, kinematic bodies, thrust); also loads in the browser |
 | Level mesh geometry | `node tools/leveltest.mjs` | no browser or WebGL; 18 assertions: glass, floor, grille, smashed windows, the character art data |
 | Multiplayer | `node tools/nettest.mjs` | spawns `server/index.js` on :8191 with `--debug`, three browsers |
 | TG notes | `python tools/tgwhere.py`, `tgcheck.py`, `tgmerge.py`, `tgplan.py` | find a DM type's definition, check a drone's note, merge its parts, list what is undocumented (section 16, `docs/tg/_STATUS.md`) |
@@ -265,10 +271,11 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 ```
 index.html                    page shell: boot overlay, canvas#view, two stylesheets, src/client/main.js
 server/index.js               static files (allow-listed dirs) + /server.json + WebSocket host + round reset; --debug flag
-src/shared/                   config.js (constants, slot list), world.js (tiles, collision, free-standing boxes), movement.js (stepMovement, gravity and drift),
+src/shared/                   config.js (constants, slot list), world.js (one grid's tiles, collision, free-standing boxes), grid.js + gamemap.js (a grid: tiles, props, doors, pose; a map: a space of grids),
+                              math3.js (vectors, quaternions, transforms), physics.js (Rapier adapter), movement.js (stepMovement, gravity and drift),
                               door.js, atmos.js, power.js, body.js, items.js (behaviour table, storage rules), chat.js, jobs.js, looks.js (characters),
                               closets.js, windows.js (window state), propdata.js (props, door angles, mounts, moveProp), nav.js, leveldata.js, util.js
-src/sim/                      sim.js (loop, clients, snapshots, handle()), actions.js (clicks, combat, drag/throw, examine), inventory.js, round.js, director.js
+src/sim/                      sim.js (maps, grids, loop, clients, snapshots, handle()), gridsim.js (a grid plus its air, power, nav, firelocks), actions.js (clicks, combat, drag/throw, examine), inventory.js, round.js, director.js
                               (meteors, power failure, carp, shuttle), terminals.js, chatsys.js, ai.js, firedoors.js, mob.js, jobs.js, closets.js, people.js
                               (handcuffs, grabs, dragging, strip window), windows.js (taking windows and grilles apart), debug.js (the debug menu's operations)
 src/render/                   level.js (terrain meshes), sprites.js (instanced batches), materials.js (shaders), lighting.js
@@ -276,7 +283,7 @@ src/client/                   main.js, game.js, net.js, state.js (Replica), view
                               interface files: hands, bags, invhud (HUD), strip, debugmenu, charedit, pda, effects, hud (runes), chatui, terminalui, lobby, screens
 css/                          style.css (in-game), screens.css (lobby, consoles, help, report)
 tools/                        build_*.py (data pipeline), serve.py, shot.mjs, simtest*.mjs, leveltest.mjs, uitest.mjs, nettest.mjs, tgwhere/tgcheck/tgmerge/tgplan.py
-assets/ data/ vendor/         generated art/sound/level data (committed), jobs data, vendored three.js r170
+assets/ data/ vendor/         generated art/sound/level data (committed), jobs data, vendored three.js r170 and Rapier 0.21 (`rapier3d-compat.mjs`, wasm inlined)
 docs/tg/                      the TG research notes and how they were made (_BRIEF*.md, _STATUS.md, gap-*.md and the topic files)
 ```
 
@@ -505,3 +512,31 @@ a crowbar, wrench, wirecutters, rods or a tile (`Game.holdingBuilder`, `floorAlo
 * Not done: broken / burnt plating and welding dents smooth, foam plating, light and mineral floors, building a floor under girders, cables on catwalks.
 * The debug spawn menu now makes real stacks (`stackInfo`). Test: the `floors, plating and lattice` section of `tools/simtest2.mjs` (480 assertions in all; the soak `node tools/simtest.mjs 12 --player` is clean).
 
+## 20. Grids and maps (the "independent grids" work: `src/shared/{grid,gamemap,math3,physics}.js`, `src/sim/gridsim.js`)
+The user asked for **independent grids**: each its own tile map, floating separately in 3D (one may be perpendicular to another), each a physics body, room for stacked floors, and *a grid's movement never directly affects its
+inhabitants*; and **a map is a separate space of grids**. Decisions made with them: do all five stages, use **Rapier** (behind `src/shared/physics.js`, so Box3D could replace it), and people who step off a moving grid **inherit its velocity**
+(`v_world = R·v_local + v_grid + ω×r`, with a cap and a relative-speed limit on entering; constants to be added in stage 3). The plan (stages 0 to 5) was written in plan mode; this is what is built and what is next.
+**Stages 0 and 1 are done**; 2 to 5 are not started.
+* **The model.** `GameMap` {id, name, grids}: a space with its own void and (stage 3) its own physics world. `Grid` (`shared/grid.js`; `GridSim` on the server, `GridReplica` on the client): `{id, bp, kind, map, tf, vel, ang, world, props, doors}`
+  built from a **blueprint** (`level.grids[bp]`: the arrays, props and spawn points of one tile map). `World` stays the tile store (gains `levels`, `n`, `idx(c, r, l)`); `grid.world.gravityOn` is the grid's own gravity. `GridSim` adds the per-grid
+  `atmos`, `power`, `nav`, `firedoors`, `built` and `tileLog`. **Everything on a grid has `.grid` and coordinates in its frame**: mobs (`m.grid`, `m.map`, `x, y, z`; `grid: null` means floating free in the map's void, not used yet), floor items
+  (`{item, grid, x, y, z, c, r}`: `place(sim, item, grid, x, z, y)` throws without a grid), doors, firelocks and props (`buildPropData` stamps `grid` on them), built structures, closets.
+* **Riding.** Because a rider's state is in the grid's frame, moving or turning the grid changes only `grid.tf`: nothing local changes (a test asserts it bit for bit), and the client's prediction does not depend on the grid's motion at all.
+* **Sim helpers** (`sim.js`): `worldPos(at)`, `dist(a, b)` (same grid: across the deck, height ignored as always; different grids: true distance in the map; different maps: `Infinity`), `sameGrid`, `mapOf`, `gridFor(id, client)`, `spawnPoints()`,
+  `addMap`, `addGrid(bp, {map, kind, tf})`. `sound(name, at, v)` and `shake(at, amt, r)` take anything with a grid and x, z (a mob, a door, an item record) and send map coordinates. `emit(ev, {near: {at, r}})`. `grid.emit(ev)` stamps `g`.
+  Two people on different grids only hear each other within 2 m (no line of sight between grids) and cannot cuff, grab or strip each other; a carp does not hunt across grids. `sim.station` is the main grid: the director, the round report and the pets name it on purpose.
+* **Shortcuts for the tests.** `sim.world / props / doors / atmos / power / nav / firedoors / built / tileLog` and `rep.world / props / doors / fdoors / power / built` still exist and mean the station's; they count their uses in `sim.compat` / `rep.compat`.
+  `tools/gridtest.mjs` fails if any file under `src/` uses them (and only lets the listed files name `.station`): **keep it that way, it is what stops the single-grid assumption creeping back.**
+* **Client** (`state.js`, `view.js`, `game.js`): `Replica.grids` (id → `GridReplica`), `station`, `map`; events are applied to the grid they name; `Game.pred.g` / `myGrid()` is the grid you stand on (its world is what you collide with and breathe from);
+  click targets carry `g` (`Game.ref`). **`WorldView` still draws only the station** (`view.grid`): events about other grids update the replica and nothing else. Making it a view per grid is the first job of stage 2.
+* **Data.** `build_level.py` writes `level.json` as shared content (art tables, areas, wall variants, item definitions) plus `grids.station` (arrays, props, spawns, the emergency-shuttle overlay) and `maps.station` (which blueprints sit at which pose).
+  The plan said one file per blueprint (`assets/grids/*.json`, `assets/maps/*.json`); that waits for stage 2, when there are shuttles to split out (the format does not change). `decodeGrid(level, bp)` makes fresh arrays each call, so one blueprint can be two grids.
+* **Physics** (`src/shared/physics.js`, stage 0, not used by the sim yet): `await initPhysics()` once (the module is async because Rapier is wasm), then `new PhysicsWorld()` per map: `addBody(id, {type: 'dynamic'|'fixed'|'kinematic', p, q, lock})`,
+  `setBoxes(id, [{c, h, d}])` (a grid's tiles as boxes), `thrust`, `impulse`, `pose`, `step(dt)` (returns collisions with their force). `lock: {y, rx, rz}` keeps a body in its plane (stage 3 flies grids that way; stage 4 lifts the locks).
+  500 boxes step in about 1 ms in Node and in the browser; Rapier is 4.3 MB of JS with the wasm inlined (`vendor/rapier3d-compat.mjs`, Apache-2.0, in `ATTRIBUTION.md`).
+* **Tests.** `tools/gridtest.mjs` (58) with `tools/gridkit.mjs` (`makeBlueprint(level, asciiRows)`, `withGrids(data, blueprints, placements)`): grids have separate arrays, air, power, gravity, doors and items; clicks name a grid; `worldPos`/`dist`; riding;
+  maps do not meet; the client replica follows events and snapshots for several grids; the source scan. `tools/physicstest.mjs` (29). The 480 `simtest2` assertions are unchanged except for the new signatures.
+* **Next (stages 2 to 5 of the plan).** 2: shuttles and docks become grids of their own (`build_level.py` stops stamping them; `Sim.applyEvac` and the overlay go), a `GridView` per grid in the renderer (a `THREE.Group` per grid, the sprite shader multiplying
+  by `modelMatrix`), pulling someone through a docking seam. 3: physics bodies for grids, scripted shuttle flight, `Frames` (leave and enter with the velocity rules), snapshots carry grid poses. 4: full 3D (perpendicular grids, space walking, the camera
+  following a grid's up). 5: stacked decks (`World.levels`, already reserved) and several maps (`moveGrid`, per-map visibility, CentCom). Gaps noticed on the way: pulling someone across grids releases them; ghosts are in map coordinates and noclip in a plane;
+  `uitest.mjs` and `nettest.mjs` were edited for the new signatures but not run (no Playwright here).

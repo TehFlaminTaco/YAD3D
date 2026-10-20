@@ -3,13 +3,18 @@ import { WS, WINDOWS } from './windows.js';
 import { WALLS, RW } from './walls.js';
 
 /**
- * Tile grid + collision + queries. Game space: x = col * TILE, z = row * TILE, y up; north is -z.
+ * One grid's tile store + collision + queries. Its own coordinates: x = col * TILE, z = row * TILE, y up; north is -z. Where the grid is
+ * in its map (and which way it faces) is the `Grid`'s business; nothing in here knows. `levels` stacked decks share the arrays
+ * (`idx(c, r, l)`); a grid has one deck until the stacked-floors stage.
  */
 export class World {
   constructor(assets) {
     const { level, w, h } = assets;
     this.W = w;
     this.H = h;
+    this.levels = assets.levels ?? 1;
+    this.n = w * h * this.levels;
+    this.grid = null;                        // the Grid this is the tile store of (set by Grid)
     this.level = level;
     this.kind = assets.kind;
     this.roof = assets.roof;
@@ -21,7 +26,7 @@ export class World {
     this.areas = level.areas;
     this.variants = level.walls;
 
-    const n = w * h;
+    const n = this.n;
     this.glass = new Uint8Array(n);          // wall-like block that is see-through (window)
     this.solid = new Uint8Array(n);          // blocks movement (walls, dense props, closed doors)
     this.boxes = new Map();                  // tile index -> the free-standing things (lockers, tanks) whose box touches it
@@ -70,7 +75,7 @@ export class World {
   hasGravity(x, z) {
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
     if (!this.inb(c, r)) return false;
-    const i = r * this.W + c, k = this.kind[i];
+    const i = this.idx(c, r), k = this.kind[i];
     if (k === KIND.SPACE || k === KIND.LATTICE) return false;
     if (this.areas[this.areaIdx[i]]?.c === 'shuttle') return true;
     return this.gravityOn;
@@ -88,7 +93,7 @@ export class World {
    * the way, so air passes but people do not. It only vents to space if it touches space (`ventsToSpace`).
    */
   setBreach(c, r) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.kind[i] = KIND.FLOOR;
     this.glass[i] = 0;
     this.solid[i] = this.grille[i] ? 1 : 0;        // the grille still blocks you; with no grille it is just open floor
@@ -134,13 +139,13 @@ export class World {
 
   /** The cell a lattice (or catwalk) tile should be drawn with, from what is around it. */
   latticeCell(c, r) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     return this.level.latCells[this.lat[i] === 2 ? 'cat' : 'lat'][this.latticeMask(c, r)];
   }
 
   /** Put a lattice (or, with `catwalk`, a catwalk) on a space tile. Its neighbours' pictures change too: the caller redraws them (`latticeAround`). */
   makeLattice(c, r, catwalk = false) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.kind[i] = KIND.LATTICE;
     this.lat[i] = catwalk ? 2 : 1;
     this.ft[i] = 0;
@@ -151,7 +156,7 @@ export class World {
 
   /** The lattice is cut away: open space again. */
   clearLattice(c, r) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.kind[i] = KIND.SPACE;
     this.lat[i] = 0;
     this.floorCell[i] = 0xffff;
@@ -159,7 +164,7 @@ export class World {
 
   /** A floor is laid (over lattice or space, or on bare plating): its type and the cell it is drawn with. */
   setFloor(c, r, ftId, cell) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.kind[i] = KIND.FLOOR;
     this.lat[i] = 0;
     this.ft[i] = ftId;
@@ -172,7 +177,7 @@ export class World {
     for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
       const cc = c + dc, rr = r + dr;
       if (!this.inb(cc, rr)) continue;
-      const i = rr * this.W + cc;
+      const i = this.idx(cc, rr);
       if (this.kind[i] !== KIND.LATTICE) continue;
       const cell = this.latticeCell(cc, rr);
       if (cell !== this.floorCell[i]) { this.floorCell[i] = cell; out.push(i); }
@@ -190,7 +195,7 @@ export class World {
 
   /** A wall is taken down to its plating (the floor the DM's ScrapeAway leaves): open floor, nothing blocks you or the air. */
   dismantleWall(c, r, platingCell) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.kind[i] = KIND.FLOOR;
     this.wallVar[i] = 0xffff;
     this.floorCell[i] = platingCell;
@@ -204,7 +209,7 @@ export class World {
 
   /** A girder is plated: the tile becomes a wall (`WALLS` key) with all its layers on. */
   buildWall(c, r, key) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     const v = this.variants.findIndex((x) => !x.glass && x.name === key);
     if (v < 0) return false;
     this.kind[i] = KIND.WALL;
@@ -232,7 +237,7 @@ export class World {
 
   /** The grille on a tile whose window is gone is cut away (deconstruct()): open floor now. */
   removeGrille(c, r) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.grille[i] = 0;
     this.ws[i] &= ~WS.GRILLE_LOOSE;
     if (this.breached.has(i)) this.solid[i] = 0;
@@ -240,7 +245,7 @@ export class World {
 
   /** A grille is put up again on a hole (rods, grille.dm / the stack recipe). */
   addGrille(c, r) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.grille[i] = 1;
     this.ws[i] &= ~WS.GRILLE_LOOSE;
     if (this.breached.has(i)) this.solid[i] = 1;
@@ -248,7 +253,7 @@ export class World {
 
   /** A window is put on a grille: it stands there, loose (not screwed down), and does not seal yet. */
   restoreWindow(c, r, key) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     const v = this.variants.findIndex((x) => x.glass && x.name === key);
     if (v < 0 || !this.grille[i]) return false;
     this.kind[i] = KIND.WALL;
@@ -278,7 +283,7 @@ export class World {
 
   /** Weld a breach shut with a reinforced plate. */
   setPatched(c, r) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.kind[i] = KIND.WALL;
     this.wallVar[i] = this.patchVariant;
     this.glass[i] = 0;
@@ -290,15 +295,15 @@ export class World {
     this.breached.delete(i);
   }
 
-  idx(c, r) { return r * this.W + c; }
-  inb(c, r) { return c >= 0 && r >= 0 && c < this.W && r < this.H; }
+  idx(c, r, l = 0) { return (l * this.H + r) * this.W + c; }
+  inb(c, r, l = 0) { return c >= 0 && r >= 0 && c < this.W && r < this.H && l >= 0 && l < this.levels; }
   tileOf(x) { return Math.floor(x / TILE); }
 
-  kindAt(c, r) { return this.inb(c, r) ? this.kind[r * this.W + c] : KIND.SPACE; }
+  kindAt(c, r) { return this.inb(c, r) ? this.kind[this.idx(c, r)] : KIND.SPACE; }
   isWallLike(c, r) { return this.kindAt(c, r) === KIND.WALL; }
-  opaque(c, r) { const i = r * this.W + c; return this.inb(c, r) && this.kind[i] === KIND.WALL && !this.glass[i]; }
-  walkable(c, r) { return this.inb(c, r) && !this.solid[r * this.W + c]; }
-  areaAt(c, r) { return this.areas[this.areaIdx[r * this.W + c]]; }
+  opaque(c, r) { const i = this.idx(c, r); return this.inb(c, r) && this.kind[i] === KIND.WALL && !this.glass[i]; }
+  walkable(c, r) { return this.inb(c, r) && !this.solid[this.idx(c, r)]; }
+  areaAt(c, r) { return this.areas[this.areaIdx[this.idx(c, r)]]; }
 
   // ------------------------------------------------------------------ free-standing things
   /*
@@ -309,7 +314,7 @@ export class World {
     const T = TILE, e = 1e-4, out = [];
     const c0 = Math.floor((rec.x - rec.half) / T), c1 = Math.floor((rec.x + rec.half - e) / T);
     const r0 = Math.floor((rec.z - rec.half) / T), r1 = Math.floor((rec.z + rec.half - e) / T);
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.inb(c, r)) out.push(r * this.W + c);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.inb(c, r)) out.push(this.idx(c, r));
     return out;
   }
 
@@ -317,7 +322,7 @@ export class World {
   boxAdd(rec) {
     this.boxDrop(rec);
     rec.tiles = this.boxTiles(rec);
-    rec.mid = Math.floor(rec.z / TILE) * this.W + Math.floor(rec.x / TILE);
+    rec.mid = this.idx(Math.floor(rec.x / TILE), Math.floor(rec.z / TILE));
     rec.counted = false;
     for (const i of rec.tiles) {
       let list = this.boxes.get(i);
@@ -361,24 +366,24 @@ export class World {
   /** Mark a thin blocker on the `d` edge of tile (c, r) (mirrored on the neighbour). */
   addEdge(c, r, d, glass = false) {
     if (!this.inb(c, r)) return;
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.edge[i] |= d;
     if (glass) this.edgeGlass[i] |= d;
     const [dc, dr] = DV[d];
     if (this.inb(c + dc, r + dr)) {
-      const j = (r + dr) * this.W + (c + dc);
+      const j = this.idx(c + dc, r + dr);
       this.edge[j] |= OPP[d];
       if (glass) this.edgeGlass[j] |= OPP[d];
     }
   }
 
   removeEdge(c, r, d) {
-    const i = r * this.W + c;
+    const i = this.idx(c, r);
     this.edge[i] &= ~d;
     this.edgeGlass[i] &= ~d;
     const [dc, dr] = DV[d];
     if (this.inb(c + dc, r + dr)) {
-      const j = (r + dr) * this.W + (c + dc);
+      const j = this.idx(c + dc, r + dr);
       this.edge[j] &= ~OPP[d];
       this.edgeGlass[j] &= ~OPP[d];
     }
@@ -392,7 +397,7 @@ export class World {
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
         if (!this.inb(c, r)) return true;
-        const i = r * this.W + c;
+        const i = this.idx(c, r);
         if (this.solid[i]) return true;
         if (this.bcount[i]) {
           for (const b of this.boxes.get(i)) if (b !== ignore && b.dense && Math.abs(x - b.x) < b.half + h && Math.abs(z - b.z) < b.half + h) return true;
@@ -439,7 +444,7 @@ export class World {
     let t = 0;
     for (let guard = 0; guard < 512; guard++) {
       if (!this.inb(c, r)) return t;
-      const i = r * this.W + c;
+      const i = this.idx(c, r);
       if (this.blocksRay(i, mode)) { this.hit = { kind: 'tile', i, c, r }; return t; }
       let dir;
       if (tMaxC < tMaxR) { t = tMaxC; tMaxC += tDeltaC; c += stepC; dir = stepC > 0 ? W : E; }

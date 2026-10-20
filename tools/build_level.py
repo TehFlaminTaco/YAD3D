@@ -1092,15 +1092,24 @@ def build(mapname):
 
     descs = dict(base['descs'])
     descs.update(emerg['descs'])
-    level = {
-        'name': mapname, 'w': Wd, 'h': Ht,
-        'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'tiles': base['tiles'],
+    # What every grid shares (the art tables, areas, item definitions) sits at the top; each grid's own map (its arrays, props, spawn points)
+    # is a "blueprint" under `grids`, and a `maps` entry says which blueprints float in it and where (a map is a space of grids).
+    station = {
+        'w': Wd, 'h': Ht,
         'ft': b64u8(base['ft']), 'lat': b64u8(base['lat']),
         'kind': b64u8(base['kind']), 'roof': b64u8(base['roof']),
         'area': b64u16(base['area']), 'floor': b64u16(base['floor']), 'wall': b64u16(base['wall']),
-        'areas': areas, 'walls': wall_variants, 'props': base['props'], 'spawns': base['spawns'], 'pool': base['pool'],
-        'itemdefs': base['itemdefs'], 'mobs': base['mobs'], 'descs': descs, 'evac': overlay,
+        'props': base['props'], 'spawns': base['spawns'], 'evac': overlay,
+    }
+    level = {
+        'name': mapname,
+        'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'tiles': base['tiles'],
+        'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
+        'itemdefs': base['itemdefs'], 'mobs': base['mobs'], 'descs': descs,
+        'grids': {'station': station},
+        'maps': {'station': {'name': mapname, 'grids': [{'bp': 'station', 'kind': 'station', 'p': [0, 0, 0], 'q': [0, 0, 0, 1]}]}},
+        'map': 'station',
     }
     # what each closet type holds (sim only): rows [item, count, chance %, stack amount] or {'pick': [[weight, rows]]}
     defs, pop = base['itemdefs'], populate()

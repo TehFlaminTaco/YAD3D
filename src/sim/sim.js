@@ -1,17 +1,14 @@
-import { TILE, KIND, SIM_DT, SNAP_EVERY, INTEREST, SLOTS } from '../shared/config.js';
-import { decodeLevel } from '../shared/leveldata.js';
-import { World } from '../shared/world.js';
-import { Atmos } from '../shared/atmos.js';
-import { Power } from '../shared/power.js';
-import { Nav } from '../shared/nav.js';
-import { DoorCore } from '../shared/door.js';
+import { TILE, KIND, SIM_DT, SNAP_EVERY, INTEREST } from '../shared/config.js';
+import { decodeGrid } from '../shared/leveldata.js';
+import { GameMap } from '../shared/gamemap.js';
+import { tfPoint, tfClone } from '../shared/math3.js';
 import { ItemDB, makeItemData } from '../shared/items.js';
 import { Jobs } from '../shared/jobs.js';
 import { buildPropData } from '../shared/propdata.js';
 import { stepMovement, floatState } from '../shared/movement.js';
 import { clamp, rng } from '../shared/util.js';
 import { Mob } from './mob.js';
-import { FireDoors } from './firedoors.js';
+import { GridSim } from './gridsim.js';
 import { ChatSys } from './chatsys.js';
 import { Round } from './round.js';
 import { Director } from './director.js';
@@ -23,12 +20,11 @@ import { Windows } from './windows.js';
 import { Walls } from './walls.js';
 import { Stacks } from './stacks.js';
 import { Floors } from './floors.js';
-import { BuiltSet } from '../shared/built.js';
 import { GIRDER } from '../shared/walls.js';
 import { Debug } from './debug.js';
 import { Looks, WORN_SLOTS } from '../shared/looks.js';
 import { AI } from './ai.js';
-import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, rootMob } from './inventory.js';
+import { attach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv } from './inventory.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -43,7 +39,7 @@ export class SimClient {
     this.send = send;
     this.state = 'lobby';          // lobby | playing | ghost
     this.mob = null;
-    this.ghost = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0, pitch: 0 };
+    this.ghost = { x: 0, y: 0, z: 0, vx: 0, vz: 0, yaw: 0, pitch: 0, grid: null, map: null };      // an observer floats in a map's void: map coordinates
     this.job = 'assistant';
     this.look = null;              // the character they designed (sanitised), or null for a random one
     this.ready = false;
@@ -56,13 +52,19 @@ export class SimClient {
     this.term = null;
     this.latejoined = false;
   }
-  get x() { return this.mob ? this.mob.x : this.ghost.x; }
-  get z() { return this.mob ? this.mob.z : this.ghost.z; }
+
+  /** Where this player is: their body, or their ghost. Both have { grid, map, x, y, z }, so distances work whichever it is. */
+  get at() { return this.mob || this.ghost; }
+  get map() { return this.sim.mapOf(this.at); }
 }
 
 /**
  * The authoritative game simulation. Pure logic: runs unchanged inside the Node server and inside the
  * browser (single player). Talks to clients only through messages (see handle() and the events it emits).
+ *
+ * The world is a set of maps, each a space of grids (the station, a shuttle, an escape pod...). Every grid keeps its own tiles, air, power,
+ * doors and props in its own frame; anything standing on one (a person, an item, a door) has `.grid` and coordinates in that frame, and
+ * `sim.dist(a, b)` / `sim.worldPos(a)` are the only places that know about where grids are.
  */
 export class Sim {
   constructor(data, opts = {}) {
@@ -72,50 +74,110 @@ export class Sim {
     this.time = 0;
     this.tick = 0;
     this.rand = rng(Date.now() & 0xffff);
-    const decoded = decodeLevel(data.level);
-    this.world = new World(decoded);
     this.db = new ItemDB(data.level.itemdefs, data.contents || {});
     this.looks = new Looks(data.chars);
     this.jobs = new Jobs(data.jobsJson);
-    this.props = buildPropData(this.world, this.rects, data.level.props, data.level);
-    this.doors = this.props.doors.map((p) => new DoorCore(this.world, p, p.fr.length - 2));
-    const apcAreas = this.props.interact.filter((it) => it.kind === 'wm' && it.sub === 'apc').map((it) => this.world.areaIdx[it.r * this.world.W + it.c]);
-    this.power = new Power(this.world, apcAreas);
-    this.power.onState = (s, prev) => this.onPowerState(s, prev);
-    this.atmos = new Atmos(this.world, this.power);
-    this.nav = new Nav(this.world);
-    this.firedoors = new FireDoors(this);
+    this.maps = new Map();               // id -> GameMap
+    this.grids = new Map();              // id -> GridSim
+    this.gridSeq = 1;
+    this.station = null;                 // the main grid; the director's meteors and the round's hull checks are about this one
+    this.builtSeq = 1;                   // ids of what players have built, over all grids
     this.chat = new ChatSys(this);
     this.terminals = new Terminals(this);
     this.actions = new Actions(this);
     this.ai = new AI(this);
     this.round = new Round(this);
     this.director = new Director(this);
+    this.compat = {};                    // how often a compatibility path was taken (the migration to explicit grids; tests keep this at zero)
 
     this.items = new Map();             // id -> item instance (everything that exists)
-    this.floor = new Map();             // id -> {item, x, y, z, c, r}
+    this.floor = new Map();             // id -> {item, grid, x, y, z, c, r}
     this.itemSeq = 1;
     this.mobs = new Map();
     this.clients = new Map();
-    this.tileLog = [];                  // breaches/patches/shuttle so late joiners can catch up
-    this.deadPanes = [];
-    this.built = new BuiltSet(this.world);       // girders and the like that players put up (shared/built.js); the map's own girders start as records
-    this.builtSeq = 1;
-    for (const g of this.props.girders) this.built.add({ id: this.builtSeq++, k: 'girder', c: g.c, r: g.r, st: GIRDER.NORMAL });
-    this.evacApplied = false;
     this.flickerUntil = 0;
 
-    for (const it of this.props.items) {
-      const item = this.newItem(it.path || '/obj/item', { name: it.name, sprite: it.sprite });
-      place(this, item, it.x, it.z, it.y);
-    }
     this.people = new People(this);
     this.windows = new Windows(this);
     this.walls = new Walls(this);
     this.stacks = new Stacks(this);
     this.floors = new Floors(this);
     this.debug = new Debug(this);
-    this.closets = new Closets(this, data.closets);       // after the floor items: closed closets swallow what lies on them
+    this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
+
+    const mapId = data.level.map;
+    const def = data.level.maps[mapId];
+    const map = this.addMap(mapId, def.name);
+    this.defaultMap = map;
+    for (const pl of def.grids) this.addGrid(pl.bp, { map, kind: pl.kind, name: pl.name, tf: { p: pl.p, q: pl.q } });
+  }
+
+  // ------------------------------------------------------------------ maps and grids
+  addMap(id, name) {
+    const map = new GameMap(id, name);
+    this.maps.set(id, map);
+    return map;
+  }
+
+  /** Bring a grid into being in `o.map` at pose `o.tf`: its tiles, its air and power, its map's girders, the items that lie about on it, its closets. */
+  addGrid(bp, o = {}) {
+    const map = o.map || this.defaultMap;
+    const g = new GridSim(this, decodeGrid(this.level, bp), { id: this.gridSeq++, kind: o.kind, name: o.name, tf: o.tf });
+    this.grids.set(g.id, g);
+    map.add(g);
+    if (!this.station && g.kind === 'station') this.station = g;
+    for (const gd of g.props.girders) g.built.add({ id: this.builtSeq++, k: 'girder', c: gd.c, r: gd.r, st: GIRDER.NORMAL, grid: g });
+    for (const it of g.props.items) {
+      const item = this.newItem(it.path || '/obj/item', { name: it.name, sprite: it.sprite });
+      place(this, item, g, it.x, it.z, it.y);
+    }
+    this.closets.initGrid(g);
+    return g;
+  }
+
+  // The station's parts, for code that has not yet been told which grid it is about (the tests, and what is still being moved over).
+  get world() { return this.useStation('world').world; }
+  get props() { return this.useStation('props').props; }
+  get doors() { return this.useStation('doors').doors; }
+  get atmos() { return this.useStation('atmos').atmos; }
+  get power() { return this.useStation('power').power; }
+  get nav() { return this.useStation('nav').nav; }
+  get firedoors() { return this.useStation('firedoors').firedoors; }
+  get built() { return this.useStation('built').built; }
+  get tileLog() { return this.useStation('tileLog').tileLog; }
+  useStation(what) { this.compat[what] = (this.compat[what] || 0) + 1; return this.station; }
+
+  // ------------------------------------------------------------------ where things are
+  /** The map something is in: its grid's, or its own for a body floating in the void. */
+  mapOf(at) { return at.grid ? at.grid.map : at.map || null; }
+
+  /** [x, y, z] in the map's coordinates of something standing in a grid's frame (or floating in the void, where they already are). */
+  worldPos(at) {
+    const y = at.y || 0;
+    return at.grid ? tfPoint(at.grid.tf, [at.x, y, at.z]) : [at.x, y, at.z];
+  }
+
+  /**
+   * How far apart two things are, in metres: Infinity when they are in different maps; on the same grid it is the distance across the
+   * deck (height does not count, as it never has); between grids it is the true distance between where they are in the map.
+   */
+  dist(a, b) {
+    if (a.grid && a.grid === b.grid) return Math.hypot(a.x - b.x, a.z - b.z);
+    if (this.mapOf(a) !== this.mapOf(b)) return Infinity;
+    const p = this.worldPos(a), q = this.worldPos(b);
+    return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+  }
+
+  sameGrid(a, b) { return !!a.grid && a.grid === b.grid; }
+
+  /** The grid a request (a click target, a message) is about: the one it names, else the one its sender stands on. */
+  gridFor(id, c) { return (id !== undefined && this.grids.get(id)) || c?.mob?.grid || null; }
+
+  /** Everyone's start points: [{ grid, job, x, y }] (tiles). */
+  spawnPoints() {
+    const out = [];
+    for (const g of this.grids.values()) for (const s of g.spawns) out.push({ grid: g, job: s.job, x: s.x, y: s.y });
+    return out;
   }
 
   // ------------------------------------------------------------------ ids / items
@@ -130,12 +192,17 @@ export class Sim {
   }
 
   // ------------------------------------------------------------------ events
-  /** scope: undefined = everyone; {to: client}; {near: [x, z, r]}; {ghosts: true} */
+  /**
+   * scope: undefined = everyone; {to: client}; {near: {at, r}} (anyone within r metres of `at`: a body, an item record, a door...);
+   * {ghosts: true}. An event with a `g` is about that grid, so only players in the grid's map get it.
+   */
   emit(ev, scope) {
+    const map = ev.g !== undefined ? this.grids.get(ev.g)?.map : null;
     for (const c of this.clients.values()) {
+      if (map && c.map !== map) continue;
       if (scope) {
         if (scope.to && scope.to !== c) continue;
-        if (scope.near) { const [x, z, r] = scope.near; if ((c.x - x) ** 2 + (c.z - z) ** 2 > r * r) continue; }
+        if (scope.near && this.dist(c.at, scope.near.at) > scope.near.r) continue;
         if (scope.ghosts && c.state !== 'ghost') continue;
       }
       c.outbox.push(ev);
@@ -144,21 +211,26 @@ export class Sim {
 
   tellClient(client, k, text, extra) { client.outbox.push({ e: 'msg', k, text, ...extra }); }
   tell(mob, k, text) { if (mob.client) this.tellClient(mob.client, k, text); }
-  sound(name, x, z, v = 1) { this.emit({ e: 'snd', n: name, x, z, v }, { near: [x, z, 40] }); }
+
+  /** A sound at `at` (a body, an item record, a door... anything with a grid and x, z), heard within 40 m. Sent in the map's coordinates. */
+  sound(name, at, v = 1) {
+    const p = this.worldPos(at);
+    this.emit({ e: 'snd', n: name, x: p[0], z: p[2], v }, { near: { at, r: 40 } });
+  }
   soundTo(client, name, v = 1) { client.outbox.push({ e: 'snd', n: name, v }); }
-  shake(x, z, amt, r = 36) { this.emit({ e: 'shake', a: amt }, { near: [x, z, r] }); }
+  shake(at, amt, r = 36) { this.emit({ e: 'shake', a: amt }, { near: { at, r } }); }
 
   /**
-   * The station's gravity goes on or off (the generator, or the debug menu). Like gravitygenerator.dm's shake_everyone():
+   * A grid's gravity goes on or off (the generator, or the debug menu). Like gravitygenerator.dm's shake_everyone():
    * everybody's camera shakes and they hear the alert. Nobody is told in words; you find out when your feet leave the floor.
    */
-  setGravity(on) {
+  setGravity(g, on) {
     on = !!on;
-    if (this.world.gravityOn === on) return false;
-    this.world.gravityOn = on;
-    this.emit({ e: 'grav', on });
-    this.emit({ e: 'shake', a: 0.5 });
-    this.emit({ e: 'snd', n: 'terminal_alert', v: 1 });
+    if (g.world.gravityOn === on) return false;
+    g.world.gravityOn = on;
+    g.emit({ e: 'grav', on });
+    g.emit({ e: 'shake', a: 0.5 });
+    g.emit({ e: 'snd', n: 'terminal_alert', v: 1 });
     return true;
   }
 
@@ -166,8 +238,10 @@ export class Sim {
   addClient(name, send) {
     const c = new SimClient(this, name, send);
     this.clients.set(c.id, c);
-    const sp = this.level.spawns.find((s) => s.job === 'latejoin') || this.level.spawns.find((s) => s.job === 'assistant');
-    c.ghost.x = sp.x * TILE + 1; c.ghost.z = sp.y * TILE + 1;
+    const sps = this.spawnPoints();
+    const sp = sps.find((s) => s.job === 'latejoin') || sps.find((s) => s.job === 'assistant');
+    const p = sp.grid.worldPoint(sp.x * TILE + 1, 0, sp.y * TILE + 1);
+    c.ghost.x = p[0]; c.ghost.y = p[1]; c.ghost.z = p[2]; c.ghost.map = sp.grid.map;
     send({ t: 'welcome', you: c.id, ...this.worldState(c) });
     this.round.onJoin(c);
     return c;
@@ -180,16 +254,28 @@ export class Sim {
     this.round.onLeave(c);
   }
 
+  /** What a joining client needs to know about one grid: which it is, and how it has changed since the map made it. */
+  gridState(g) {
+    return {
+      g: g.id, bp: g.bp, kind: g.kind, name: g.name, tf: tfClone(g.tf),
+      power: { state: g.power.state, battery: g.power.battery },
+      areaOn: [...g.power.areaOn], areaLights: [...g.power.areaLights],
+      doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
+      tiles: g.tileLog, panes: g.deadPanes, evac: g.evacApplied, closets: this.closets.changed(g), moved: this.people.moved(g),
+      gravity: g.world.gravityOn, built: [...g.built].map((b) => [b.id, b.k, b.c, b.r, b.st]),
+    };
+  }
+
   /** Everything a joining client needs to build its view of the world. */
   worldState(c) {
+    const map = c.map;
     return {
       name: this.level.name,
+      map: map.id,
       round: this.round.publicState(),
-      power: { state: this.power.state, battery: this.power.battery },
-      areaOn: [...this.power.areaOn], areaLights: [...this.power.areaLights],
-      doors: this.doors.map((d) => d.state), fdoors: this.firedoors.list.map((f) => (f.closed ? 1 : 0)),
-      items: [...this.floor.values()].map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z]),
-      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(), moved: this.people.moved(), debug: !!this.opts.debug, gravity: this.world.gravityOn, built: [...this.built].map((b) => [b.id, b.k, b.c, b.r, b.st]),
+      grids: [...map.grids.values()].map((g) => this.gridState(g)),
+      items: [...this.floor.values()].filter((f) => f.grid.map === map).map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z, f.grid.id]),
+      debug: !!this.opts.debug,
       jobs: this.jobs.list.map((j) => ({ id: j.id, title: j.title, color: j.color, supervisors: j.supervisors, slots: this.jobs.slots(j), total: j.id === 'assistant' ? 99 : j.total, ap: this.outfitPreview(j) })),
     };
   }
@@ -202,10 +288,9 @@ export class Sim {
     this.applyPlayerInputs(dt);
     this.people.update();
     this.updateDoors(dt);
-    this.firedoors.update(dt);
+    for (const g of this.grids.values()) g.firedoors.update(dt);
     this.windows.update();
-    this.atmos.update(dt);
-    this.power.update(dt);
+    for (const g of this.grids.values()) { g.atmos.update(dt); g.power.update(dt); }
     this.ai.update(dt);
     this.tickBodies(dt);
     this.actions.update(dt);
@@ -243,8 +328,8 @@ export class Sim {
         if (m.dead || m.stunned > 0 || m.body.crit) { this.limp(m, d); continue; }
         const run = inp.run && !(m.body.health < 30);
         const ctx = this.moveCtx(m);
-        m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw }, this.world, d, ctx);
-        if (m.jetOn && (inp.f || inp.b || inp.l || inp.r) && floatState(this.world, m, { ...ctx, jet: false }).floating) this.burnJetpack(m, d);
+        m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw }, m.grid.world, d, ctx);
+        if (m.jetOn && (inp.f || inp.b || inp.l || inp.r) && floatState(m.grid.world, m, { ...ctx, jet: false }).floating) this.burnJetpack(m, d);
         moved = true;
       }
       void moved;
@@ -256,7 +341,7 @@ export class Sim {
 
   /** What `stepMovement` needs to know about a body (the client predicts with the same things, see Game.predictCtx). */
   moveCtx(m) {
-    return { slow: this.moveFactor(m) * (m.body.crit ? 0.35 : 1), wind: this.atmos.windAt(m.x, m.z), ignore: m.hauling?.it, noclip: m.noclip, jet: !!m.jetOn, mag: !!m.magOn };
+    return { slow: this.moveFactor(m) * (m.body.crit ? 0.35 : 1), wind: m.grid.atmos.windAt(m.x, m.z), ignore: m.hauling?.it, noclip: m.noclip, jet: !!m.jetOn, mag: !!m.magOn };
   }
 
   /** Thrusting uses the jetpack's gas; when it is gone the engines cut out. */
@@ -269,8 +354,8 @@ export class Sim {
 
   /** A body that cannot act: it stops where it is, unless there is no gravity to stop it, then it keeps drifting. */
   limp(m, d) {
-    if (this.world.hasGravity(m.x, m.z)) { m.vx = m.vz = 0; return; }
-    m.speedNow = stepMovement(m, { yaw: m.yaw }, this.world, d, { ...this.moveCtx(m), limp: true });
+    if (m.grid.world.hasGravity(m.x, m.z)) { m.vx = m.vz = 0; return; }
+    m.speedNow = stepMovement(m, { yaw: m.yaw }, m.grid.world, d, { ...this.moveCtx(m), limp: true });
   }
 
   updateGhosts(dt) {
@@ -281,7 +366,7 @@ export class Sim {
         const inp = c.inputs.shift();
         c.lastSeq = inp.seq;
         g.yaw = inp.yaw; g.pitch = inp.pitch || 0;
-        stepMovement(g, inp, this.world, clamp(inp.dt || 0.016, 0.001, 0.06), { noclip: true });
+        stepMovement(g, inp, null, clamp(inp.dt || 0.016, 0.001, 0.06), { noclip: true });      // a ghost passes through everything: it needs no tiles
       }
     }
   }
@@ -289,44 +374,42 @@ export class Sim {
   // ------------------------------------------------------------------ doors
   updateDoors(dt) {
     const players = [...this.clients.values()].filter((c) => c.mob && !c.mob.dead).map((c) => c.mob);
-    for (let k = 0; k < this.doors.length; k++) {
-      const d = this.doors[k];
-      if (d.state === 'closed') {
-        for (const m of players) {
-          const dx = m.x - d.x, dz = m.z - d.z;
-          if (dx * dx + dz * dz < 1.8 * 1.8 && d.allows(m) && this.power.doorsWork(d)) { this.openDoor(k, m); break; }
+    for (const g of this.grids.values()) {
+      for (const d of g.doors) {
+        if (d.state === 'closed') {
+          for (const m of players) {
+            if (this.dist(m, d) < 1.8 && d.allows(m) && g.power.doorsWork(d)) { this.openDoor(d, m); break; }
+          }
+          continue;
         }
-        continue;
-      }
-      const res = d.tick(dt);
-      if (res) this.emit({ e: 'door', i: k, st: res });
-      if (d.state === 'open' && res === 'open') d.holdUntil = this.time + 3.2;
-      if (d.state === 'open' && this.time > d.holdUntil) {
-        if (!this.power.doorsWork(d)) d.holdUntil = this.time + 1;
-        else if (!this.occupied(d)) this.closeDoor(k); else d.holdUntil = this.time + 0.8;
+        const res = d.tick(dt);
+        if (res) g.emit({ e: 'door', i: d.idx, st: res });
+        if (d.state === 'open' && res === 'open') d.holdUntil = this.time + 3.2;
+        if (d.state === 'open' && this.time > d.holdUntil) {
+          if (!g.power.doorsWork(d)) d.holdUntil = this.time + 1;
+          else if (!this.occupied(d)) this.closeDoor(d); else d.holdUntil = this.time + 0.8;
+        }
       }
     }
   }
 
   occupied(d) {
-    for (const m of this.mobs.values()) if (!m.dead && (m.x - d.x) ** 2 + (m.z - d.z) ** 2 < 1.5 * 1.5) return true;
+    for (const m of this.mobs.values()) if (!m.dead && this.dist(m, d) < 1.5) return true;
     return false;
   }
 
-  openDoor(k, by, force = false) {
-    const d = this.doors[k];
-    if (!force && (d.bolted || d.welded || !this.power.doorsWork(d))) return false;
+  openDoor(d, by, force = false) {
+    if (!force && (d.bolted || d.welded || !d.grid.power.doorsWork(d))) return false;
     if (!d.open()) return false;
-    this.emit({ e: 'door', i: k, st: 'opening' });
-    this.sound('door_open', d.x, d.z, 0.9);
+    d.grid.emit({ e: 'door', i: d.idx, st: 'opening' });
+    this.sound('door_open', d, 0.9);
     return true;
   }
 
-  closeDoor(k) {
-    const d = this.doors[k];
+  closeDoor(d) {
     if (!d.close()) return false;
-    this.emit({ e: 'door', i: k, st: 'closing' });
-    this.sound('door_close', d.x, d.z, 0.9);
+    d.grid.emit({ e: 'door', i: d.idx, st: 'closing' });
+    this.sound('door_close', d, 0.9);
     return true;
   }
 
@@ -337,14 +420,14 @@ export class Sim {
       m.cool = Math.max(0, m.cool - dt);
       m.stunned = Math.max(0, m.stunned - dt);
       const [c, r] = m.tile;
-      const a = this.atmos;
+      const a = m.grid?.atmos;                                       // in the void there is no air at all
       let internals = false;
       if (m.humanoid && m.internals) {
         const src = internalsSource(m);
         if (src) { internals = true; src.gas = Math.max(0, src.gas - dt); if (src.gas <= 0) { m.internals = false; this.tell(m, 'danger', 'Your air tank runs dry!'); } }
       }
       m.body.tick(dt, {
-        pressure: a.pressureAt(c, r), o2: a.o2At(c, r), tox: a.toxAt(c, r),
+        pressure: a ? a.pressureAt(c, r) : 0, o2: a ? a.o2At(c, r) : 0, tox: a ? a.toxAt(c, r) : 0,
         safeSuit: m.kind === 'carp' || (m.humanoid && spaceSafe(m)), internals: internals || m.kind === 'carp',
       });
     }
@@ -353,10 +436,10 @@ export class Sim {
   onMobDeath(m, cause) {
     m.dead = true;
     m.vx = m.vz = 0;
-    this.sound('bodyfall', m.x, m.z, 0.8);
+    this.sound('bodyfall', m, 0.8);
     if (m.kind === 'human') {
       this.chat.visible(m, `${m.name} seizes up and falls limp, their eyes dead and lifeless...`, 'danger', 8);
-      this.chat.systemAll('deadsay', `${m.name} (${this.jobs.get(m.job)?.title || 'crew'}) has died at ${this.world.areaAt(...m.tile)?.n || 'an unknown location'}.`);
+      this.chat.systemAll('deadsay', `${m.name} (${this.jobs.get(m.job)?.title || 'crew'}) has died at ${m.grid?.world.areaAt(...m.tile)?.n || 'an unknown location'}.`);
     }
     if (m.client) this.round.onPlayerDeath(m.client, cause);
     this.director.onMobDeath(m);
@@ -367,130 +450,129 @@ export class Sim {
     const dmg = amount * (1 - (m.humanoid ? (m.worn.suit?.def.armor ?? 0) : 0));
     m.body.damage(type, dmg, src);
     m.fear = 6;
-    if (m.client) { this.emit({ e: 'hurt', a: dmg }, { to: m.client }); this.shake(m.x, m.z, Math.min(0.5, dmg / 25), 0.1); }
-    if (m.humanoid && !m.dead) this.sound((m.name.charCodeAt(0) % 2) ? 'pain_m' : 'pain_f', m.x, m.z, 0.8);
+    if (m.client) { this.emit({ e: 'hurt', a: dmg }, { to: m.client }); this.shake(m, Math.min(0.5, dmg / 25), 0.1); }
+    if (m.humanoid && !m.dead) this.sound((m.name.charCodeAt(0) % 2) ? 'pain_m' : 'pain_f', m, 0.8);
   }
 
   // ------------------------------------------------------------------ hull & world changes
-  tileEvent(i, extra = {}) {
-    const w = this.world;
-    return { e: 'tile', i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], brk: w.breached.has(i) ? 1 : 0, gr: w.grille[i], ws: w.ws[i], ft: w.ft[i], lat: w.lat[i], ...extra };
+  tileEvent(g, i, extra = {}) {
+    const w = g.world;
+    return { e: 'tile', g: g.id, i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], brk: w.breached.has(i) ? 1 : 0, gr: w.grille[i], ws: w.ws[i], ft: w.ft[i], lat: w.lat[i], ...extra };
   }
 
   /** Something is built on a tile (a girder). Everyone is told; it is dense and takes the tile's `solid`. */
-  addBuilt(k, c, r, st = 0) {
-    const rec = this.built.add({ id: this.builtSeq++, k, c, r, st });
-    this.emit({ e: 'bs+', id: rec.id, k, c, r, st });
+  addBuilt(g, k, c, r, st = 0) {
+    const rec = g.built.add({ id: this.builtSeq++, k, c, r, st, grid: g });
+    g.emit({ e: 'bs+', id: rec.id, k, c, r, st });
     return rec;
   }
 
   /** A built thing changes state (a girder unbolted or reinforced: another picture, another name). */
   setBuilt(rec, st) {
     rec.st = st;
-    this.emit({ e: 'bs~', id: rec.id, st });
+    rec.grid.emit({ e: 'bs~', id: rec.id, st });
   }
 
   removeBuilt(rec) {
-    if (!this.built.remove(rec.id)) return;
-    this.emit({ e: 'bs-', id: rec.id });
+    if (!rec.grid.built.remove(rec.id)) return;
+    rec.grid.emit({ e: 'bs-', id: rec.id });
   }
 
   /** A tile's glass, grille or anchoring changed: tell the air and the clients. (A smashed window is `breachTile`: it is also loud.) */
-  tileChanged(c, r) {
-    const i = r * this.world.W + c;
-    this.atmos.tileChanged(c, r);
-    this.emitTile(i);
+  tileChanged(g, c, r) {
+    g.atmos.tileChanged(c, r);
+    this.emitTile(g, g.world.idx(c, r));
   }
 
-  /** Tell everyone how tile `i` is now (and keep it for those who join later). */
-  emitTile(i) {
-    const ev = this.tileEvent(i);
-    this.tileLog.push(ev); this.emit(ev);
+  /** Tell everyone how tile `i` of `g` is now (and keep it for those who join later). */
+  emitTile(g, i) {
+    const ev = this.tileEvent(g, i);
+    g.tileLog.push(ev); this.emit(ev);
   }
 
   /** A window shatters. Only one that touches space is a hull breach (loud, everything flickers). It leaves shards (and rods) on the floor and its grille standing. */
-  breachTile(c, r, cause) {
-    const w = this.world;
-    const i = r * w.W + c;
+  breachTile(g, c, r, cause) {
+    const w = g.world;
+    const i = w.idx(c, r);
     w.setBreach(c, r);
-    this.tileChanged(c, r);
-    const x = c * TILE + 1, z = r * TILE + 1;
-    this.windows.spill(x, z, w.windowKey(i), true);
-    this.sound('glass_break', x, z, 1);
-    if (cause === 'meteor') { this.sound('meteor', x, z, 1); this.sound('explosion', x, z, 0.8); this.sound('wind', x, z, 0.9); }
+    this.tileChanged(g, c, r);
+    const at = { grid: g, x: c * TILE + 1, z: r * TILE + 1 };
+    this.windows.spill(g, at.x, at.z, w.windowKey(i), true);
+    this.sound('glass_break', at, 1);
+    if (cause === 'meteor') { this.sound('meteor', at, 1); this.sound('explosion', at, 0.8); this.sound('wind', at, 0.9); }
     if (w.ventsToSpace(i)) {
-      this.shake(x, z, 0.6, 40);
-      this.flicker(0.9);
-    } else this.shake(x, z, 0.25, 12);
+      this.shake(at, 0.6, 40);
+      this.flicker(g, 0.9);
+    } else this.shake(at, 0.25, 12);
   }
 
-  patchBreach(c, r) {
-    const w = this.world;
-    const i = r * w.W + c;
+  patchBreach(g, c, r) {
+    const w = g.world;
+    const i = w.idx(c, r);
     const venting = w.ventsToSpace(i);
     w.setPatched(c, r);
-    this.atmos.tileChanged(c, r);
-    const ev = this.tileEvent(i);
-    this.tileLog.push(ev); this.emit(ev);
-    this.sound('welder', c * TILE + 1, r * TILE + 1, 0.8);
+    g.atmos.tileChanged(c, r);
+    const ev = this.tileEvent(g, i);
+    g.tileLog.push(ev); this.emit(ev);
+    this.sound('welder', { grid: g, x: c * TILE + 1, z: r * TILE + 1 }, 0.8);
     this.director.onPatched(venting);
   }
 
-  /** Damage a window (tile) or a thin pane; shatters when hit points run out. `hit` is a world.hit record. */
-  damageHull(hit, dmg) {
-    const w = this.world;
+  /** Damage a window (tile) or a thin pane; shatters when hit points run out. `hit` is a world.hit record from `g`'s tiles. */
+  damageHull(g, hit, dmg) {
+    const w = g.world;
     if (hit.kind === 'tile') {
       const i = hit.i;
       if (!w.glass[i]) return null;
       const hp = (w.hp.get(i) ?? 30) - dmg;
       const c = i % w.W, r = Math.floor(i / w.W);
-      this.sound('glass_hit', c * TILE, r * TILE, 0.8);
-      if (hp <= 0) { this.breachTile(c, r, 'shot'); return 'shatter'; }
+      this.sound('glass_hit', { grid: g, x: c * TILE, z: r * TILE }, 0.8);
+      if (hp <= 0) { this.breachTile(g, c, r, 'shot'); return 'shatter'; }
       w.hp.set(i, hp);
       return hp < 15 ? 'crack2' : 'crack';
     }
-    const pane = this.props.paneIdx.get(hit.i * 16 + hit.bit);
+    const pane = g.props.paneIdx.get(hit.i * 16 + hit.bit);
     if (!pane || pane.dead) return null;
     pane.hp -= dmg;
-    this.sound('glass_hit', pane.c * TILE, pane.r * TILE, 0.8);
-    if (pane.hp <= 0) { this.shatterPane(pane); return 'shatter'; }
+    this.sound('glass_hit', { grid: g, x: pane.c * TILE, z: pane.r * TILE }, 0.8);
+    if (pane.hp <= 0) { this.shatterPane(g, pane); return 'shatter'; }
     return 'crack';
   }
 
-  shatterPane(p) {
-    this.removePane(p);
-    this.sound('glass_break', p.c * TILE, p.r * TILE, 1);
-    this.windows.spill(p.c * TILE + 1, p.r * TILE + 1, p.tag, false);
+  shatterPane(g, p) {
+    this.removePane(g, p);
+    const at = { grid: g, x: p.c * TILE + 1, z: p.r * TILE + 1 };
+    this.sound('glass_break', at, 1);
+    this.windows.spill(g, at.x, at.z, p.tag, false);
   }
 
   /** A thin window is gone (smashed, or taken apart: then it leaves nothing but its glass sheet). */
-  removePane(p) {
+  removePane(g, p) {
     p.dead = true;
-    this.world.removeEdge(p.c, p.r, p.d);
-    this.deadPanes.push([p.c, p.r, p.d]);
-    this.emit({ e: 'pane', c: p.c, r: p.r, d: p.d });
+    g.world.removeEdge(p.c, p.r, p.d);
+    g.deadPanes.push([p.c, p.r, p.d]);
+    g.emit({ e: 'pane', c: p.c, r: p.r, d: p.d });
   }
 
-  flicker(sec) { this.emit({ e: 'flicker', s: sec }); }
+  flicker(g, sec) { g.emit({ e: 'flicker', s: sec }); }
 
-  onPowerState(s, prev) {
-    this.emit({ e: 'power', state: s, battery: this.power.battery });
-    this.sound(s === 'normal' ? 'ping' : 'zzzt', 0, 0, 0);
-    this.emit({ e: 'snd', n: s === 'normal' ? 'ping' : 'zzzt', v: 0.8 });
-    this.flicker(1.5);
+  onPowerState(g, s, prev) {
+    g.emit({ e: 'power', state: s, battery: g.power.battery });
+    g.emit({ e: 'snd', n: s === 'normal' ? 'ping' : 'zzzt', v: 0.8 });
+    this.flicker(g, 1.5);
   }
 
-  setAreaPower(a, on, lights) {
-    if (on !== undefined) this.power.areaOn[a] = on ? 1 : 0;
-    if (lights !== undefined) this.power.areaLights[a] = lights ? 1 : 0;
-    this.emit({ e: 'area', a, on: this.power.areaOn[a], lights: this.power.areaLights[a] });
+  setAreaPower(g, a, on, lights) {
+    if (on !== undefined) g.power.areaOn[a] = on ? 1 : 0;
+    if (lights !== undefined) g.power.areaLights[a] = lights ? 1 : 0;
+    g.emit({ e: 'area', a, on: g.power.areaOn[a], lights: g.power.areaLights[a] });
   }
 
-  /** The emergency shuttle docks: stamp its tiles into the world (and tell clients to do the same). */
-  applyEvac() {
-    if (this.evacApplied) return;
-    this.evacApplied = true;
-    const w = this.world, ov = this.level.evac;
+  /** The emergency shuttle docks: stamp its tiles into the grid (and tell clients to do the same). */
+  applyEvac(g = this.station) {
+    if (g.evacApplied) return;
+    g.evacApplied = true;
+    const w = g.world, ov = g.evac;
     const changed = new Set();
     for (const [i, kind, floor, wall, area, roof] of ov.tiles) {
       w.kind[i] = kind; w.floorCell[i] = floor; w.wallVar[i] = wall; w.areaIdx[i] = area; w.roof[i] = roof;
@@ -502,17 +584,14 @@ export class Sim {
       }
       changed.add(i);
     }
-    const before = this.doors.length;
-    buildPropData(w, this.rects, ov.props, this.level, this.props);
-    for (const p of this.props.added.doors) this.doors.push(new DoorCore(w, p, p.fr.length - 2));
-    for (const p of this.props.added.fdoors) void p;
-    this.atmos.buildTopology(false, changed);
-    for (const it of this.props.added.items) {
+    buildPropData(w, this.rects, ov.props, this.level, g.props);
+    g.addDoors(g.props.added.doors);
+    g.atmos.buildTopology(false, changed);
+    for (const it of g.props.added.items) {
       const item = this.newItem(it.path || '/obj/item', { name: it.name, sprite: it.sprite });
-      place(this, item, it.x, it.z, it.y);
+      place(this, item, g, it.x, it.z, it.y);
     }
-    this.emit({ e: 'evac' });
-    void before;
+    g.emit({ e: 'evac' });
     return changed;
   }
 
@@ -525,12 +604,13 @@ export class Sim {
 
   /** Create a crew member (player-controlled if `client`, otherwise an NPC) and equip them from the job's outfit. */
   spawnCrew(job, client, o = {}) {
-    const pts = this.level.spawns.filter((s) => s.job === job.id);
-    const late = this.level.spawns.filter((s) => s.job === 'latejoin');
-    let p = o.late && late.length ? late[Math.floor(this.rand() * late.length)] : pts.length ? pts[Math.floor(this.rand() * pts.length)] : late[0] || this.level.spawns[0];
+    const all = this.spawnPoints();
+    const pts = all.filter((s) => s.job === job.id);
+    const late = all.filter((s) => s.job === 'latejoin');
+    let p = o.late && late.length ? late[Math.floor(this.rand() * late.length)] : pts.length ? pts[Math.floor(this.rand() * pts.length)] : late[0] || all[0];
     const name = client ? client.name : this.ai.randomName();
     const look = (client && client.look) || this.looks.random(this.rand);
-    const m = this.newMob({ kind: 'human', name, job: job.id, look, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, speed: 1.7 + this.rand() * 0.5, hp: 100 });
+    const m = this.newMob({ kind: 'human', name, job: job.id, look, grid: p.grid, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, speed: 1.7 + this.rand() * 0.5, hp: 100 });
     this.outfit(m, job);
     if (client) { client.mob = m; m.client = client; client.state = 'playing'; }
     return m;
@@ -592,26 +672,26 @@ export class Sim {
     this.sendLookChanges();
     const mobsArr = [...this.mobs.values()];
     for (const c of this.clients.values()) {
-      const px = c.x, pz = c.z;
+      const here = c.at, map = c.map;
       const list = [];
       const seen = new Set();
       for (const m of mobsArr) {
         if (m.evacuated || (m.inside && m !== c.mob)) continue;       // nobody sees someone shut in a locker
-        const dx = m.x - px, dz = m.z - pz;
-        if (dx * dx + dz * dz > INTEREST * INTEREST && m !== c.mob) continue;
+        if (this.mapOf(m) !== map) continue;
+        if (m !== c.mob && this.dist(m, here) > INTEREST) continue;
         seen.add(m.id);
         if (!c.known.has(m.id)) { c.known.add(m.id); c.outbox.push({ e: 'mob+', id: m.id, n: m.name, job: m.job, set: m.set, kind: m.kind, ap: m.look ? this.appearanceOf(m) : undefined }); }
         const flags = (m.dead ? 1 : 0) | (m.body.crit ? 2 : 0) | (m.speedNow > 3.8 ? 8 : 0) | (m.stunned > 0 || m.downed ? 16 : 0);
-        list.push([m.id, +m.x.toFixed(2), +m.z.toFixed(2), +m.yaw.toFixed(2), flags, +(m.speedNow || 0).toFixed(1)]);
+        list.push([m.id, m.grid ? m.grid.id : 0, +m.x.toFixed(2), +m.z.toFixed(2), +m.yaw.toFixed(2), flags, +(m.speedNow || 0).toFixed(1)]);
       }
       for (const id of [...c.known]) if (!seen.has(id)) { c.known.delete(id); c.outbox.push({ e: 'mob-', id }); }
       const snap = { t: 'snap', tick: this.tick, ack: c.lastSeq, mobs: list };
       const m = c.mob;
       if (m) {
-        const [tc, tr] = m.tile;
-        snap.you = { x: +m.x.toFixed(3), z: +m.z.toFixed(3), vx: +m.vx.toFixed(2), vz: +m.vz.toFixed(2), id: m.id };
-        snap.env = { p: +this.atmos.pressureAt(tc, tr).toFixed(1), o2: +this.atmos.o2At(tc, tr).toFixed(1), tox: +this.atmos.toxAt(tc, tr).toFixed(2), area: this.world.areaIdx[tr * this.world.W + tc] };
-        const wind = this.atmos.windAt(m.x, m.z);
+        const [tc, tr] = m.tile, g = m.grid;
+        snap.you = { g: g.id, x: +m.x.toFixed(3), z: +m.z.toFixed(3), vx: +m.vx.toFixed(2), vz: +m.vz.toFixed(2), id: m.id };
+        snap.env = { p: +g.atmos.pressureAt(tc, tr).toFixed(1), o2: +g.atmos.o2At(tc, tr).toFixed(1), tox: +g.atmos.toxAt(tc, tr).toFixed(2), area: g.world.areaIdx[g.world.idx(tc, tr)] };
+        const wind = g.atmos.windAt(m.x, m.z);
         if (wind) snap.you.wind = [+wind[0].toFixed(2), +wind[1].toFixed(2)];
         const self = this.selfState(c);
         const json = JSON.stringify(self);
@@ -648,7 +728,7 @@ export class Sim {
       case 'mirror': this.actions.mirror(c, msg); break;
       case 'strip': this.people.handle(c, msg); break;
       case 'stack': this.stacks.handle(c, msg); break;
-      case 'stuff': { const it = this.props.interact[msg.idx]; if (c.mob && it?.kind === 'closet') this.closets.stuff(c.mob, it, this.mobs.get(msg.id)); break; }
+      case 'stuff': { const g = this.gridFor(msg.g, c), it = g?.props.interact[msg.idx]; if (c.mob && it?.kind === 'closet') this.closets.stuff(c.mob, it, this.mobs.get(msg.id)); break; }
       case 'input':
         for (const inp of msg.list || [msg]) { if (c.inputs.length < 60) c.inputs.push(inp); }
         break;

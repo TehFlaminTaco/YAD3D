@@ -60,7 +60,7 @@ export class LevelMesh {
     this.tmp = [0, 0, 0];
     this.lf = null;
     this.tableAt = new Map();
-    for (const t of extras.tables || []) this.tableAt.set(t.r * world.W + t.c, t);
+    for (const t of extras.tables || []) this.tableAt.set(world.idx(t.c, t.r), t);
     this.build();
   }
 
@@ -155,7 +155,7 @@ export class LevelMesh {
     const { world } = this;
     for (const d of [1, 2, 4, 8]) {
       const [dc, dr] = DV[d];
-      if (!world.inb(c + dc, r + dr) || world.kind[(r + dr) * world.W + c + dc] === KIND.WALL) continue;
+      if (!world.inb(c + dc, r + dr) || world.kind[world.idx(c + dc, r + dr)] === KIND.WALL) continue;
       face(acc, c, r, d, TILE / 2 - GRILLE_INSET, variant.gr, 0.9);
     }
   }
@@ -169,7 +169,7 @@ export class LevelMesh {
     // top fill (sprite sits just above)
     acc.quad([[x0, h, z0], [x1, h, z0], [x1, h, z1], [x0, h, z1]], UV_FULL, this.assets.level.terrain.flat,
       [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], 1, col);
-    const hasT = (dc, dr) => tableAt.has((r + dr) * world.W + (c + dc));
+    const hasT = (dc, dr) => tableAt.has(world.idx(c + dc, r + dr));
     const sides = [
       [0, -1, [[x0, 0, z0], [x1, 0, z0], [x1, h, z0], [x0, h, z0]], [x0, z0 - 0.3]],
       [0, 1, [[x1, 0, z1], [x0, 0, z1], [x0, h, z1], [x1, h, z1]], [x0, z1 + 0.3]],
@@ -193,11 +193,11 @@ export class LevelMesh {
       const [dc, dr] = DV[d];
       const nc = c + dc, nr = r + dr;
       if (!world.inb(nc, nr)) continue;
-      const nk = world.kind[nr * world.W + nc];
+      const nk = world.kind[world.idx(nc, nr)];
       if (glass) { if (nk !== KIND.WALL) open.push(d); }
-      else if (nk !== KIND.WALL || world.glass[nr * world.W + nc]) open.push(d);       // including space: you can float out and look back at the hull
+      else if (nk !== KIND.WALL || world.glass[world.idx(nc, nr)]) open.push(d);       // including space: you can float out and look back at the hull
     }
-    const conn = (cc, rr) => (glass ? world.kind[rr * world.W + cc] === KIND.WALL && world.inb(cc, rr)
+    const conn = (cc, rr) => (glass ? world.kind[world.idx(cc, rr)] === KIND.WALL && world.inb(cc, rr)
       : world.inb(cc, rr) && world.opaque(cc, rr));
     const cellFor = (d) => {
       const [nx, nz] = DV[d];

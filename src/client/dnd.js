@@ -164,7 +164,7 @@ export class DragDrop {
     if (el !== g.canvas) return;
     const { o, d: dir } = g.rayAt(e.clientX, e.clientY);
     const t = g.findTarget(o, dir);
-    if (t && t.k === 'prop' && g.rep.props.interact[t.idx]?.kind === 'closet') g.send({ t: 'stuff', idx: t.idx, id: d.mobId });
+    if (t && t.k === 'prop' && g.myGrid().props.interact[t.idx]?.kind === 'closet') g.send({ t: 'stuff', g: g.myGrid().id, idx: t.idx, id: d.mobId });
   }
 
   drop(e, d) {

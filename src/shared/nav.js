@@ -15,7 +15,7 @@ export class Nav {
   passable(c, r, who) {
     const w = this.world;
     if (!w.inb(c, r)) return false;
-    const i = r * w.W + c;
+    const i = w.idx(c, r);
     if (w.dyn[i]) return false;                                   // a locker or tank stands there
     if (w.solid[i]) {
       const d = w.doorAt.get(i);
@@ -27,7 +27,7 @@ export class Nav {
 
   edgeBlocked(c, r, nc, nr) {
     const w = this.world;
-    const e = w.edge[r * w.W + c];
+    const e = w.edge[w.idx(c, r)];
     if (!e) return false;
     if (nc > c) return !!(e & 4);
     if (nc < c) return !!(e & 8);
