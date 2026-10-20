@@ -70,12 +70,14 @@ export class Atmos {
     }
   }
 
+  // (off the edge of the array, and in the void, there is no air at all)
   pressureAt(c, r) {
+    if (!this.world.inb(c, r)) return 0;
     const i = r * this.world.W + c;
     return this.o2[i] + this.n2[i] + this.tox[i];
   }
-  o2At(c, r) { return this.o2[r * this.world.W + c]; }
-  toxAt(c, r) { return this.tox[r * this.world.W + c]; }
+  o2At(c, r) { return this.world.inb(c, r) ? this.o2[r * this.world.W + c] : 0; }
+  toxAt(c, r) { return this.world.inb(c, r) ? this.tox[r * this.world.W + c] : 0; }
   pressureWorld(x, z) { return this.pressureAt(Math.floor(x / TILE), Math.floor(z / TILE)); }
 
   /** A window was smashed or a breach welded shut: tile (c, r) joins or leaves the gas grid. */
@@ -106,6 +108,7 @@ export class Atmos {
   }
 
   addGas(c, r, o2, n2, tox) {
+    if (!this.world.inb(c, r)) return;
     const i = r * this.world.W + c;
     if (!this.isCell[i]) return;
     this.o2[i] += o2; this.n2[i] += n2; this.tox[i] += tox;

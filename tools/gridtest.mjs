@@ -6,7 +6,9 @@ import { loadSimData } from '../src/sim/load.js';
 import { initPhysics } from '../src/shared/physics.js';
 import { Sim } from '../src/sim/sim.js';
 import { Replica } from '../src/client/state.js';
-import { SIM_DT, TILE } from '../src/shared/config.js';
+import { SIM_DT, TILE, ENTER_MAX, VOID_LIMIT } from '../src/shared/config.js';
+import { stepMovement } from '../src/shared/movement.js';
+import { settle } from '../src/shared/frames.js';
 import { place } from '../src/sim/inventory.js';
 import { qYaw, qToYaw, tfPoint } from '../src/shared/math3.js';
 import { KIND } from '../src/shared/config.js';
@@ -52,7 +54,8 @@ function setup(at = [300, 0, 300], opts = {}) {
 
 section('two grids in one map', () => {
   const { sim, station, room } = setup();
-  ok(sim.grids.size === 2 && station.id !== room.id, 'the sim has two grids with their own ids');
+  ok(station.map.solids.length === 2 && station.id !== room.id, 'the sim has two grids with their own ids');
+  ok(station.map.void && station.map.void.kind === 'void' && station.map.void.id !== station.id && sim.grids.size === 3, 'and the map has its void');
   ok(station.map === room.map && sim.maps.size === 1 && sim.station === station, 'they are in one map, and the first is the station');
   ok(room.kind === 'shuttle' && room.bp === 'room' && room.world.W === 7 && room.world.H === 7, 'the second is built from its own blueprint, at its own size');
   ok(room.world !== station.world && room.world.kind !== station.world.kind && station.world.W === 255, 'each has its own tile arrays');
@@ -108,7 +111,7 @@ section('where things are', () => {
   const m3 = sim.newMob({ kind: 'carp', set: 'carp', name: 'far carp', grid: g3, x: 3, z: 3, hp: 20 });
   ok(sim.mapOf(m3) === away && sim.mapOf(a) === sim.station.map && sim.dist(a, m3) === Infinity, 'things in different maps are infinitely far apart');
   const g4 = sim.addGrid('room', { map: away, kind: 'away', tf: { p: [330, 0, 300], q: [0, 0, 0, 1] } });
-  ok(sim.gridSeq === 5 && g3.id !== g4.id && g3.world !== g4.world && g3.world.W === 7, 'one blueprint can be a grid twice (their tiles are separate)');
+  ok(g3.id !== g4.id && g3.world !== g4.world && g3.world.W === 7 && away.void && away.void !== sim.station.map.void, 'one blueprint can be a grid twice (their tiles are separate), and each map has a void of its own');
   const f = { grid: g4, x: 1, z: 1 };
   ok(near(sim.dist(m3, f), 30 - 0, 1e-9) || near(sim.dist(m3, f), Math.hypot(30 + (1 - 3), 0 + (1 - 3)), 1e-9), 'two grids in the away map measure against each other');
 });
@@ -205,10 +208,10 @@ section('the client replica', () => {
   const { sim, data, A, B, a, b, inbox, step, put, room, station } = setup([300, 0, 300]);
   room.tf.p = [a.x + 12, 0, a.z];                             // right beside Alice, so Bob is in her snapshots
   const welcome = inbox.a.find((m) => m.t === 'welcome');
-  ok(welcome.grids.length === 2 && welcome.grids[1].bp === 'room' && welcome.grids[1].kind === 'shuttle' && welcome.map === 'station', 'the welcome lists the grids of the map, with their blueprints');
+  ok(welcome.grids.length === 3 && welcome.grids[1].bp === 'room' && welcome.grids[1].kind === 'shuttle' && welcome.grids[2].kind === 'void' && welcome.map === 'station', 'the welcome lists the grids of the map (and its void), with their blueprints');
   ok(welcome.grids[1].tf.p[0] === 300 && welcome.grids[1].doors.length === 1, 'their poses and their state');
   const rep = new Replica({ level: data.level, rects: data.rects }, { ...welcome, you: A.id });
-  ok(rep.grids.size === 2 && rep.station.id === station.id && rep.grids.get(room.id).world.W === 7, 'the replica builds the same grids from the same blueprints');
+  ok(rep.grids.size === 3 && rep.station.id === station.id && rep.grids.get(room.id).world.W === 7 && rep.map.void === rep.grids.get(station.map.void.id), 'the replica builds the same grids from the same blueprints');
   ok(rep.grids.get(room.id).doors.length === 1 && rep.station.doors.length === station.doors.length, 'with the same doors, counted the same way');
   const feed = () => { for (const m of inbox.a.splice(0)) { if (m.t === 'ev') for (const ev of m.list) rep.apply(ev); else if (m.t === 'snap') rep.applySnap(m, 0); } };
   put(b, room, 3, 4); b.yaw = Math.PI; b.cool = 0;
@@ -290,7 +293,7 @@ function aPod(sim) {
 section('shuttles are docked grids', () => {
   const { sim, a } = realRound();
   const st = sim.station;
-  const shuttles = [...sim.grids.values()].filter((g) => g !== st);
+  const shuttles = st.map.solids.filter((g) => g !== st);
   ok(shuttles.length === 9 && shuttles.filter((g) => g.kind === 'pod').length === 4, 'the level docks five shuttles and four pods, each a grid of its own');
   ok(shuttles.every((g) => g.map === st.map && g.world.W < 20 && g.world.gravityOn), 'in the station\'s map, small, each with its own gravity');
   const turned = new Set(shuttles.map(degrees));
@@ -628,6 +631,233 @@ section('the emergency shuttle flies in and out', () => {
   const gone = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'grid-');
   ok(gone.length === 1 && gone[0].g === eg.id, 'with everybody told');
   void A;
+});
+
+// ---------------------------------------------------------------------------------------------------------------- the void
+const DECK = [          // an open platform in a margin of space
+  '         ',
+  ' ....... ',
+  ' ....... ',
+  ' ....... ',
+  '         ',
+];
+const EAST = -Math.PI / 2;                                   // a facing (forward is (-sin yaw, -cos yaw))
+
+/** The station with a platform (docked at (700, 100)) and the walled room (docked at (700, 200)) out beyond the edge of its array, and Alice playing. */
+function voidRound() {
+  BP.deck = makeBlueprint(DATA.level, DECK);
+  const data = withGrids(DATA, BP, [{ bp: 'deck', kind: 'shuttle', p: [700, 0, 100], q: qYaw(0) }, { bp: 'room', kind: 'shuttle', p: [700, 0, 200], q: qYaw(0) }]);
+  const sim = new Sim(data, { bots: 0 });
+  const inbox = [];
+  const A = sim.addClient('Alice', (m) => inbox.push(m));
+  sim.handle(A, { t: 'lobby', op: 'job', id: 'station_engineer' });
+  sim.handle(A, { t: 'lobby', op: 'ready', v: true });
+  sim.handle(A, { t: 'lobby', op: 'start' });
+  const step = (sec) => { for (let k = 0; k < sec / SIM_DT; k++) sim.step(SIM_DT); };
+  let seq = 0;
+  const a = A.mob;
+  const hits = [];                                           // what arriving too fast did to you (the vacuum hurts too, so it is the one thing to tell apart)
+  const hurt = sim.hurt.bind(sim);
+  sim.hurt = (m, amount, type, src) => { if (src === 'impact') hits.push(amount); return hurt(m, amount, type, src); };
+  /** One input a tick, for `sec` seconds: keys held, facing `dir` in the map (so it stays the same whichever grid you are on). */
+  const drive = (sec, keys, dir = a.yaw + qToYaw(a.grid.tf.q)) => {
+    for (let k = 0; k < Math.round(sec / 0.05); k++) {
+      sim.handle(A, { t: 'input', list: [{ seq: ++seq, dt: 0.05, f: 0, b: 0, l: 0, r: 0, run: 0, ...keys, yaw: dir - qToYaw(a.grid.tf.q), pitch: 0, g: a.grid.id }] });
+      step(0.05);
+    }
+  };
+  const [station, deck, room] = station_(sim);
+  const put = (g, x, z, vx = 0, vz = 0) => { a.grid = g; a.map = g.map; a.x = x; a.z = z; a.vx = vx; a.vz = vz; a.dirty = true; };
+  return { sim, data, A, a, inbox, step, drive, station, deck, room, vd: sim.station.map.void, put, hits };
+}
+const station_ = (sim) => sim.station.map.solids;
+
+section('floating free in the void', () => {
+  // ---- off the side of a moving grid: you take its speed with you
+  {
+    const { sim, a, step, drive, deck, vd, put } = voidRound();
+    sim.undock(deck);
+    sim.physics.setVel(deck, [5, 0, 0], [0, 0, 0]);
+    step(0.1);
+    put(deck, 9, 5);
+    drive(0.6, { f: 1 }, EAST);
+    ok(a.grid === deck && Math.abs(a.vx - 3.4) < 0.15, 'walking about on a moving deck keeps you on it, at your own speed on it');
+    let jump = 0;
+    const speeds = [];
+    for (let k = 0; k < 60 && a.grid === deck; k++) {
+      const w0 = sim.worldPos(a);
+      drive(0.05, { f: 1 }, EAST);
+      const w = sim.worldPos(a);
+      jump = Math.max(jump, Math.hypot(w[0] - w0[0], w[2] - w0[2]));
+      speeds.push(Math.hypot(w[0] - w0[0], w[2] - w0[2]) / 0.05);
+    }
+    const speedBefore = speeds[speeds.length - 2];                    // (in the last tick it was already off: the body moves, then the grid does)
+    ok(a.grid === vd && a.map === deck.map, 'walk off its edge and you are in the map\'s void');
+    ok(jump < 0.6, `your place in the map does not jump when you leave (${jump.toFixed(2)} m in a tick: walking and the deck are 0.42)`);
+    ok(Math.abs(a.vx - (3.4 + 5)) < 0.3 && Math.abs(a.vz) < 0.05, `you carry the deck's speed and your own (${a.vx.toFixed(2)} m/s, the deck 5 and you 3.4)`);
+    ok(Math.abs(Math.hypot(a.vx, a.vz) - speedBefore) < 0.4, 'the speed you had in the map just before is the speed you have just after');
+    const x0 = a.x, v0 = a.vx;
+    drive(2, {}, EAST);
+    ok(a.vx === v0 && near(a.x, x0 + v0 * 2, 0.05), 'and you drift on at that speed, nothing slowing you');
+    ok(deck.worldPoint(9, 0, 5)[0] > 700 + 5 * 2 && a.x - deck.tf.p[0] > 6, `while the deck goes on its way (you are ${(a.x - deck.tf.p[0]).toFixed(1)} m beyond its origin)`);
+    drive(1, { b: 1 }, EAST);
+    ok(a.vx === v0, 'pressing a key does nothing: there is nothing to push against');
+    ok(vd.world.hasGravity(a.x, a.z) === false && vd.world.isOpenSpace(0, 0) && vd.atmos.pressureAt(1, 1) === 0, 'no gravity and no air in the void');
+  }
+  // ---- a docked grid is part of the map: only the edge of its array is the way out
+  {
+    const { sim, a, drive, deck, vd, put } = voidRound();
+    put(deck, 13, 5);
+    drive(1.0, { f: 1 }, EAST);
+    ok(a.grid === deck && a.x > 16 && a.x < 18, 'over the open space of a grid that is held in place you are still on it');
+    drive(1.2, { f: 1 }, EAST);
+    ok(a.grid === vd && a.x > 700 + 17.9, 'past the edge of its array you are in the void');
+    ok(Math.abs(a.vx - 3.4) < 0.2, 'at the speed you had');
+    // and back in again
+    drive(0.2, {}, EAST);
+    put(vd, 690, 105, 2, 0);
+    drive(6, {}, EAST);
+    ok(a.grid === deck && Math.abs(a.vx) < 4.01, 'drifting back over its array you are on it again (the void is not another place to be)');
+  }
+  // ---- only a player leaves
+  {
+    const { sim, deck } = voidRound();
+    const npc = sim.newMob({ kind: 'carp', set: 'carp', name: 'carp', grid: deck, x: 13, z: 5, hp: 20 });
+    for (let k = 0; k < 100; k++) { stepMovement(npc, { f: 1, yaw: EAST }, deck.world, 0.05, sim.moveCtx(npc)); sim.settleMob(npc); }
+    ok(npc.grid === deck && npc.x <= 18, 'the edge of a grid is a wall to anything that is not a player');
+    sim.undock(deck);
+    npc.x = 16.5; npc.z = 5; npc.vx = 3; npc.vz = 0;
+    for (let k = 0; k < 20; k++) { stepMovement(npc, { yaw: EAST }, deck.world, 0.05, sim.moveCtx(npc)); sim.settleMob(npc); }
+    ok(npc.grid === deck, 'and one over the open space of a flying grid stays on it');
+  }
+  // ---- a grid let go leaves whoever is out on its open space behind
+  {
+    const { sim, a, deck, vd, put } = voidRound();
+    put(deck, 17, 5, 0, 0);
+    sim.step(0.05);
+    ok(a.grid === deck, 'standing out on the space of a held grid you are on it');
+    sim.undock(deck);
+    ok(a.grid === vd && Math.abs(a.x - (700 + 17)) < 1e-6, 'but when it is let go you are in the void where you stood');
+  }
+  // ---- a spinning grid throws you off at the speed of the place you left from
+  {
+    const { sim, a, step, drive, deck, vd, put } = voidRound();
+    sim.undock(deck);
+    sim.physics.setVel(deck, [0, 0, 0], [0, 0.4, 0]);
+    step(0.2);
+    put(deck, 9, 5);
+    const speeds = [];
+    for (let k = 0; k < 120 && a.grid === deck; k++) {
+      const w0 = sim.worldPos(a);
+      drive(0.05, { f: 1 }, EAST + 0.4 * sim.time);                           // always out along the deck's own east, as it turns
+      const w = sim.worldPos(a);
+      speeds.push(Math.hypot(w[0] - w0[0], w[2] - w0[2]) / 0.05);
+    }
+    const speedBefore = speeds[speeds.length - 2];
+    ok(a.grid === vd, 'a spinning deck lets you off the side of it');
+    ok(Math.hypot(a.vx, a.vz) > 3.5 && Math.abs(Math.hypot(a.vx, a.vz) - speedBefore) < 0.6, `with the speed of the place you left from (${Math.hypot(a.vx, a.vz).toFixed(2)} m/s; ${speedBefore.toFixed(2)} in the map a moment before)`);
+  }
+  // ---- arriving on a grid
+  {
+    const { sim, a, drive, deck, vd, put, inbox, hits } = voidRound();
+    sim.undock(deck);
+    put(vd, 695, 105, 2, 0);
+    let slow = null;
+    for (let k = 0; k < 200 && a.grid === vd; k++) { drive(0.05, {}, EAST); if (a.grid === deck) slow = Math.hypot(a.vx, a.vz); }
+    ok(a.grid === deck && Math.abs(slow - 2) < 0.2 && hits.length === 0, `drifting onto a floor at 2 m/s you are on the grid, still at 2 m/s, unhurt (${slow?.toFixed(2)})`);
+    put(vd, 690, 105, 12, 0);
+    inbox.length = 0;
+    let seen = null;
+    for (let k = 0; k < 40 && a.grid === vd; k++) { drive(0.05, {}, EAST); if (a.grid === deck) seen = Math.hypot(a.vx, a.vz); }
+    ok(a.grid === deck && seen !== null && seen <= 6.01, `at 12 m/s you are stopped to ${ENTER_MAX} m/s relative to it as you arrive (${seen?.toFixed(2)})`);
+    ok(hits.length === 1 && hits[0] > 5, `and it hurts (${hits[0]?.toFixed(1)})`);
+    const msgs = inbox.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((e) => e.e === 'msg').map((e) => e.text);
+    ok(msgs.some((t) => /You crash into the .* with a sickening noise!/.test(t)), 'in the words of SS13');
+  }
+  {
+    // the speed that counts is relative to the grid: a deck flying at 9 m/s is caught up with by someone drifting at 12
+    const { sim, a, drive, deck, vd, put, hits } = voidRound();
+    sim.undock(deck);
+    sim.physics.setVel(deck, [9, 0, 0], [0, 0, 0]);
+    sim.physics.place(deck, { p: [660, 0, 100], q: [0, 0, 0, 1] });
+    sim.physics.setVel(deck, [9, 0, 0], [0, 0, 0]);
+    put(vd, 650, 105, 12, 0);
+    let rel = null;
+    for (let k = 0; k < 400 && a.grid === vd; k++) { drive(0.05, {}, EAST); if (a.grid === deck) rel = Math.hypot(a.vx, a.vz); }
+    ok(a.grid === deck && rel < 3.2 && hits.length === 0, `at 12 m/s but only 3 relative to a deck going 9 you arrive gently (${rel?.toFixed(2)} m/s)`);
+  }
+  // ---- the hulls are solid, and something to hold on to
+  {
+    const { sim, a, drive, vd, put } = voidRound();
+    put(vd, 690, 205, 3, 0);
+    drive(6, {}, EAST);
+    ok(a.grid === vd && a.x < 700 - 0.32 && a.x > 697 && Math.abs(a.vx) < 0.05, `a hull stops someone floating up to it (at x = ${a.x.toFixed(2)})`);
+    ok(vd.world.hasGrip(a.x, a.z) && !vd.world.hasGrip(690, 205), 'and something to hold on to');
+    drive(0.6, { b: 1 }, EAST);
+    ok(a.vx < -1, 'so you can push yourself off it');
+    // holding on to a hull that is going somewhere takes you with it, and you steer relative to it
+    {
+      const r2 = voidRound();
+      r2.sim.undock(r2.room);
+      r2.sim.physics.setVel(r2.room, [0, 0, -5], [0, 0, 0]);
+      r2.put(r2.vd, 698.9, 208, 0, 0);
+      r2.drive(1.5, {}, EAST);
+      ok(r2.a.grid === r2.vd && Math.abs(r2.a.vz + 5) < 0.3 && Math.abs(r2.a.vx) < 0.3 && r2.a.x < 700, `holding on to a hull that is flying you go along with it (${r2.a.vx.toFixed(2)}, ${r2.a.vz.toFixed(2)} m/s)`);
+      const along = r2.a.z - 208;
+      r2.drive(0.8, { f: 1 }, EAST + Math.PI / 2);                         // and walk along it, north, faster than it goes
+      ok(r2.a.vz < -7 && r2.a.x < 700, `and walk along it relative to it (${r2.a.vz.toFixed(2)} m/s; it moves at 5, you at 3.4 more)`);
+      void along;
+    }
+    // a grid moving into someone does not leave them inside a wall
+    put(vd, 701, 201, 0, 0);
+    drive(0.1, {}, EAST);
+    ok(a.grid === vd && !vd.world.collides(a.x, a.z, 0.32), `inside a wall of a grid that has moved onto you, you are put in the nearest clear space (${a.x.toFixed(2)}, ${a.z.toFixed(2)})`);
+    ok(near(vd.world.raycast(690, 205, 1, 0, 100, 'sight'), 10, 0.01) && vd.world.raycast(690, 150, 1, 0, 100, 'sight') === 100, 'a line of sight in the void ends at a hull, or at nothing');
+    ok(vd.world.collides(VOID_LIMIT + 1, 0, 0.3) && !vd.world.collides(0, 0, 0.3), 'there is an edge to the map');
+  }
+  // ---- the client agrees
+  {
+    const { sim, A, inbox, step, deck, vd } = voidRound();
+    const welcome = inbox.find((m) => m.t === 'welcome');
+    const rep = new Replica({ level: sim.level, rects: sim.rects }, { ...welcome, you: A.id });
+    ok(rep.map.void && rep.map.void.kind === 'void' && rep.map.void.world.isVoid && rep.map.void.world.neighbors.length === 3, 'the client has the void too, with every grid of the map beside it');
+    sim.undock(deck);
+    sim.physics.setVel(deck, [4, 0, 0], [0, 0.3, 0]);
+    step(0.7);
+    rep.apply({ e: 'grid~', g: deck.id, docked: false, tf: deck.tf });
+    const rd = rep.grids.get(deck.id);
+    rd.tf = { p: [...deck.tf.p], q: [...deck.tf.q] }; rd.vel = [...deck.vel]; rd.ang = [...deck.ang];
+    rep.map.linkVoid();
+    const s1 = { x: 16.1, z: 5, vx: 3.4, vz: 0.3, yaw: 0.7 }, s2 = { ...s1 };
+    const r1 = settle(deck, s1, true), r2 = settle(rd, s2, true);
+    ok(r1 && r2 && r1.grid.id === vd.id && r2.grid.id === vd.id && ['x', 'z', 'vx', 'vz', 'yaw'].every((k) => near(s1[k], s2[k], 1e-9)), 'the client takes you off a grid just as the server does');
+    // and arrives alike
+    let same = 0, total = 0;
+    for (let k = 0; k < 300; k++) {
+      const x = 680 + (k * 37 % 61), z = 80 + (k * 53 % 150);
+      total++;
+      if (vd.world.collides(x, z, 0.32) === rep.map.void.world.collides(x, z, 0.32)) same++;
+    }
+    ok(same === total, `and finds the same hulls in the way (${same} of ${total} places)`);
+  }
+  // ---- what the server tells
+  {
+    const { sim, a, A, inbox, step, vd, put } = voidRound();
+    put(vd, 690, 105, 2, 0);
+    inbox.length = 0;
+    step(0.5);
+    const snap = inbox.filter((m) => m.t === 'snap').pop();
+    ok(snap && snap.you.g === vd.id && snap.env.p === 0 && snap.mobs.some((r) => r[0] === a.id && r[1] === vd.id), 'a snapshot says you are in the void, with no air about you');
+    const item = sim.newItem('/obj/item');
+    place(sim, item, vd, a.x + 1, a.z);
+    ok(sim.floor.get(item.id).grid === vd && sim.dist(a, sim.floor.get(item.id)) < 1.5, 'things can be left floating in it');
+    const ibox = [];
+    sim.addClient('Bob', (m) => ibox.push(m));
+    step(0.5);
+    const gsnap = ibox.filter((m) => m.t === 'snap').pop();
+    ok(gsnap && gsnap.you.ghost && gsnap.you.g === vd.id, 'someone who is only watching floats in the void too, in the coordinates of the map');
+    void A;
+  }
 });
 
 section('no single-grid assumptions are left in the source', () => {

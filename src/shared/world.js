@@ -87,10 +87,10 @@ export class World {
   }
 
   /** Something to push off from (Process_Spacemove's "backup"): lattice within a tile, or a wall / locker / window frame within arm's reach. */
-  hasGrip(x, z, ignore = null) {
+  hasGrip(x, z, ignore = null, free = false) {
     const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
     for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (this.kindAt(c + dc, r + dr) === KIND.LATTICE) return true;
-    return this.collides(x, z, PLAYER_R + GRIP_REACH, ignore);
+    return this.collides(x, z, PLAYER_R + GRIP_REACH, ignore, free);          // (the edge of the array is a wall to hold, unless you may go past it)
   }
 
   /**
@@ -397,9 +397,10 @@ export class World {
   /**
    * Axis-aligned box (half-size `h`) vs tiles + thin edges + free-standing boxes (not `ignore`, which is the one being moved), and the same
    * in each grid that lies over this one's open space and might be in the way (a docked shuttle's hull is solid from the station's side too).
+   * The edge of the array is a wall, unless `free`: the body may go past it (it leaves the grid, see frames.js `settle`).
    */
-  collides(x, z, h, ignore = null) {
-    if (this.collidesTiles(x, z, h, ignore, true)) return true;
+  collides(x, z, h, ignore = null, free = false) {
+    if (this.collidesTiles(x, z, h, ignore, !free)) return true;
     for (const nb of this.neighbors) {
       const [x0, z0, x1, z1] = nb.rect;
       if (x + h <= x0 || x - h >= x1 || z + h <= z0 || z - h >= z1) continue;      // nowhere near that grid
@@ -435,13 +436,13 @@ export class World {
   }
 
   /** Slide an entity with half-size h by (dx, dz); returns true if blocked on either axis. */
-  move(pos, dx, dz, h, ignore = null) {
+  move(pos, dx, dz, h, ignore = null, free = false) {
     let blocked = false;
     if (dx !== 0) {
-      if (!this.collides(pos.x + dx, pos.z, h, ignore)) pos.x += dx; else blocked = true;
+      if (!this.collides(pos.x + dx, pos.z, h, ignore, free)) pos.x += dx; else blocked = true;
     }
     if (dz !== 0) {
-      if (!this.collides(pos.x, pos.z + dz, h, ignore)) pos.z += dz; else blocked = true;
+      if (!this.collides(pos.x, pos.z + dz, h, ignore, free)) pos.z += dz; else blocked = true;
     }
     return blocked;
   }

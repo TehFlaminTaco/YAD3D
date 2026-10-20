@@ -7,11 +7,15 @@ function b64(s) {
   return out;
 }
 
+/** The blueprint name of a map's void: not in the level data, it has no tiles (a single empty one, so the arrays that every grid has are there). */
+export const VOID_BP = 'void';
+
 /**
  * One grid's own map, ready to build a `World` and its props from: the blueprint `bp` of `level.grids`. Every call makes fresh arrays, so two
  * grids built from one blueprint (four escape pods) do not share tiles. `level` itself is what all grids share (art, areas, item definitions).
  */
 export function decodeGrid(level, bp) {
+  if (bp === VOID_BP) return { bp, level, w: 1, h: 1, levels: 1, kind: new Uint8Array(1), roof: new Uint8Array(1), area: new Uint16Array(1), floor: new Uint16Array(1), wall: new Uint16Array(1).fill(0xffff), ft: new Uint8Array(1), lat: new Uint8Array(1), props: [], spawns: [], void: true };
   const g = level.grids?.[bp];
   if (!g) throw new Error(`no grid blueprint "${bp}" in the level data`);
   const { w, h } = g;

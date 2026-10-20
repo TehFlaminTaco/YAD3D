@@ -12,6 +12,11 @@ export const DRIFT_MAX = 4;           // m/s: the fastest you can coast
 export const THROW_KICK = 2.2;        // m/s you are pushed the other way by throwing something with nothing to brace on
 export const WIND_PUSH = 3;           // how hard escaping air shoves you while you float (m/s gained per m/s of wind, per second)
 
+// ---- leaving a grid and arriving on one (a body that is not on any grid floats in its map's void, in the map's own coordinates)
+export const LEAVE_CAP = 24;          // m/s: the fastest you are carried off a moving grid (a fast spin would fling you off at hundreds)
+export const ENTER_MAX = 6;           // m/s: the most you can meet a grid at, relative to it, without it stopping you dead (and hurting)
+export const VOID_LIMIT = 1500;       // m: how far from its origin a map goes; past it there is nothing to float to
+
 // BYOND direction bitflags
 export const N = 1, S = 2, E = 4, W = 8;
 export const OPP = { 1: 2, 2: 1, 4: 8, 8: 4 };

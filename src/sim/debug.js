@@ -356,7 +356,7 @@ export class Debug {
     const sim = this.sim, what = String(msg.what);
     if (what === 'list') {
       const map = sim.mapOf(c.at);
-      const grids = [...sim.grids.values()].filter((g) => g.map === map).map((g) => ({ id: g.id, bp: g.bp, kind: g.kind, name: g.name, docked: g.docked, flying: sim.shuttles.flying(g), sp: +Math.hypot(g.vel[0], g.vel[2]).toFixed(1), spin: +g.ang[1].toFixed(2), x: Math.round(g.tf.p[0]), z: Math.round(g.tf.p[2]) }));
+      const grids = map.solids.map((g) => ({ id: g.id, bp: g.bp, kind: g.kind, name: g.name, docked: g.docked, flying: sim.shuttles.flying(g), sp: +Math.hypot(g.vel[0], g.vel[2]).toFixed(1), spin: +g.ang[1].toFixed(2), x: Math.round(g.tf.p[0]), z: Math.round(g.tf.p[2]) }));
       sim.emit({ e: 'dbg', k: 'grids', grids }, { to: c });
       return;
     }

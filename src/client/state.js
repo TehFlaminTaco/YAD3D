@@ -207,9 +207,11 @@ export class Replica {
 
   /** Put every flying grid where it was at render time `rt` (between the two snapshots either side of it). */
   updatePoses(rt) {
+    let moved = false;
     for (const g of this.grids.values()) {
       const b = g.buf;
       if (g.docked || !b.length) continue;
+      moved = true;
       let a = b[0], c = b[0], k = 0;
       if (rt >= b[b.length - 1].t) a = c = b[b.length - 1];
       else if (rt > b[0].t) {
@@ -218,6 +220,7 @@ export class Replica {
       g.tf = { p: [a.p[0] + (c.p[0] - a.p[0]) * k, a.p[1] + (c.p[1] - a.p[1]) * k, a.p[2] + (c.p[2] - a.p[2]) * k], q: k ? qslerp(a.q, c.q, k) : [...a.q] };
       g.vel = c.v; g.ang = c.w;
     }
+    if (moved) this.map.linkVoid();                            // what a body floating free can bump into is where the grids are now
   }
 
   /** My entry in the round's player list (lobby / playing / ghost). */

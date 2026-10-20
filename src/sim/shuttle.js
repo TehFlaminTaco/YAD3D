@@ -34,7 +34,7 @@ export class Shuttles {
    * or null. (Lattice and open space are not in the way. Not every shuttle can leave every way: some sit in a notch of the station.)
    */
   clearDirection(g, dist = 60) {
-    const w = g.world, tiles = [], others = [...g.map.grids.values()].filter((o) => o !== g);
+    const w = g.world, tiles = [], others = g.map.solids.filter((o) => o !== g);
     for (let r = 0; r < w.H; r++) for (let c = 0; c < w.W; c++) if (w.kind[w.idx(c, r)] !== KIND.SPACE) tiles.push(g.worldPoint(c * TILE + 1, 0, r * TILE + 1));
     for (const d of [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
       let clear = true;

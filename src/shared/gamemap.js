@@ -12,18 +12,49 @@ export class GameMap {
   constructor(id, name) {
     this.id = id;
     this.name = name;
-    this.grids = new Map();               // grid id -> Grid
+    this.grids = new Map();               // grid id -> Grid (the void is one of them, kind 'void')
+    this.void = null;                     // the grid that stands for the empty space between the rest: a body that is on no grid is "on" this one (see VoidWorld)
   }
 
   add(grid) {
     if (grid.map && grid.map !== this) grid.map.remove(grid);
     grid.map = this;
     this.grids.set(grid.id, grid);
+    if (grid.kind === 'void') this.void = grid;
     return grid;
   }
 
   remove(grid) {
     if (this.grids.delete(grid.id) && grid.map === this) grid.map = null;
+  }
+
+  /** The grids that are really somewhere (not the void). */
+  get solids() { return [...this.grids.values()].filter((g) => g.kind !== 'void'); }
+
+  /**
+   * The void's neighbours: every other grid of the map, wherever it is, with how to get from the map's coordinates to its frame (the same record as a docked
+   * grid's `world.neighbors`). Moving grids change this every step, so both sides call it whenever a pose changes (`relink` does it too).
+   */
+  linkVoid() {
+    const v = this.void;
+    if (!v) return;
+    const out = [];
+    for (const b of this.grids.values()) {
+      if (b === v) continue;
+      const bw = b.world;
+      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+      for (const [cx, cz] of [[0, 0], [bw.W * TILE, 0], [bw.W * TILE, bw.H * TILE], [0, bw.H * TILE]]) {
+        const p = b.worldPoint(cx, 0, cz);
+        x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[2]); z1 = Math.max(z1, p[2]);
+      }
+      const o = b.localPoint([0, 0, 0]), ex = b.localPoint([1, 0, 0]), ez = b.localPoint([0, 0, 1]);
+      out.push({
+        grid: b, world: bw, rect: [x0 - 0.5, z0 - 0.5, x1 + 0.5, z1 + 0.5],
+        a: ex[0] - o[0], b: ez[0] - o[0], c: ex[2] - o[2], d: ez[2] - o[2], tx: o[0], tz: o[2],
+        dyaw: qToYaw(v.tf.q) - qToYaw(b.tf.q),
+      });
+    }
+    v.world.neighbors = out;
   }
 
   /**
@@ -34,7 +65,7 @@ export class GameMap {
    * (Grids are turned about the vertical axis only for now, so a position on the deck maps with a 2 by 2 matrix and an offset.)
    */
   relink() {
-    const all = [...this.grids.values()];
+    const all = this.solids;
     for (const g of all) g.world.neighbors = [];
     const gs = all.filter((g) => g.docked);                    // only grids that are held in place lie against each other: a flying one has no neighbours
     const changed = [];
@@ -82,6 +113,7 @@ export class GameMap {
       if (g.docked) continue;                                  // one that is not docked has nothing covering it
       if (g.world.covered.some((v) => v)) { g.world.covered = new Uint8Array(g.world.n); changed.push(g); }
     }
+    this.linkVoid();
     return changed;
   }
 

@@ -1,5 +1,5 @@
 import { TILE, KIND, SIM_DT, SNAP_EVERY, INTEREST } from '../shared/config.js';
-import { decodeGrid } from '../shared/leveldata.js';
+import { decodeGrid, VOID_BP } from '../shared/leveldata.js';
 import { GameMap } from '../shared/gamemap.js';
 import { tfPoint, tfClone } from '../shared/math3.js';
 import { settle, frameYaw } from '../shared/frames.js';
@@ -111,19 +111,30 @@ export class Sim {
 
     const mapId = data.level.map;
     const def = data.level.maps[mapId];
-    const map = this.addMap(mapId, def.name);
+    const map = this.addMap(mapId, def.name, { void: false });
     this.defaultMap = map;
     for (const pl of def.grids) this.addGrid(pl.bp, { map, kind: pl.kind, name: pl.name, tf: { p: pl.p, q: pl.q }, quiet: true });
+    this.ensureVoid(map);                // after the real grids, which keep the first ids
     this.relink(map);
     this.physics.warm();
     this.docks = def.docks || {};        // where a shuttle that arrives later (the emergency shuttle) is held: { name: { bp, kind, name, p, q } }
   }
 
   // ------------------------------------------------------------------ maps and grids
-  addMap(id, name) {
+  /** A new map (a separate space of grids). It has its void from the start (see `ensureVoid`), unless the caller is about to fill it with grids first (`o.void === false`). */
+  addMap(id, name, o = {}) {
     const map = new GameMap(id, name);
     this.maps.set(id, map);
+    if (o.void !== false) this.ensureVoid(map);
     return map;
+  }
+
+  /**
+   * The grid that stands for a map's empty space (kind 'void', no tiles, the map's own coordinates): what a body that is on no grid (it has floated off one)
+   * is "on". Never drawn as terrain, never a physics body, never moves.
+   */
+  ensureVoid(map) {
+    return map.void || this.addGrid(VOID_BP, { map, kind: 'void', name: 'Space', quiet: true });
   }
 
   /** Bring a grid into being in `o.map` at pose `o.tf`: its tiles, its air and power, its map's girders, the items that lie about on it, its closets. */
@@ -132,7 +143,7 @@ export class Sim {
     const g = new GridSim(this, decodeGrid(this.level, bp), { id: this.gridSeq++, kind: o.kind, name: o.name, tf: o.tf, docked: o.docked });
     this.grids.set(g.id, g);
     map.add(g);
-    this.physics.add(g);
+    if (g.kind !== 'void') this.physics.add(g);
     if (!this.station && g.kind === 'station') this.station = g;
     for (const gd of g.props.girders) g.built.add({ id: this.builtSeq++, k: 'girder', c: gd.c, r: gd.r, st: GIRDER.NORMAL, grid: g });
     for (const it of g.props.items) {
@@ -174,6 +185,7 @@ export class Sim {
     this.physics.setDocked(g, false);
     this.relink(g.map);
     g.emit({ e: 'grid~', docked: false, tf: tfClone(g.tf) });
+    for (const m of this.mobs.values()) if (m.grid === g) this.settleMob(m);          // anyone standing out on its open space is in the void now (it is not part of a held grid's frame any more)
   }
 
   /** A grid is held at `pose` (exactly there, standing still): it lies against its neighbours again. */
@@ -199,14 +211,27 @@ export class Sim {
   /** How much to turn a facing given in grid `from`'s frame to have it in grid `to`'s. */
   frameYaw(from, to) { return frameYaw(from, to); }
 
-  /** After a body has moved: if it has walked onto another grid (through a docking door, say), it belongs to that grid now. */
+  /**
+   * After a body has moved: if it has walked onto another grid (through a docking door, say), it belongs to that grid now; if a player has gone off the
+   * edge of one it floats in the map's void (with the grid's speed), and one that meets a grid too fast is stopped by it, hard.
+   */
   settleMob(m) {
     if (!m.grid) return false;
-    const r = settle(m.grid, m);
+    const r = settle(m.grid, m, !!m.client);
     if (!r) return false;
     m.grid = r.grid;
     m.dirty = true;
+    if (r.impact > 0) this.hullImpact(m, r.grid, r.impact);
     return true;
+  }
+
+  /** Someone has arrived on grid `g` `over` m/s faster (relative to it) than a body can take: it stops them, like landing from a height. */
+  hullImpact(m, g, over) {
+    this.sound('punch', m, Math.min(1, 0.4 + over * 0.05));
+    this.tell(m, 'danger', `You crash into the ${g.name} with a sickening noise!`);
+    this.chat.visible(m, `${m.name} crashes into the ${g.name} with a sickening noise!`, 'danger', 12, m);
+    this.hurt(m, over * 1.5, 'brute', 'impact');
+    m.stunned = Math.max(m.stunned, Math.min(3, over * 0.25));
   }
 
   // The station's parts, for code that has not yet been told which grid it is about (the tests, and what is still being moved over).
@@ -426,7 +451,7 @@ export class Sim {
 
   /** What `stepMovement` needs to know about a body (the client predicts with the same things, see Game.predictCtx). */
   moveCtx(m) {
-    return { slow: this.moveFactor(m) * (m.body.crit ? 0.35 : 1), wind: m.grid.atmos.windAt(m.x, m.z), ignore: m.hauling?.it, noclip: m.noclip, jet: !!m.jetOn, mag: !!m.magOn };
+    return { slow: this.moveFactor(m) * (m.body.crit ? 0.35 : 1), wind: m.grid.atmos.windAt(m.x, m.z), ignore: m.hauling?.it, noclip: m.noclip, jet: !!m.jetOn, mag: !!m.magOn, free: !!m.client };
   }
 
   /** Thrusting uses the jetpack's gas; when it is gone the engines cut out. */
@@ -752,14 +777,14 @@ export class Sim {
       if (m) {
         const [tc, tr] = m.tile, g = m.grid;
         snap.you = { g: g.id, x: +m.x.toFixed(3), z: +m.z.toFixed(3), vx: +m.vx.toFixed(2), vz: +m.vz.toFixed(2), id: m.id };
-        snap.env = { p: +g.atmos.pressureAt(tc, tr).toFixed(1), o2: +g.atmos.o2At(tc, tr).toFixed(1), tox: +g.atmos.toxAt(tc, tr).toFixed(2), area: g.world.areaIdx[g.world.idx(tc, tr)] };
+        snap.env = { p: +g.atmos.pressureAt(tc, tr).toFixed(1), o2: +g.atmos.o2At(tc, tr).toFixed(1), tox: +g.atmos.toxAt(tc, tr).toFixed(2), area: g.world.inb(tc, tr) ? g.world.areaIdx[g.world.idx(tc, tr)] : 0 };
         const wind = g.atmos.windAt(m.x, m.z);
         if (wind) snap.you.wind = [+wind[0].toFixed(2), +wind[1].toFixed(2)];
         const self = this.selfState(c);
         const json = JSON.stringify(self);
         if (json !== c.selfJson) { c.selfJson = json; c.outbox.push({ e: 'self', ...self }); }
       } else {
-        snap.you = { x: +c.ghost.x.toFixed(2), z: +c.ghost.z.toFixed(2), vx: 0, vz: 0, ghost: true };
+        snap.you = { g: map.void.id, x: +c.ghost.x.toFixed(2), z: +c.ghost.z.toFixed(2), vx: 0, vz: 0, ghost: true };      // a ghost floats in the void, in the map's own coordinates
       }
       c.send(snap);
     }

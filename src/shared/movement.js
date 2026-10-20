@@ -10,7 +10,7 @@ export const RUN_SPEED = 5.6;
 export function floatState(world, st, ctx = {}) {
   const floating = !ctx.noclip && !world.hasGravity(st.x, st.z)
     && !(ctx.mag && world.kindAt(Math.floor(st.x / TILE), Math.floor(st.z / TILE)) === KIND.FLOOR);
-  const held = !floating || !!ctx.jet || world.hasGrip(st.x, st.z, ctx.ignore);
+  const held = !floating || !!ctx.jet || world.hasGrip(st.x, st.z, ctx.ignore, ctx.free);
   return { floating, held, adrift: floating && !held };
 }
 
@@ -18,7 +18,8 @@ export function floatState(world, st, ctx = {}) {
  * One movement step, shared by the server (authoritative) and the client (prediction).
  * st: {x, z, vx, vz}   inp: {f, b, l, r, run, yaw}
  * ctx: {slow, wind:[x,z]|null, noclip, ignore: a box to walk through (the thing you are dragging),
- *       jet: a jetpack is on, mag: magboots are on, limp: out cold, dead or held (no steering; in zero gravity you keep drifting)}
+ *       jet: a jetpack is on, mag: magboots are on, limp: out cold, dead or held (no steering; in zero gravity you keep drifting),
+ *       free: the edge of the grid is no wall (a player may float off it, see frames.js settle)}
  *
  * Gravity follows SS13's Process_Spacemove: with gravity you walk. Without it you can only steer while you have something to hold
  * (a wall, a locker, a window frame, lattice) or a jetpack; otherwise you coast at the speed you had until you bump into
@@ -40,20 +41,22 @@ export function stepMovement(st, inp, world, dt, ctx = {}) {
 
   if (!adrift) {
     const k = Math.min(1, 14 * dt);
-    st.vx += (wx * speed - st.vx) * k;
-    st.vz += (wz * speed - st.vz) * k;
+    // floating in the void and holding on to a grid that is itself moving: you steer relative to it (stand still and you go along with it)
+    const hv = floating && world.isVoid ? world.holdVelocity(st.x, st.z, ctx.ignore) : null;
+    st.vx += (wx * speed + (hv ? hv[0] : 0) - st.vx) * k;
+    st.vz += (wz * speed + (hv ? hv[1] : 0) - st.vz) * k;
   } else if (ctx.wind) {
     st.vx += ctx.wind[0] * WIND_PUSH * dt; st.vz += ctx.wind[1] * WIND_PUSH * dt;     // blown out of the airlock: you keep going
   }
   let mx = st.vx * dt, mz = st.vz * dt;
   if (ctx.wind && !adrift) { mx += ctx.wind[0] * dt; mz += ctx.wind[1] * dt; }
-  if (adrift) {
+  if (adrift && ctx.wind) {                                           // escaping air can only blow you so fast; with none, nothing slows you: you keep the speed you left a grid at (frames.js)
     const v = Math.hypot(st.vx, st.vz);
     if (v > DRIFT_MAX) { st.vx *= DRIFT_MAX / v; st.vz *= DRIFT_MAX / v; mx = st.vx * dt; mz = st.vz * dt; }
   }
   if (ctx.noclip) { st.x += mx; st.z += mz; } else {
     const ox = st.x, oz = st.z;
-    world.move(st, mx, mz, PLAYER_R, ctx.ignore);
+    world.move(st, mx, mz, PLAYER_R, ctx.ignore, ctx.free);
     if (floating) {                                                 // a bump stops you dead along that axis
       if (mx && st.x === ox) st.vx = 0;
       if (mz && st.z === oz) st.vz = 0;

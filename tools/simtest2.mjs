@@ -5,6 +5,7 @@ import { loadSimData } from '../src/sim/load.js';
 import { initPhysics } from '../src/shared/physics.js';
 import { Sim } from '../src/sim/sim.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
+import { stepMovement } from '../src/shared/movement.js';
 import { CL } from '../src/shared/closets.js';
 import { recalc, place, attach, detach } from '../src/sim/inventory.js';
 import { menuFor } from '../src/shared/stacks.js';
@@ -1036,10 +1037,13 @@ section('zero gravity', () => {
   // with a hold, you steer again, and can push off from it
   drive(A, 400, 10, { b: 1, yaw: 0 }); step(0.6);
   ok(a.z > rz - 8 && a.vz > 0.5, 'holding the wall you can push yourself away from it');
-  // the speed limit
+  // the speed limit: escaping air can only blow you so fast, and nothing else slows you down
   a.x = sx; a.z = sz; a.vx = 9; a.vz = 0;
   drive(A, 500, 4, { yaw: 0 }); step(0.2);
-  ok(Math.hypot(a.vx, a.vz) <= 4.01, 'you cannot coast faster than the drift limit');
+  ok(Math.abs(a.vx - 9) < 0.01, 'a speed you had is kept in open space');
+  const blown = { x: sx, z: sz, vx: 0, vz: 0 };
+  for (let k = 0; k < 100; k++) stepMovement(blown, { yaw: 0 }, w, 0.05, { wind: [30, 0] });
+  ok(Math.hypot(blown.vx, blown.vz) <= 4.01 && blown.vx > 3, 'but the wind cannot blow you faster than the drift limit');
 
   // out in open space nothing ever stops you but the edge of the map
   a.x = sx; a.z = sz; a.vx = 0; a.vz = 3;

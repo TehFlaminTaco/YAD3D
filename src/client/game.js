@@ -335,14 +335,14 @@ export class Game {
     return null;
   }
 
-  /** The grid your body is on (the station while you are in the lobby or a ghost): whose tiles you collide with and whose air you breathe. */
+  /** The grid your body is on (the map's void while you are in the lobby, a ghost, or floating free): whose tiles you collide with and whose air you breathe. */
   myGrid() { return this.rep.grids.get(this.pred.g) || this.rep.station; }
 
   // ---------------------------------------------------------------- prediction
   predictCtx() {
     const s = this.self;
     if (this.phase === 'ghost') return { noclip: true };
-    return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind, noclip: !!s?.dbg?.noclip, ignore: s?.haul >= 0 ? this.myGrid().props.interact[s.haul] : null, jet: !!s?.jet, mag: !!s?.mag };   // you pass through what you drag
+    return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind, noclip: !!s?.dbg?.noclip, ignore: s?.haul >= 0 ? this.myGrid().props.interact[s.haul] : null, jet: !!s?.jet, mag: !!s?.mag, free: true };   // you pass through what you drag; you may float off the edge of a grid
   }
 
   frozen() {
@@ -360,8 +360,8 @@ export class Game {
       if (grid.world.hasGravity(this.pred.x, this.pred.z) || this.self.inside) this.pred.vx = this.pred.vz = 0;
       else stepMovement(this.pred, { yaw: inp.yaw }, grid.world, dt, { ...this.predictCtx(), limp: true });
     } else stepMovement(this.pred, inp, grid.world, dt, this.predictCtx());
-    if (this.phase === 'playing') {                              // walked onto another grid (through a docking door)? then it is yours now
-      const r = settle(grid, this.pred);
+    if (this.phase === 'playing') {                              // walked onto another grid (through a docking door), or off the side of one into the void? then that is yours now
+      const r = settle(grid, this.pred, true);
       if (r) this.pred.g = r.grid.id;
     }
   }

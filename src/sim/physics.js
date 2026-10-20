@@ -1,6 +1,6 @@
 import { TILE } from '../shared/config.js';
 import { PhysicsWorld, physicsReady } from '../shared/physics.js';
-import { tfClone } from '../shared/math3.js';
+import { tfClone, qrot, vsub, vcross } from '../shared/math3.js';
 
 const DENSITY = 50;                 // kg per cubic metre of hull: a tile (4 m^3) is 200 kg, so a hundred-tile shuttle is 20 tonnes
 const HEIGHT = 1;                   // how tall a grid's solid is for the physics (grids are flat for now; stage 4 makes this the deck's height)
@@ -111,14 +111,18 @@ export class GridPhysics {
     for (const [id, at] of this.dirty) if (sim.time >= at) { const g = sim.grids.get(id); if (g) this.setShape(g); else this.dirty.delete(id); }
     for (const [mid, w] of this.worlds) {
       const hits = w.step(dt);
+      let any = false;
       for (const g of sim.grids.values()) {
         if (g.docked || g.map.id !== mid) continue;
         const p = w.pose(g.id);
         if (!p) continue;
-        const moved = p.p.some((v, i) => Math.abs(v - g.tf.p[i]) > 1e-5) || p.q.some((v, i) => Math.abs(v - g.tf.q[i]) > 1e-6) || p.v.some((v, i) => Math.abs(v - g.vel[i]) > 1e-4) || p.w.some((v, i) => Math.abs(v - g.ang[i]) > 1e-5);
-        g.tf.p = p.p; g.tf.q = p.q; g.vel = p.v; g.ang = p.w;
-        if (moved || g.poseSeq === undefined) g.poseSeq = sim.tick;               // clients are only told a pose that has changed
+        // the grid's own velocity is that of its origin (the point `tf.p` that everything on it is placed from), not of its centre of mass: a body leaving it needs `v + w x r` from there
+        const v = vsub(p.v, vcross(p.w, qrot(p.q, w.centerOfMass(g.id))));
+        const moved = p.p.some((x, i) => Math.abs(x - g.tf.p[i]) > 1e-5) || p.q.some((x, i) => Math.abs(x - g.tf.q[i]) > 1e-6) || v.some((x, i) => Math.abs(x - g.vel[i]) > 1e-4) || p.w.some((x, i) => Math.abs(x - g.ang[i]) > 1e-5);
+        g.tf.p = p.p; g.tf.q = p.q; g.vel = v; g.ang = p.w;
+        if (moved || g.poseSeq === undefined) { g.poseSeq = sim.tick; any = true; }               // clients are only told a pose that has changed
       }
+      if (any) sim.maps.get(mid)?.linkVoid();
       for (const h of hits) sim.gridImpact(sim.grids.get(h.a), sim.grids.get(h.b), h.force);
     }
   }

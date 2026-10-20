@@ -1,4 +1,5 @@
 import { World } from './world.js';
+import { VoidWorld } from './voidworld.js';
 import { buildPropData } from './propdata.js';
 import { DoorCore } from './door.js';
 import { tfClone, tfIdentity, tfPoint, tfInvPoint, tfDir } from './math3.js';
@@ -28,7 +29,7 @@ export class Grid {
     this.vel = [0, 0, 0];                       // m/s, in the map's coordinates
     this.ang = [0, 0, 0];                       // rad/s
     this.buf = [];                              // (client) snapshots of its pose, to draw it between
-    this.world = new World(decoded);
+    this.world = decoded.void ? new VoidWorld(decoded) : new World(decoded);
     this.world.grid = this;
     this.props = buildPropData(this.world, rects, decoded.props, decoded.level);
     this.doors = this.props.doors.map((p, i) => this.makeDoor(p, i));
