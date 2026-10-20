@@ -1,5 +1,6 @@
 import { TILE, KIND, DV, OPP, N, S, E, W, PLAYER_R, GRIP_REACH } from './config.js';
 import { WS, WINDOWS } from './windows.js';
+import { WALLS, RW } from './walls.js';
 
 /**
  * Tile grid + collision + queries. Game space: x = col * TILE, z = row * TILE, y up; north is -z.
@@ -35,6 +36,7 @@ export class World {
 
     this.hp = new Map();                     // destructible tile -> hit points
     this.breached = new Set();               // windows smashed during play (open frames; see ventsToSpace)
+    this.holes = new Set();                  // walls taken down during play (open tiles; a hull breach too if they touch space)
     this.patchVariant = Math.max(0, this.variants.findIndex((v) => !v.glass && /reinforced/.test(v.name)));
     if (this.patchVariant < 0) this.patchVariant = 0;
 
@@ -94,6 +96,44 @@ export class World {
     this.breached.add(i);
   }
 
+  /** A plain or reinforced wall stands on tile (c, r): its `WALLS` key, else undefined (glass, shuttle walls, floor...). */
+  wallKey(i) {
+    if (this.kind[i] !== KIND.WALL || this.glass[i]) return undefined;
+    const v = this.wallVar[i];
+    const name = v === 0xffff ? undefined : this.variants[v]?.name;
+    return WALLS[name] ? name : undefined;
+  }
+
+  /** A wall is taken down to its plating (the floor the DM's ScrapeAway leaves): open floor, nothing blocks you or the air. */
+  dismantleWall(c, r, platingCell) {
+    const i = r * this.W + c;
+    this.kind[i] = KIND.FLOOR;
+    this.wallVar[i] = 0xffff;
+    this.floorCell[i] = platingCell;
+    this.glass[i] = 0;
+    this.solid[i] = 0;
+    this.airBlock[i] = 0;
+    this.ws[i] = 0;
+    this.hp.delete(i);
+    this.holes.add(i);
+  }
+
+  /** A girder is plated: the tile becomes a wall (`WALLS` key) with all its layers on. */
+  buildWall(c, r, key) {
+    const i = r * this.W + c;
+    const v = this.variants.findIndex((x) => !x.glass && x.name === key);
+    if (v < 0) return false;
+    this.kind[i] = KIND.WALL;
+    this.wallVar[i] = v;
+    this.glass[i] = 0;
+    this.solid[i] = 1;
+    this.airBlock[i] = 1;
+    this.ws[i] = RW.INTACT;
+    this.hp.set(i, WALLS[key]?.hp ?? 400);
+    this.holes.delete(i);
+    return true;
+  }
+
   /** The window variant (`WINDOWS` key) of glass tile `i`, whether it is still there or not. */
   windowKey(i) {
     const v = this.wallVar[i];
@@ -147,9 +187,9 @@ export class World {
     return false;
   }
 
-  /** Broken windows that let air out into space (the hull breaches). */
+  /** Broken windows and taken-down walls that let air out into space (the hull breaches). */
   ventTiles() {
-    return [...this.breached].filter((i) => this.ventsToSpace(i));
+    return [...this.breached, ...this.holes].filter((i) => this.ventsToSpace(i));
   }
 
   /** Weld a breach shut with a reinforced plate. */

@@ -4,6 +4,7 @@ import { ITEM_SCALE } from '../shared/propdata.js';
 import { lightMode } from '../shared/power.js';
 import { rng } from '../shared/util.js';
 import { closetSprite } from '../shared/closets.js';
+import { girderLook } from '../shared/walls.js';
 import { LevelMesh } from '../render/level.js';
 import { LightField } from '../render/lighting.js';
 import { SpriteBatch } from '../render/sprites.js';
@@ -81,6 +82,9 @@ export class WorldView {
     for (const d of rep.doors) this.addDoorView(d);
     this.fdoorViews = rep.fdoors.map((f) => this.addFdoorView(f));
     this.mirrors = this.addMirrors();
+    this.builtView = new Map();                  // built structure id -> its sprite slot
+    this.builtFree = [];
+    for (const b of rep.built) this.addBuilt(b);
 
     this.itemSlot = new Map();                   // item id -> sprite id
     this.itemFree = [];
@@ -279,6 +283,42 @@ export class WorldView {
   setFdoor(f) {
     const v = this.fdoorViews[f.idx];
     if (v) { this.dyn.setAlpha(v.id, f.closed ? 1 : 0); this.relightSprites(); }
+  }
+
+  // ------------------------------------------------------------------ things players build (girders)
+  builtRect(rec) { return this.rects[this.assets.level.structs?.[girderLook(rec.st).sprite]]; }
+
+  addBuilt(rec) {
+    const rc = rec && this.builtRect(rec);
+    if (!rc) return;
+    const x = rec.c * TILE + TILE / 2, z = rec.r * TILE + TILE / 2, w = rc.w * PX, h = rc.h * PX, ox = (rc.ox + rc.w / 2 - rc.fw / 2) * PX;
+    const free = this.builtFree.pop();
+    let id;
+    if (free !== undefined) {
+      id = free;
+      this.dyn.setPos(id, x, 0, z); this.dyn.setRect(id, rc, w, h, ox, 0); this.dyn.setAlpha(id, 1); this.dyn.setHighlight(id, 0);
+    } else id = this.dyn.add({ x, y: 0, z, mode: 0, w, h, ox, oy: 0, yaw: 0, rect: rc });
+    const lit = { batch: this.dyn, id, sx: x, sz: z };
+    this.lit.push(lit);
+    this.lightField.sample(x, z, this.tmpC);
+    this.dyn.setTint(id, Math.min(1.35, this.tmpC[0]), Math.min(1.35, this.tmpC[1]), Math.min(1.35, this.tmpC[2]));
+    this.builtView.set(rec.id, { id, lit });
+  }
+
+  /** A built thing changed state: another picture. */
+  updateBuilt(rec) {
+    const v = rec && this.builtView.get(rec.id), rc = rec && this.builtRect(rec);
+    if (v && rc) this.dyn.setRect(v.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, 0);
+  }
+
+  removeBuilt(id) {
+    const v = this.builtView.get(id);
+    if (!v) return;
+    this.dyn.setAlpha(v.id, 0);
+    this.builtFree.push(v.id);
+    const k = this.lit.indexOf(v.lit);
+    if (k >= 0) this.lit.splice(k, 1);
+    this.builtView.delete(id);
   }
 
   // ------------------------------------------------------------------ floor items

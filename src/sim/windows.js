@@ -1,6 +1,7 @@
 import { TILE } from '../shared/config.js';
 import { WS, WINDOWS, DECON_SPEED, GLASS_PER_WINDOW, WELD_REPAIR, HEAT_BOLTS, BOLTS_COOL, PLACE_WINDOW, SHEET_TO_WINDOW } from '../shared/windows.js';
 import { place, consume } from './inventory.js';
+import { toolJob } from './tooljob.js';
 
 const PANE_HP = 25;
 
@@ -59,12 +60,7 @@ export class Windows {
   }
 
   /** One timed step: `done` runs if the window is still as it was, you still hold the tool and stand close. */
-  job(m, th, held, expect, o) {
-    const sim = this.sim;
-    const near = () => Math.hypot(m.x - th.x, m.z - th.z) < th.reach;
-    if (o.others) sim.chat.visible(m, o.others, 'notice', 10, m);
-    sim.actions.startTimed(m, o.label, o.ds / 10, () => th.alive() && th.ws() === expect && m.held === held && near() && (!o.valid || o.valid()), o.done, o.sfx, { start: o.start });
-  }
+  job(m, th, held, expect, o) { toolJob(this.sim, m, { ...th, state: th.ws }, held, expect, o); }
 
   /**
    * A click on a window with `held` (maybe nothing) in hand. Returns true if the window dealt with it; false means it was

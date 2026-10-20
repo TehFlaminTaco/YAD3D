@@ -211,7 +211,7 @@ writes `assets/ui.png`, `assets/ui.json` and `assets/overlays/` from the HUD ico
 ### Tests
 
 ```sh
-npm run test:sim      # 331 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, closets, zero gravity, windows and grilles,
+npm run test:sim      # 404 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, closets, zero gravity, windows and grilles,
                       #   characters, handcuffs/grabs/stripping, structures and dragging, observers, the debug menu, zero gravity, windows and
                       #   grilles, door angles and wall mounts, chat, consoles,
                       #   drag and drop, death and ghosts)

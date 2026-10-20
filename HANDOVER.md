@@ -15,7 +15,7 @@ browser. It works end to end. **Not everything is committed or pushed** (below).
 * **Git state (2026-10-20):** committed and pushed; PR #1 has everything. `99cef4d` is one commit holding the work of two sessions that ran side by side (the debug menu 13, the inventory HUD 14,
   the observer and rune fixes, zero gravity 15, windows and grilles 17, door angles and wall mounts 18, the TG notes and `tools/tg*.py` 16): their edits share files (`sim.js`, `world.js`,
   `movement.js`, `hud.js`, `simtest2.mjs`) and could not be split. Check `git status -sb` for anything newer.
-* **Tests (all pass now):** `node tools/simtest2.mjs` 339/339, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
+* **Tests (all pass now):** `node tools/simtest2.mjs` 404/404, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
   (191 assertions, about 4 min) and `node tools/nettest.mjs` (29) were last run before the window work, were **edited for the new HUD but never run** (they hard-code a Playwright path that
   only exists in the Linux container, see section 3), and could not be run in the Windows sessions since: re-run both before you say "all green". The multiplayer suite is the one most worth
   running (tile, `look`, `pm`, `imv`, `strip` and `grav` events and the debug flag are all new since it last ran).
@@ -73,7 +73,7 @@ The user is casual and direct ("Get that shit goin'"). Their actual feedback so 
 ```sh
 git clone https://github.com/TehFlaminTaco/YAD3D && cd YAD3D && git checkout claude/yad3d-game
 npm install                        # three (vendored copy is what the page loads), ws
-node tools/simtest2.mjs            # sanity: 339 passed
+node tools/simtest2.mjs            # sanity: 404 passed
 python3 tools/serve.py 8123 &      # static server; needed by uitest.mjs and shot.mjs
 npm start                          # or the multiplayer server on :8080
 ```
@@ -195,7 +195,7 @@ All in `src/client/`; CSS in `css/style.css` (in-game) and `css/screens.css` (lo
 
 | What | Command | Notes |
 | --- | --- | --- |
-| Sim logic (no browser) | `node tools/simtest2.mjs` | 339 assertions, seconds. Add a `section()` for any new server rule. Sections: spawn, inventory, combat, doors, breaches, closets, characters, people, structures, observers, debug menu, door angles and wall mounts, zero gravity, windows and grilles, chat, consoles, drag and drop, death. |
+| Sim logic (no browser) | `node tools/simtest2.mjs` | 404 assertions, seconds. Add a `section()` for any new server rule. Sections: spawn, inventory, combat, doors, breaches, closets, characters, people, structures, observers, debug menu, door angles and wall mounts, zero gravity, windows and grilles, chat, consoles, drag and drop, death. |
 | Long soak | `node tools/simtest.mjs 12 --player` | a 12-minute simulated shift, ~4 s |
 | Browser UI (local round) | `node tools/uitest.mjs` | needs :8123 static server; ~4 min; `BASE=`, `SHOTS=` env; drives the real mouse/keyboard |
 | Closets, people (in simtest2) | `node tools/simtest2.mjs` | the `closets` section: DM contents, locks, welding, breakout, personal lockers; the `people` section: handcuffs, strip window, pockets, grabs, examine, stuffing |
@@ -466,3 +466,18 @@ Read `window.dm` and `grille.dm` in `_src/tg2020/code/game/objects/structures/`;
 * Test: the `door angles and wall mounts` section of `tools/simtest2.mjs`.
 * **Chat runes** (`hud.js` `updateRunes`): a speaker's words sit just above the top of their drawn picture (`WorldView.mobViews.get(id).top`, from the standing frame so a walk cycle does not shake it), kept on screen when the head is above the top edge
   (`RUNE_EDGE`), and your own speech is not shown (your head is the camera, and your own record is never moved, so it used to hang where you spawned). Checked in the browser: a person at range, a corgi, someone lying down, someone standing close.
+
+## 19. Walls, girders and what players build (`src/sim/walls.js`, `src/shared/walls.js`, `src/shared/built.js`)
+Read from `walls.dm`, `reinf_walls.dm`, `girders.dm` (all delays and messages are theirs). **Stage 1 of "walls+"** (stacks, the craft menu, floors and lattice are the next two stages).
+* **Walls** (`World.wallKey(i)`: `wall` or `reinforced_wall`; the shuttle wall and the other variants are not taken apart): target `wall`, a target only while you hold a tool (`Game.holdingTool`), so corridors are not labelled.
+  Plain: a lit welder, 100 ds, then two metal sheets, a girder and bare plating (`World.dismantleWall`, floor cell `level.terrain.plating`). Reinforced: 7 states in `world.ws[i]`
+  (`RW`): wirecutters (instant) / screwdriver 40 / welder 60 / crowbar 100 / wrench 40 / welder 100 / crowbar 100, each reversible one step back, ending in a plasteel sheet and a reinforced girder.
+  Taking down a wall that touches space is a hull breach (`World.holes`, `ventTiles()`), until a wall is built there again.
+* **Girders** are **built structures** (`BuiltSet`, one per tile, events `bs+ bs~ bs-`, `welcome.built`, `Replica.built`, drawn from `WorldView.addBuilt` in the `dyn` batch). The map's 5 girders are records now (`props.girders`), not static
+  sprites. State `GIRDER` 0 normal, 1 struts unscrewed, 2 reinforced, 3 displaced. Wrench 40 loosens / bolts, screwdriver 40 takes a displaced one apart (two metal) or the struts of a reinforced one,
+  wirecutters 40 take the inner grille out (a plasteel sheet, back to a plain girder), two metal sheets plate it (40) into a wall, plasteel reinforces it (60) and then finishes the reinforced wall (50).
+  Not done: false walls (sheets on a displaced girder), iron walls from rods, plasma cutters, girders taking damage.
+* `src/sim/tooljob.js` (`toolJob`) is the timed tool step both the windows and the walls use; reuse it for anything that is "work for N ds, still there, still holding it, still close".
+* Wall mounts (an APC, buttons) on a wall that is taken down stay drawn where the wall was (the DM leaves such objects on the tile too).
+* Build: `structs` (girder sprites) and `terrain.plating|floor|engine` are in `level.json`. Test: the `walls and girders` section of `tools/simtest2.mjs`.
+

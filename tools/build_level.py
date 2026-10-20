@@ -1021,6 +1021,13 @@ def build(mapname):
     areas, wall_variants = shared['areas'], shared['wall_variants']
     ceiling_cell = cells.add(sl.compose([('icons/turf/floors.dmi', 'plating', S, '#8a8f99', None)], (32, 32)))
     flat_cell = cells.add(Image.new('RGBA', (32, 32), (255, 255, 255, 255)))
+    # art for things made at run time: girders (structures.dmi), and the floors a dismantled wall or a laid tile leaves
+    # (added last, so no existing cell or sprite id moves)
+    structs = {}
+    for key, state in (('girder', 'girder'), ('displaced', 'displaced'), ('reinforced', 'reinforced')):
+        structs[key] = spr.add([('icons/obj/structures.dmi', state, S, None, None)])
+    floors = {key: cells.add(sl.compose([('icons/turf/floors.dmi', state, S, None, None)], (32, 32)))
+              for key, state in (('plating', 'plating'), ('floor', 'floor'), ('engine', 'engine'))}
     print('  cells', len(cells.imgs), 'sprites', len(spr.items), 'areas', len(areas), 'wall variants', len(wall_variants))
 
     # ---- write ----------------------------------------------------------------------------
@@ -1041,7 +1048,8 @@ def build(mapname):
     descs.update(emerg['descs'])
     level = {
         'name': mapname, 'w': Wd, 'h': Ht,
-        'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell},
+        'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
+        'structs': structs,
         'kind': b64u8(base['kind']), 'roof': b64u8(base['roof']),
         'area': b64u16(base['area']), 'floor': b64u16(base['floor']), 'wall': b64u16(base['wall']),
         'areas': areas, 'walls': wall_variants, 'props': base['props'], 'spawns': base['spawns'], 'pool': base['pool'],

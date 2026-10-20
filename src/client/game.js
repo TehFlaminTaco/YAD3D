@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { TILE, EYE, REACH, RENDER_HEIGHT, KIND } from '../shared/config.js';
 import { stepMovement, floatState } from '../shared/movement.js';
 import { WINDOWS } from '../shared/windows.js';
+import { WALLS, girderLook } from '../shared/walls.js';
 import { clamp } from '../shared/util.js';
 import { Input } from './input.js';
 import { Replica } from './state.js';
@@ -164,6 +165,9 @@ export class Game {
     rep.on('cl', (ev) => this.view.setClosetView(rep.props.interact[ev.i]));
     rep.on('tile', (ev) => this.view.tilesChanged([[ev.i % rep.world.W, Math.floor(ev.i / rep.world.W)]]));
     rep.on('pane', (ev) => this.view.tilesChanged([[ev.c, ev.r]]));
+    rep.on('bs+', (ev) => this.view.addBuilt(rep.built.get(ev.id)));
+    rep.on('bs~', (ev) => this.view.updateBuilt(rep.built.get(ev.id)));
+    rep.on('bs-', (ev) => this.view.removeBuilt(ev.id));
     rep.on('evac', (ev) => this.view.onEvac(ev));
     rep.on('pm', (ev) => this.view.propMoved(rep.props.interact[ev.i]));
     rep.on('imv', (ev) => this.view.moveItem(ev.id));
@@ -469,6 +473,10 @@ export class Game {
       if (it.kind === 'wm') consider({ k: 'prop', idx: it.idx }, it.x, it.y0, it.z, 0.7, { y1: it.y1, name: it.name, through: true, prop: it });
       else consider({ k: 'prop', idx: it.idx }, it.x, it.y0 + 0.1, it.z, it.half ? Math.min(0.9, it.half + 0.1) : 0.9, { y1: Math.max(it.y0 + 1.0, it.y1), name: it.name, prop: it });   // as wide as the thing really is
     }
+    for (const b of rep.built) {
+      const bx = b.c * TILE + TILE / 2, bz = b.r * TILE + TILE / 2;
+      if (near(bx, bz)) consider({ k: 'built', id: b.id }, bx, 0.1, bz, 0.95, { y1: 1.7, name: girderLook(b.st).name });
+    }
     for (const m of rep.mobs.values()) {
       if (m.id === rep.you?.id || !near(m.x, m.z)) continue;
       consider({ k: 'mob', id: m.id }, m.x, 0.1, m.z, m.dead ? 0.8 : 0.7, { y1: m.dead ? 0.4 : 1.6, name: m.n, mob: m });
@@ -482,6 +490,13 @@ export class Game {
     return best;
   }
 
+  /** Is the item in your active hand one of the tools that work on walls and windows? */
+  holdingTool() {
+    const inv = this.self?.inv;
+    const tg = inv?.hands?.[inv.active]?.tg;
+    return !!tg && /(?:^| )(?:welder|screwdriver|crowbar|wrench|wirecutters)(?: |$)/.test(tg);
+  }
+
   /** The window (a whole glass tile, or a thin pane on a tile's edge) the ray reaches first, if nothing else is in the way. */
   windowAlong(o, f) {
     const w = this.rep.world, reach = REACH + 0.6;
@@ -489,7 +504,12 @@ export class Game {
     const h = w.hit;
     if (t >= reach || !h) return null;
     if (h.kind === 'tile') {
-      if (!w.glass[h.i] || w.breached.has(h.i)) return null;
+      if (!w.glass[h.i]) {
+        // a wall is a target only while you hold something that works on it, so it does not label every corridor
+        const key = w.wallKey(h.i);
+        return key && this.holdingTool() ? { k: 'wall', c: h.c, r: h.r, name: WALLS[key].name, d: t } : null;
+      }
+      if (w.breached.has(h.i)) return null;
       return { k: 'window', c: h.c, r: h.r, name: WINDOWS[w.windowKey(h.i)]?.name || 'window', d: t };
     }
     if (h.kind === 'edge') {
@@ -546,7 +566,8 @@ export class Game {
     if (!t) return { k: 'none' };
     switch (t.k) {
       case 'item': case 'mob': return { k: t.k, id: t.id };
-      case 'breach': case 'window': return { k: t.k, c: t.c, r: t.r };
+      case 'breach': case 'window': case 'wall': return { k: t.k, c: t.c, r: t.r };
+      case 'built': return { k: 'built', id: t.id };
       case 'pane': return { k: 'pane', c: t.c, r: t.r, d: t.pd };
       default: return { k: t.k, idx: t.idx };
     }

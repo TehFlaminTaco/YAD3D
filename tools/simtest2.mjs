@@ -1328,5 +1328,197 @@ section('windows and grilles', () => {
   }
 });
 
+section('walls and girders', () => {
+  const { sim, A, a, inbox, step, evs, hand } = setup({ debug: true });
+  const w = sim.world, I = (c, r) => r * w.W + c, TERR = w.level.terrain;
+  const tool = (path, extra = {}) => { const it = sim.newItem(path, extra); hand(a, it, 0); a.active = 0; a.cool = 0; return it; };
+  const welder = () => { const it = tool('/obj/item/weldingtool'); it.lit = true; it.fuel = 20; return it; };
+  const click = (target) => { a.cool = 0; sim.handle(A, { t: 'click', target }); step(0.06); };
+  const said = (from) => inbox.a.slice(from).filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((x) => x.e === 'msg').map((x) => x.text);
+  const floorAt = (x, z, path) => [...sim.floor.values()].filter((f) => f.item.path === path && Math.abs(f.x - x) < 0.6 && Math.abs(f.z - z) < 0.6);
+  const at = (c, r) => [c * TILE + 1, r * TILE + 1];
+  const find = (key) => {
+    for (let i = 0; i < w.W * w.H; i++) {
+      if (w.wallKey(i) !== key) continue;
+      const c = i % w.W, r = Math.floor(i / w.W);
+      if (c < 3 || r < 3 || c > w.W - 4 || r > w.H - 4) continue;
+      for (const [dc, dr] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const nc = c + dc, nr = r + dr;
+        if (w.kindAt(nc, nr) === 1 && !w.solid[I(nc, nr)] && !w.dyn[I(nc, nr)] && w.areas[w.areaIdx[I(nc, nr)]].c !== 'space') return { c, r, i, stand: at(nc, nr) };
+      }
+    }
+    return null;
+  };
+  const stand = (s) => { a.x = s.stand[0]; a.z = s.stand[1]; a.vx = a.vz = 0; a.busy = null; a.stunned = 0; a.intent = 'help'; };
+  const girderAt = (c, r) => sim.built.at(c, r);
+
+  // ---- the map's own girders are real now
+  ok(sim.built.size >= 5 && [...sim.built].every((b) => b.k === 'girder' && w.solid[I(b.c, b.r)] === 1), 'the map\'s girders are built structures and block you');
+  ok(sim.worldState(A).built.length === sim.built.size, 'a player who joins is told about them');
+
+  // ---- a plain wall: a welder cuts through it in 10 s, and leaves a girder, two metal sheets and bare plating
+  const plain = find('wall');
+  ok(!!plain, 'found a wall to work on');
+  stand(plain);
+  ok(sim.walls.examine({ k: 'wall', c: plain.c, r: plain.r }).join(' ') === 'A huge chunk of metal used to separate rooms. The outer plating is welded firmly in place.', 'examining a wall');
+  tool('/obj/item/wrench'); click({ k: 'wall', c: plain.c, r: plain.r }); step(0.4);
+  ok(!a.busy && w.wallKey(plain.i) === 'wall', 'a wrench does nothing to a wall');
+  let mark = inbox.a.length;
+  const unlit = tool('/obj/item/weldingtool'); unlit.fuel = 20;
+  click({ k: 'wall', c: plain.c, r: plain.r });
+  ok(!a.busy && said(mark).some((t) => /has to be on/.test(t)), 'a welder that is not lit will not do');
+  mark = inbox.a.length;
+  welder(); click({ k: 'wall', c: plain.c, r: plain.r }); step(8);
+  ok(w.wallKey(plain.i) === 'wall', 'slicing takes 10 s');
+  step(2.2);
+  const [px, pz] = at(plain.c, plain.r);
+  ok(w.kind[plain.i] === 1 && w.solid[plain.i] === 1 && w.airBlock[plain.i] === 0, 'the wall is gone; the girder that is left blocks the tile but not the air');
+  ok(w.floorCell[plain.i] === TERR.plating, 'on bare plating');
+  const gp = girderAt(plain.c, plain.r);
+  ok(gp && gp.st === 0, 'a plain girder stands there');
+  ok(floorAt(px, pz, '/obj/item/stack/sheet/metal').some((f) => f.item.amount === 2), 'and two sheets of metal lie there');
+  ok(said(mark).includes('You begin slicing through the outer plating...') && said(mark).includes('You remove the outer plating.'), 'with the DM\'s messages');
+  ok(sim.atmos.isCell[plain.i] === 1, 'the tile holds air now');
+  ok(evs(inbox.a, 'bs+').some((e) => e.c === plain.c && e.r === plain.r) && evs(inbox.a, 'tile').some((e) => e.i === plain.i && e.kind === 1), 'clients are told: tile and girder');
+
+  // ---- the girder: unbolt (4 s), disassemble when displaced (4 s) into two sheets, bolt it down again
+  ok(sim.walls.examine({ k: 'built', id: gp.id }).join(' ').endsWith('The bolts are wrenched in place.'), 'a bolted girder says so');
+  mark = inbox.a.length;
+  tool('/obj/item/wrench'); click({ k: 'built', id: gp.id }); step(3.4);
+  ok(gp.st === 0, 'unbolting takes 4 s');
+  step(0.9);
+  ok(gp.st === 3 && w.solid[plain.i] === 1, 'a displaced girder still blocks the tile');
+  ok(said(mark).includes('You start unsecuring the girder...') && said(mark).includes('You unsecure the girder.'), 'messages');
+  tool('/obj/item/wrench'); click({ k: 'built', id: gp.id }); step(4.5);
+  ok(gp.st === 0, 'and bolting it down takes 4 s too');
+  tool('/obj/item/screwdriver'); click({ k: 'built', id: gp.id }); step(0.6);
+  ok(!a.busy, 'a screwdriver does nothing to a bolted girder');
+  tool('/obj/item/wrench'); click({ k: 'built', id: gp.id }); step(4.5);
+  mark = inbox.a.length;
+  tool('/obj/item/screwdriver'); click({ k: 'built', id: gp.id }); step(3.3);
+  ok(girderAt(plain.c, plain.r) === gp, 'disassembling takes 4 s');
+  step(1);
+  ok(!girderAt(plain.c, plain.r) && w.solid[plain.i] === 0, 'then it is gone and the tile is free');
+  ok(floorAt(px, pz, '/obj/item/stack/sheet/metal').reduce((s, f) => s + f.item.amount, 0) === 4, 'two more sheets of metal (four in all, with the wall\'s)');
+  ok(said(mark).includes('You start to disassemble the girder...') && said(mark).includes('You disassemble the girder.'), 'DM\'s messages');
+  ok(!floorAt(px, pz, '/obj/item/stack/rods').length, 'and no rods');
+  // you can walk over it now
+  a.x = px; a.z = pz; a.vx = a.vz = 0;
+  ok(!w.collides(px, pz, 0.32), 'you can stand on that tile');
+
+  // ---- putting it back: a girder, then two sheets of metal (4 s). One sheet is not enough
+  const g2 = sim.addBuilt('girder', plain.c, plain.r, 0);
+  ok(w.collides(px, pz, 0.32), 'a new girder blocks the tile');
+  stand(plain);
+  tool('/obj/item/stack/sheet/metal', { amount: 1 });
+  mark = inbox.a.length; click({ k: 'built', id: g2.id });
+  ok(said(mark).includes('You need two sheets of metal to finish a wall!'), 'one sheet is not enough');
+  const metal = tool('/obj/item/stack/sheet/metal', { amount: 5 });
+  mark = inbox.a.length; click({ k: 'built', id: g2.id }); step(3.4);
+  ok(!!girderAt(plain.c, plain.r), 'plating takes 4 s');
+  step(1);
+  ok(w.wallKey(plain.i) === 'wall' && !girderAt(plain.c, plain.r) && w.airBlock[plain.i] === 1, 'a wall again: the girder is gone');
+  ok(metal.amount === 3, 'two sheets of metal used');
+  ok(said(mark).includes('You start adding plating...') && said(mark).includes('You add the plating.'), 'messages');
+
+  // ---- a reinforced wall: grille, screws, cover, cover, bolts, rods, sheath
+  const re = find('reinforced_wall');
+  ok(!!re, 'found a reinforced wall');
+  stand(re);
+  const T = { k: 'wall', c: re.c, r: re.r };
+  const st = () => w.ws[re.i];
+  ok(sim.walls.examine(T).join(' ').endsWith('The outer grille is fully intact.'), 'a reinforced wall starts intact');
+  tool('/obj/item/weldingtool'); a.hands[0].lit = true; a.hands[0].fuel = 20; click(T); step(0.5);
+  ok(!a.busy && st() === 0, 'a welder does nothing to an intact one');
+  const stepTool = (path, secs, to, msg) => {
+    if (path === 'welder') welder(); else tool(path);
+    mark = inbox.a.length;
+    click(T);
+    if (secs) { step(secs - 0.4); const early = st(); step(0.9); if (early === to) return false; } else step(0.1);
+    return st() === to && (!msg || said(mark).includes(msg));
+  };
+  ok(stepTool('/obj/item/wirecutters', 0, 1, 'You cut the outer grille.'), 'wirecutters cut the outer grille at once');
+  ok(stepTool('/obj/item/wirecutters', 0, 0, 'You repair the outer grille.'), 'and mend it again');
+  stepTool('/obj/item/wirecutters', 0, 1);
+  ok(stepTool('/obj/item/screwdriver', 4, 2, 'You unsecure the support lines.'), 'a screwdriver unsecures the support lines in 4 s');
+  ok(stepTool('welder', 6, 3, 'You press firmly on the cover, dislodging it.'), 'a welder slices the cover in 6 s');
+  ok(stepTool('/obj/item/crowbar', 10, 4, 'You pry off the cover.'), 'a crowbar pries it off in 10 s');
+  ok(stepTool('/obj/item/wrench', 4, 5, 'You remove the bolts anchoring the support rods.'), 'a wrench loosens the bolts in 4 s');
+  ok(stepTool('welder', 10, 6, 'You slice through the support rods.'), 'a welder slices the rods in 10 s');
+  // going back a step works too
+  ok(stepTool('welder', 10, 5, 'You weld the support rods back together.'), 'and welds them back');
+  ok(stepTool('welder', 10, 6), 'then cuts them again');
+  ok(sim.walls.examine(T).join(' ').endsWith('the outer sheath is connected loosely to the girder.'), 'the hint changes with each step');
+  mark = inbox.a.length;
+  tool('/obj/item/crowbar'); click(T); step(9.5);
+  ok(w.wallKey(re.i) === 'reinforced_wall', 'prying off the sheath takes 10 s');
+  step(1);
+  const [rx, rz] = at(re.c, re.r);
+  ok(w.kind[re.i] === 1 && w.floorCell[re.i] === TERR.plating, 'then the wall is down to plating');
+  const gr = girderAt(re.c, re.r);
+  ok(gr && gr.st === 2, 'with a reinforced girder');
+  ok(floorAt(rx, rz, '/obj/item/stack/sheet/plasteel').some((f) => f.item.amount === 1), 'and one sheet of plasteel');
+  ok(said(mark).includes('You pry off the outer sheath.'), 'DM\'s message');
+
+  // ---- a reinforced girder: screws (4 s), then the inner grille comes out with wirecutters (4 s) leaving a plasteel sheet and a plain girder
+  tool('/obj/item/screwdriver'); click({ k: 'built', id: gr.id }); step(4.5);
+  ok(gr.st === 1, 'the struts are unscrewed');
+  ok(sim.walls.examine({ k: 'built', id: gr.id }).join(' ').endsWith('The support struts are unscrewed and the inner grille is intact.'), 'and it says so');
+  tool('/obj/item/screwdriver'); click({ k: 'built', id: gr.id }); step(4.5);
+  ok(gr.st === 2, 'the screwdriver puts them back');
+  tool('/obj/item/screwdriver'); click({ k: 'built', id: gr.id }); step(4.5);
+  tool('/obj/item/wirecutters'); click({ k: 'built', id: gr.id }); step(4.5);
+  ok(gr.st === 0 && floorAt(rx, rz, '/obj/item/stack/sheet/plasteel').reduce((s, f) => s + f.item.amount, 0) === 2, 'wirecutters take the inner grille out: a plain girder and another plasteel sheet');
+  // plasteel: reinforce the girder (6 s), then finish the wall (5 s)
+  const ps = tool('/obj/item/stack/sheet/plasteel', { amount: 3 });
+  mark = inbox.a.length; click({ k: 'built', id: gr.id }); step(5.4);
+  ok(gr.st === 0, 'reinforcing takes 6 s');
+  step(0.9);
+  ok(gr.st === 2 && ps.amount === 2, 'and uses one sheet of plasteel');
+  click({ k: 'built', id: gr.id }); step(4.4);
+  ok(!!girderAt(re.c, re.r), 'finishing the wall takes 5 s');
+  step(0.9);
+  ok(w.wallKey(re.i) === 'reinforced_wall' && w.ws[re.i] === 0 && ps.amount === 1 && !girderAt(re.c, re.r), 'a reinforced wall again, with one more sheet used');
+  ok(said(mark).includes('You start reinforcing the girder...') && said(mark).includes('You fully reinforce the wall.'), 'messages');
+
+  // ---- an outside wall: taking it down opens the station to space, and that is a hull breach until it is plated again
+  {
+    let out = null;
+    for (let i = 0; i < w.W * w.H && !out; i++) {
+      if (w.wallKey(i) !== 'wall' || !w.ventsToSpace(i)) continue;
+      const c = i % w.W, r = Math.floor(i / w.W);
+      for (const [dc, dr] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const nc = c + dc, nr = r + dr;
+        if (w.kindAt(nc, nr) === 1 && !w.solid[I(nc, nr)] && !w.dyn[I(nc, nr)]) { out = { c, r, i, stand: at(nc, nr) }; break; }
+      }
+    }
+    ok(!!out, 'found an outside wall');
+    if (out) {
+      stand(out);
+      const before = w.ventTiles().length;
+      welder(); click({ k: 'wall', c: out.c, r: out.r }); step(10.5);
+      ok(w.kind[out.i] === 1 && w.ventTiles().includes(out.i) && w.ventTiles().length === before + 1, 'an outside wall that is taken down is a hull breach');
+      const gx = girderAt(out.c, out.r);
+      tool('/obj/item/wrench'); click({ k: 'built', id: gx.id }); step(4.5);
+      tool('/obj/item/screwdriver'); click({ k: 'built', id: gx.id }); step(4.5);
+      const g3 = sim.addBuilt('girder', out.c, out.r, 0);
+      tool('/obj/item/stack/sheet/metal', { amount: 2 }); click({ k: 'built', id: g3.id }); step(4.5);
+      ok(w.wallKey(out.i) === 'wall' && !w.ventTiles().includes(out.i), 'and plating it closes the breach');
+    }
+  }
+
+  // ---- leaving stops the job
+  stand(plain);
+  welder(); click({ k: 'wall', c: plain.c, r: plain.r }); step(2);
+  ok(!!a.busy, 'slicing in progress');
+  a.x += 30; step(0.3);
+  ok(!a.busy && w.wallKey(plain.i) === 'wall', 'walking away stops it');
+
+  // ---- a late joiner is told what the world looks like
+  const C = sim.addClient('Cara', () => {});
+  const ws = sim.worldState(C);
+  ok(ws.built.length === sim.built.size && ws.tiles.some((e) => e.i === plain.i), 'a later joiner gets the girders and the changed tiles');
+});
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

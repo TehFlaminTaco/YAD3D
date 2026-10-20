@@ -45,10 +45,10 @@ export const ITEM_SCALE = 0.5;               // SS13 item icons are drawn big fo
 export function buildPropData(world, rects, props, level, prev = null) {
   const W = world.W;
   const out = prev || {
-    tables: [], panes: [], lights: [], items: [], interact: [], doors: [], fdoors: [], statics: [], closets: [],
+    tables: [], panes: [], lights: [], items: [], interact: [], doors: [], fdoors: [], statics: [], closets: [], girders: [],
     paneIdx: new Map(), pool: level.pool.filter((q) => q.s >= 0), lootRng: rng(1337), wmSpots: new Map(),
   };
-  out.added = { tables: [], panes: [], lights: [], doors: [], statics: [], items: [], interact: [], fdoors: [], closets: [] };
+  out.added = { tables: [], panes: [], lights: [], doors: [], statics: [], items: [], interact: [], fdoors: [], closets: [], girders: [] };
   const center = (c, r) => [c * TILE + TILE / 2, r * TILE + TILE / 2];
 
   const addItem = (spriteId, name, c, r, extra = {}) => {
@@ -106,6 +106,8 @@ export function buildPropData(world, rects, props, level, prev = null) {
         break;
       }
       case 'sprite': {
+        // a girder is not scenery: it can be unbolted and plated, so it is a built structure (the sim makes the record, see shared/built.js)
+        if (p.p === 'structure/girder') { const g = { c, r }; out.girders.push(g); out.added.girders.push(g); break; }
         const rc = rects[p.s];
         if (!rc) break;
         const w = rc.w * PX, h = rc.h * PX;

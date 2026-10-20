@@ -20,6 +20,9 @@ import { Actions } from './actions.js';
 import { Closets } from './closets.js';
 import { People } from './people.js';
 import { Windows } from './windows.js';
+import { Walls } from './walls.js';
+import { BuiltSet } from '../shared/built.js';
+import { GIRDER } from '../shared/walls.js';
 import { Debug } from './debug.js';
 import { Looks, WORN_SLOTS } from '../shared/looks.js';
 import { AI } from './ai.js';
@@ -94,6 +97,9 @@ export class Sim {
     this.clients = new Map();
     this.tileLog = [];                  // breaches/patches/shuttle so late joiners can catch up
     this.deadPanes = [];
+    this.built = new BuiltSet(this.world);       // girders and the like that players put up (shared/built.js); the map's own girders start as records
+    this.builtSeq = 1;
+    for (const g of this.props.girders) this.built.add({ id: this.builtSeq++, k: 'girder', c: g.c, r: g.r, st: GIRDER.NORMAL });
     this.evacApplied = false;
     this.flickerUntil = 0;
 
@@ -103,6 +109,7 @@ export class Sim {
     }
     this.people = new People(this);
     this.windows = new Windows(this);
+    this.walls = new Walls(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // after the floor items: closed closets swallow what lies on them
   }
@@ -178,7 +185,7 @@ export class Sim {
       areaOn: [...this.power.areaOn], areaLights: [...this.power.areaLights],
       doors: this.doors.map((d) => d.state), fdoors: this.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       items: [...this.floor.values()].map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z]),
-      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(), moved: this.people.moved(), debug: !!this.opts.debug, gravity: this.world.gravityOn,
+      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(), moved: this.people.moved(), debug: !!this.opts.debug, gravity: this.world.gravityOn, built: [...this.built].map((b) => [b.id, b.k, b.c, b.r, b.st]),
       jobs: this.jobs.list.map((j) => ({ id: j.id, title: j.title, color: j.color, supervisors: j.supervisors, slots: this.jobs.slots(j), total: j.id === 'assistant' ? 99 : j.total, ap: this.outfitPreview(j) })),
     };
   }
@@ -364,6 +371,24 @@ export class Sim {
   tileEvent(i, extra = {}) {
     const w = this.world;
     return { e: 'tile', i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], brk: w.breached.has(i) ? 1 : 0, gr: w.grille[i], ws: w.ws[i], ...extra };
+  }
+
+  /** Something is built on a tile (a girder). Everyone is told; it is dense and takes the tile's `solid`. */
+  addBuilt(k, c, r, st = 0) {
+    const rec = this.built.add({ id: this.builtSeq++, k, c, r, st });
+    this.emit({ e: 'bs+', id: rec.id, k, c, r, st });
+    return rec;
+  }
+
+  /** A built thing changes state (a girder unbolted or reinforced: another picture, another name). */
+  setBuilt(rec, st) {
+    rec.st = st;
+    this.emit({ e: 'bs~', id: rec.id, st });
+  }
+
+  removeBuilt(rec) {
+    if (!this.built.remove(rec.id)) return;
+    this.emit({ e: 'bs-', id: rec.id });
   }
 
   /** A tile's glass, grille or anchoring changed: tell the air and the clients. (A smashed window is `breachTile`: it is also loud.) */

@@ -157,14 +157,16 @@ export class Actions {
         const th = sim.windows.thing(t);
         return th ? { k: t.k, c: t.c, r: t.r, d: t.d, x: th.x, z: th.z } : undefined;
       }
+      case 'wall': { const th = sim.walls.wall(t); return th ? { k: 'wall', c: t.c, r: t.r, x: th.x, z: th.z } : undefined; }
+      case 'built': { const th = sim.walls.girder(t); return th ? { k: 'built', id: t.id, x: th.x, z: th.z } : undefined; }
       default: return undefined;
     }
   }
 
   inReach(m, t) {
     const d = Math.hypot(t.x - m.x, t.z - m.z);
-    if (d > REACH + (t.k === 'mob' ? 0.5 : t.k === 'window' || t.k === 'pane' || t.k === 'breach' ? 1.3 : 0)) return false;       // a window's middle is a metre behind its face
-    if (t.k === 'door' || t.k === 'breach' || t.k === 'window' || t.k === 'pane' || (t.k === 'prop' && t.it.kind === 'wm')) return true;
+    if (d > REACH + (t.k === 'mob' ? 0.5 : t.k === 'window' || t.k === 'pane' || t.k === 'breach' || t.k === 'wall' || t.k === 'built' ? 1.3 : 0)) return false;       // a window's middle is a metre behind its face
+    if (t.k === 'door' || t.k === 'breach' || t.k === 'window' || t.k === 'pane' || t.k === 'wall' || (t.k === 'prop' && t.it.kind === 'wm')) return true;
     const wd = this.sim.world.raycast(m.x, m.z, t.x - m.x, t.z - m.z, d, 'shot');
     return wd >= d - 0.8;
   }
@@ -192,6 +194,8 @@ export class Actions {
       case 'mob': return this.clickMob(m, t.o, held, !!msg.alt);
       case 'breach': return this.clickBreachTile(m, t, held);
       case 'window': case 'pane': if (sim.windows.click(m, t, held)) return; return this.clickAir(m, held);
+      case 'wall': if (sim.walls.clickWall(m, t, held)) return; return this.clickAir(m, held);
+      case 'built': if (sim.walls.clickGirder(m, t, held)) return; return this.clickAir(m, held);
       default: return;
     }
   }
@@ -730,6 +734,7 @@ export class Actions {
       const it = sim.props.interact[t.idx];
       if (it) lines.push(...this.propText(it));
     } else if (t.k === 'breach' || t.k === 'window' || t.k === 'pane') lines.push(...sim.windows.examine(t));
+    else if (t.k === 'wall' || t.k === 'built') lines.push(...sim.walls.examine(t));
     if (m && lines.length) sim.tellClient(c, 'info', lines.join(' '));
   }
 

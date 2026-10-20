@@ -3,6 +3,7 @@ import { World } from '../shared/world.js';
 import { DoorCore } from '../shared/door.js';
 import { buildPropData, moveProp } from '../shared/propdata.js';
 import { setClosetState } from '../shared/closets.js';
+import { BuiltSet } from '../shared/built.js';
 
 /**
  * The client's copy of the world: the same tile grid, doors and prop tables the server has (built from the
@@ -34,6 +35,7 @@ export class Replica {
     this.env = { p: 101, o2: 21, tox: 0, area: 0 };
     this.alert = 'green';
     this.evacApplied = false;
+    this.built = new BuiltSet(world);        // girders and the like that players have built (shared/built.js)
     this.listeners = {};
     this.applyWelcome(welcome);
   }
@@ -47,6 +49,7 @@ export class Replica {
     w.areaOn.forEach((v, i) => { this.power.areaOn[i] = v; });
     w.areaLights.forEach((v, i) => { this.power.areaLights[i] = v; });
     this.world.gravityOn = w.gravity !== false;
+    for (const [id, k, c, r, st] of w.built || []) this.built.add({ id, k, c, r, st });
     for (const ev of w.tiles) this.setTile(ev);
     for (const [c, r, d] of w.panes) this.killPane(c, r, d);
     for (const [i, cs, g] of w.closets || []) this.setCloset(i, cs, !!g);
@@ -145,6 +148,9 @@ export class Replica {
       case 'round': this.round = ev; this.roundAt = performance.now(); break;
       case 'alert': this.alert = ev.level; break;
       case 'grav': this.world.gravityOn = !!ev.on; break;
+      case 'bs+': this.built.add({ id: ev.id, k: ev.k, c: ev.c, r: ev.r, st: ev.st }); break;
+      case 'bs~': { const b = this.built.get(ev.id); if (b) b.st = ev.st; break; }
+      case 'bs-': this.built.remove(ev.id); break;
       case 'evac': this.applyEvac(); return;
       default: break;
     }
