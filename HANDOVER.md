@@ -12,11 +12,10 @@ browser. It works end to end. **Not everything is committed or pushed** (below).
 * **Branch** `claude/yad3d-game` on `TehFlaminTaco/YAD3D`, open as **[PR #1](https://github.com/TehFlaminTaco/YAD3D/pull/1)**
   into `main` (which holds only an "Initial commit"). Pushing to the branch updates the PR. The user said not to worry about
   the repo's original Unlicense: the project is now **AGPL-3.0** (`LICENSE`), art and sound CC BY-SA 3.0.
-* **Git state (2026-10-20):** local `HEAD` is `d1b5a2a` (people interactions and the structure rework), **two commits ahead of `origin`** (`ca706f5`). On top of that
-  the working tree holds a lot of **uncommitted work from two sessions that ran side by side**: the debug menu (13), the SS13-style inventory HUD (14), the observer fix, the
-  rune placement fix, zero gravity (15), windows and grilles the TG way (17), door angles and wall mounts (18), the TG notes and their tools (16, `docs/`, `tools/tg*.py`).
-  Files such as `sim.js`, `world.js`, `movement.js`, `hud.js` and `simtest2.mjs` carry both sessions' edits, so it cannot be split by file: **review `git status`, do not revert
-  what you did not write, and commit it in one go (or ask the user how to split it) before building more.** Nothing has been pushed since `ca706f5`.
+* **Git state (2026-10-20):** everything is committed. `99cef4d` holds the work of two sessions that ran side by side (the debug menu 13, the inventory HUD 14, the observer and rune
+  fixes, zero gravity 15, windows and grilles 17, door angles and wall mounts 18, the TG notes and `tools/tg*.py` 16) as one commit, because their edits share files (`sim.js`, `world.js`,
+  `movement.js`, `hud.js`, `simtest2.mjs`) and could not be split. Local `HEAD` is that commit, three commits ahead of `origin` (`ca706f5`). **Nothing has been pushed since `ca706f5`**, so PR #1
+  does not have any of it yet.
 * **Tests (all pass now):** `node tools/simtest2.mjs` 339/339, `node tools/leveltest.mjs` 18/18, `node tools/simtest.mjs 12 --player` clean (a 12-minute shift). `node tools/uitest.mjs`
   (191 assertions, about 4 min) and `node tools/nettest.mjs` (29) were last run before the window work, were **edited for the new HUD but never run** (they hard-code a Playwright path that
   only exists in the Linux container, see section 3), and could not be run in the Windows sessions since: re-run both before you say "all green". The multiplayer suite is the one most worth
