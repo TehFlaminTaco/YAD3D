@@ -1,9 +1,12 @@
 import { HAIR_COLORS, EYE_COLORS } from '../shared/looks.js';
 
+// The sheet's directions are S, N, E, W (0..3); the turn buttons go round the way a compass does: N, E, S, W.
+const COMPASS = [1, 2, 0, 3];
+
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
 /**
- * The character screen: a mannequin that turns slowly and the dials to change it (body, skin, hair, facial hair, eyes,
+ * The character screen: a mannequin you turn with the arrows (it does not turn by itself) and the dials to change it (body, skin, hair, facial hair, eyes,
  * underwear). In the lobby it shows the job's clothes and edits everything; at a mirror it shows what you are wearing and
  * edits only hair and facial hair (SS13's mirror does exactly that).
  */
@@ -29,8 +32,7 @@ export class CharEditor {
     this.root = root;
     this.$ = (id) => root.querySelector('#' + id);
     this.open_ = false;
-    this.di = 0;
-    this.hold = 0;
+    this.pos = 2;                       // where in COMPASS we are: facing you (south)
     this.$('ce-done').onclick = () => this.close();
     this.$('ce-rand').onclick = () => {
       const r = this.looks.random(Math.random);
@@ -39,8 +41,7 @@ export class CharEditor {
       this.build();
     };
     this.$('ce-wear').onchange = () => this.draw();
-    root.querySelectorAll('.ce-rot button').forEach((b) => { b.onclick = () => { this.di = (this.di + (+b.dataset.r) + 4) % 4; this.hold = 5; this.draw(); }; });
-    this.timer = setInterval(() => { if (!this.open_) return; if (this.hold > 0) { this.hold--; return; } this.di = (this.di + 1) % 4; this.draw(); }, 1100);
+    root.querySelectorAll('.ce-rot button').forEach((b) => { b.onclick = () => { this.pos = (this.pos + (+b.dataset.r) + 4) % 4; this.draw(); }; });
     addEventListener('keydown', (e) => { if (this.open_ && e.key === 'Escape') { e.stopPropagation(); this.close(); } }, true);
   }
 
@@ -61,6 +62,7 @@ export class CharEditor {
     this.$('ce-wear').parentElement.style.display = mode === 'mirror' ? 'none' : '';
     this.root.classList.add('on');
     this.open_ = true;
+    this.pos = 2;                       // start facing you
     this.build();
     this.game.input?.releaseAll?.();
     if (this.game.inWorld()) this.game.enterHands(true);
@@ -88,7 +90,7 @@ export class CharEditor {
   draw() {
     const wear = this.mode === 'mirror' || this.$('ce-wear').checked;
     const o = wear ? this.outfit?.() || { o: {}, h: 0 } : { o: {}, h: 0 };
-    const cv = this.art.portrait({ l: this.look, o: o.o || {}, h: o.h || 0 }, this.di);
+    const cv = this.art.portrait({ l: this.look, o: o.o || {}, h: o.h || 0 }, COMPASS[this.pos]);
     const dst = this.$('ce-cv'), c = dst.getContext('2d');
     c.clearRect(0, 0, 32, 32);
     c.drawImage(cv, 0, 0);
