@@ -17,10 +17,7 @@ export class DoorCore {
     this.proto = proto;
     this.x = proto.x * 2 + 1;
     this.z = proto.y * 2 + 1;
-    const wl = (c, r) => world.isWallLike(c, r);
-    if (wl(this.c - 1, this.r) && wl(this.c + 1, this.r)) this.yaw = 0;
-    else if (wl(this.c, this.r - 1) && wl(this.c, this.r + 1)) this.yaw = Math.PI / 2;
-    else this.yaw = (wl(this.c - 1, this.r) || wl(this.c + 1, this.r)) ? 0 : Math.PI / 2;
+    this.yaw = proto.yaw ?? 0;           // worked out with the rest of the props (doorYaw in shared/propdata.js)
     this.anim = Math.max(1, frames);     // opening frame count (for timing)
     this.state = 'closed';
     this.t = 0;

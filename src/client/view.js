@@ -267,10 +267,11 @@ export class WorldView {
   addFdoorView(f) {
     const rc = this.rects[f.s];
     if (!rc) return null;
-    const w = this.rep.world;
-    const wl = (c, r) => w.isWallLike(c, r);
-    const yaw = wl(f.c - 1, f.r) && wl(f.c + 1, f.r) ? 0 : wl(f.c, f.r - 1) && wl(f.c, f.r + 1) ? Math.PI / 2 : 0;
-    const id = this.dyn.add({ x: f.x, y: 0, z: f.z, mode: 1, w: rc.w * PX, h: rc.h * PX * SY, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.fh - rc.oy - rc.h) * PX * SY, yaw, rect: rc, alpha: f.closed ? 1 : 0 });
+    const yaw = f.yaw ?? 0;
+    // a firelock in an airlock's doorway is drawn a little to one side of it: two closed doors in one plane would flicker through each other
+    const off = this.rep.world.doorAt.has(f.i) ? 0.2 : 0;
+    const fx = f.x + Math.sin(yaw) * off, fz = f.z + Math.cos(yaw) * off;
+    const id = this.dyn.add({ x: fx, y: 0, z: fz, mode: 1, w: rc.w * PX, h: rc.h * PX * SY, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: (rc.fh - rc.oy - rc.h) * PX * SY, yaw, rect: rc, alpha: f.closed ? 1 : 0 });
     this.lit.push({ batch: this.dyn, id, sx: f.x, sz: f.z });
     return { f, id };
   }
@@ -432,13 +433,14 @@ export class WorldView {
       const m = v.m;
       if (mid === selfId) { this.dyn.setAlpha(v.id, 0); continue; }
       this.interpolate(m, rt);
-      let sid;
-      if ((m.dead || m.lying) && (m.dead ? v.set.dead : v.set.lie ?? v.set.dead) >= 0) sid = m.dead ? v.set.dead : v.set.lie ?? v.set.dead;       // dead, stunned or held down: on their side
+      let sid, still;
+      if ((m.dead || m.lying) && (m.dead ? v.set.dead : v.set.lie ?? v.set.dead) >= 0) still = sid = m.dead ? v.set.dead : v.set.lie ?? v.set.dead;       // dead, stunned or held down: on their side
       else {
         const di = viewIndex(-Math.sin(m.yaw), -Math.cos(m.yaw), m.x - cam.x, m.z - cam.z, camRx, camRz);
         const frames = v.set.d[di];
         v.anim += m.speed * dt * 1.6;
         sid = frames[Math.floor(v.anim) % frames.length];
+        still = frames[0];
       }
       const rc = this.rects[sid];
       if (!rc) continue;
@@ -446,7 +448,9 @@ export class WorldView {
       this.dyn.setAlpha(v.id, 1);
       this.dyn.setPos(v.id, m.x, bob, m.z);
       // feet on the floor; only carp float
-      this.dyn.setRect(v.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, m.kind === 'carp' ? (rc.fh - rc.oy - rc.h) * PX : 0);
+      const lift = m.kind === 'carp' ? (rc.fh - rc.oy - rc.h) * PX : 0;
+      this.dyn.setRect(v.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, lift);
+      v.top = lift + (this.rects[still] ?? rc).h * PX;       // where the picture ends, for speech to sit on (the standing frame: a walk cycle must not shake it)
       this.lightField.sample(m.x, m.z, t);
       this.dyn.setTint(v.id, Math.min(1.3, t[0] + 0.05), Math.min(1.3, t[1] + 0.05), Math.min(1.3, t[2] + 0.05));
       v.hi = this.target && this.target.k === 'mob' && this.target.id === mid ? 1 : 0;

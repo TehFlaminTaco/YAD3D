@@ -16,6 +16,25 @@ export const TABLE_H = 0.92;
 export function blockHalf(widthM) {
   return Math.round(Math.min(0.95, Math.max(0.45, widthM / 2 + 0.1)) * 20) / 20;
 }
+/**
+ * Which way a door or firelock stands: yaw 0 means its plane runs along x (a door in an east-west wall), PI / 2 along z. The plane's two ends
+ * meet walls (best) or other doors in the same line, and people pass through the two sides, which are open floor. A lone firelock in a corridor
+ * has no wall beside it, so the open floor on both sides decides; an unclear one looks two tiles out before it gives up.
+ */
+export function doorYaw(world, c, r, doorTiles) {
+  const W = world.W;
+  const wall = (cc, rr) => world.isWallLike(cc, rr);
+  const door = (cc, rr) => world.inb(cc, rr) && doorTiles.has(rr * W + cc);
+  const open = (cc, rr) => world.inb(cc, rr) && !wall(cc, rr) && !door(cc, rr);
+  const ends = (a, b) => 3 * (wall(a[0], a[1]) + wall(b[0], b[1])) + (door(a[0], a[1]) + door(b[0], b[1]));
+  const sides = (a, b) => open(a[0], a[1]) + open(b[0], b[1]);
+  const sx = ends([c - 1, r], [c + 1, r]) + sides([c, r - 1], [c, r + 1]);          // plane along x
+  const sz = ends([c, r - 1], [c, r + 1]) + sides([c - 1, r], [c + 1, r]);          // plane along z
+  if (sx !== sz) return sx > sz ? 0 : Math.PI / 2;
+  const fx = wall(c - 2, r) + wall(c + 2, r), fz = wall(c, r - 2) + wall(c, r + 2);
+  return fz > fx ? Math.PI / 2 : 0;
+}
+
 export const ITEM_SCALE = 0.5;               // SS13 item icons are drawn big for a top-down view; shrink them for first person
 
 /**
@@ -27,7 +46,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
   const W = world.W;
   const out = prev || {
     tables: [], panes: [], lights: [], items: [], interact: [], doors: [], fdoors: [], statics: [], closets: [],
-    paneIdx: new Map(), pool: level.pool.filter((q) => q.s >= 0), lootRng: rng(1337),
+    paneIdx: new Map(), pool: level.pool.filter((q) => q.s >= 0), lootRng: rng(1337), wmSpots: new Map(),
   };
   out.added = { tables: [], panes: [], lights: [], doors: [], statics: [], items: [], interact: [], fdoors: [], closets: [] };
   const center = (c, r) => [c * TILE + TILE / 2, r * TILE + TILE / 2];
@@ -124,7 +143,12 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const yc = WM_Y[p.sub] ?? WM_Y.misc;
         const [sdx, sdz] = DV[p.sd];
         const w = rc.w * PX * S, h = rc.h * PX * S;
-        const x = cx + sdx * (TILE / 2 - 0.03), z = cz + sdz * (TILE / 2 - 0.03);
+        // two mounts on the same stretch of wall stand a hair apart (later ones in front), so they cannot flicker through each other
+        const spot = `${c},${r},${p.sd}`, k = out.wmSpots.get(spot) || 0;
+        out.wmSpots.set(spot, k + 1);
+        // on a floor tile the mount stands just in front of the wall; on a wall tile (a sign) it hangs just outside that tile's face
+        const depth = p.ow ? TILE / 2 + 0.03 + 0.012 * k : TILE / 2 - 0.03 - 0.012 * k, lat = (p.lat || 0) * PX;
+        const x = cx + sdx * depth + (sdx ? 0 : lat), z = cz + sdz * depth + (sdz ? 0 : lat);
         const st = sprite({ tag: 'wm', rect: p.s, mode: 1, x, y: yc - h / 2, z, w, h, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz], emit: p.sub === 'status_display' || p.sub === 'newscaster' ? 0.6 : 0 });
         const it = { idx: out.interact.length, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, x, z, y0: yc - h / 2, y1: yc + h / 2, rad: 0.6, st, sd: p.sd };
         out.interact.push(it); out.added.interact.push(it);
@@ -155,6 +179,10 @@ export function buildPropData(world, rects, props, level, prev = null) {
       default: break;
     }
   }
+  // which way every door and firelock faces (needs all of them placed first: a door's neighbour may be another door)
+  const doorTiles = new Set([...out.doors.map((d) => d.i), ...out.fdoors.map((f) => f.y * W + f.x)]);
+  for (const d of out.added.doors) d.yaw = doorYaw(world, d.x, d.y, doorTiles);
+  for (const f of out.added.fdoors) f.yaw = doorYaw(world, f.x, f.y, doorTiles);
   return out;
 }
 

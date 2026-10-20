@@ -1,0 +1,36 @@
+# item types to document (DM path, in-game name)
+/obj/item/storage/box/prisoner	box of prisoner IDs
+/obj/item/storage/box/rxglasses/spyglasskit	spyglass kit
+/obj/item/storage/box/shipping	box of shipping supplies
+/obj/item/storage/box/survival	box
+/obj/item/storage/box/survival/engineer	box
+/obj/item/storage/box/survival/medical	box
+/obj/item/storage/box/survival/mining	box
+/obj/item/storage/firstaid/brute	brute trauma treatment kit
+/obj/item/storage/firstaid/emergency	emergency first-aid kit
+/obj/item/storage/firstaid/fire	burn treatment kit
+/obj/item/storage/firstaid/o2	oxygen deprivation treatment kit
+/obj/item/storage/firstaid/regular	first-aid kit
+/obj/item/storage/firstaid/toxin	toxin treatment kit
+/obj/item/storage/pill_bottle/dice	bag of dice
+/obj/item/storage/pill_bottle/happinesspsych	happiness pills
+/obj/item/storage/pill_bottle/lsdpsych	mindbreaker toxin pills
+/obj/item/storage/pill_bottle/mannitol	bottle of mannitol pills
+/obj/item/storage/pill_bottle/mutadone	bottle of mutadone pills
+/obj/item/storage/pill_bottle/paxpsych	pax pills
+/obj/item/storage/pill_bottle/psicodine	bottle of psicodine pills
+/obj/item/surgical_drapes	surgical drapes
+/obj/item/survivalcapsule	bluespace shelter capsule
+/obj/item/t_scanner/adv_mining_scanner/lesser	automatic mining scanner
+/obj/item/target	shooting target
+/obj/item/target/alien	shooting target
+/obj/item/target/alien/anchored	shooting target
+/obj/item/target/clown	shooting target
+/obj/item/target/syndicate	shooting target
+/obj/item/toner	toner cartridge
+/obj/item/toy/beach_ball/holoball	basketball
+/obj/item/toy/cards/deck/cas	CAS deck (white)
+/obj/item/toy/plush/slimeplushie	slime plushie
+/obj/item/toy/sword	toy sword
+/obj/item/transfer_valve	tank transfer valve
+/obj/item/wirerod	wired rod

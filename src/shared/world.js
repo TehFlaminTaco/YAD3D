@@ -1,4 +1,5 @@
-import { TILE, KIND, DV, OPP, N, S, E, W } from './config.js';
+import { TILE, KIND, DV, OPP, N, S, E, W, PLAYER_R, GRIP_REACH } from './config.js';
+import { WS, WINDOWS } from './windows.js';
 
 /**
  * Tile grid + collision + queries. Game space: x = col * TILE, z = row * TILE, y up; north is -z.
@@ -28,6 +29,8 @@ export class World {
     this.tableH = new Float32Array(n);       // surface height of tables (items rest on them)
     this.doorAt = new Map();                 // tile index -> Door
     this.airBlock = new Uint8Array(n);       // blocks gas (walls, windows, closed doors)
+    this.grille = new Uint8Array(n);         // a grille stands here (under every window, and still there when the glass is gone)
+    this.ws = new Uint8Array(n);             // a window's state, see shared/windows.js (WS)
     this.hit = null;                         // what the last raycast stopped at
 
     this.hp = new Map();                     // destructible tile -> hit points
@@ -41,16 +44,39 @@ export class World {
         const v = this.wallVar[i];
         if (v !== 0xffff && this.variants[v].glass) {
           this.glass[i] = 1;
-          this.hp.set(i, this.variants[v].name === 'pwindow' ? 90 : this.variants[v].name === 'rwindow' ? 70 : 30);
+          const win = WINDOWS[this.variants[v].name];
+          this.hp.set(i, win ? win.hp : 30);
+          this.grille[i] = this.variants[v].gr !== undefined ? 1 : 0;      // every spawner window has one
+          this.ws[i] = win?.reinf ? WS.SECURE : WS.OUT_OF_FRAME;           // in the map they are fastened down
         } else {
           this.hp.set(i, v !== 0xffff && /reinforced/.test(this.variants[v].name) ? 900 : 400);
         }
         this.solid[i] = 1;
         this.airBlock[i] = 1;
-      } else if (k === KIND.SPACE) {
-        this.solid[i] = 1;
       }
+      // open space is not solid: you can float out into it (the edge of the map is the wall, see collides)
     }
+    this.gravityOn = true;                   // the station's gravity generator (debug menu / generator machine)
+  }
+
+  /**
+   * SS13 has_gravity(): none over open space or lattice, always on a shuttle (its area carries its own), otherwise whatever the
+   * station's generator is doing.
+   */
+  hasGravity(x, z) {
+    const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
+    if (!this.inb(c, r)) return false;
+    const i = r * this.W + c, k = this.kind[i];
+    if (k === KIND.SPACE || k === KIND.LATTICE) return false;
+    if (this.areas[this.areaIdx[i]]?.c === 'shuttle') return true;
+    return this.gravityOn;
+  }
+
+  /** Something to push off from (Process_Spacemove's "backup"): lattice within a tile, or a wall / locker / window frame within arm's reach. */
+  hasGrip(x, z, ignore = null) {
+    const c = Math.floor(x / TILE), r = Math.floor(z / TILE);
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (this.kindAt(c + dc, r + dr) === KIND.LATTICE) return true;
+    return this.collides(x, z, PLAYER_R + GRIP_REACH, ignore);
   }
 
   /**
@@ -61,10 +87,54 @@ export class World {
     const i = r * this.W + c;
     this.kind[i] = KIND.FLOOR;
     this.glass[i] = 0;
-    this.solid[i] = 1;
+    this.solid[i] = this.grille[i] ? 1 : 0;        // the grille still blocks you; with no grille it is just open floor
     this.airBlock[i] = 0;
+    this.ws[i] = 0;
     this.hp.delete(i);
     this.breached.add(i);
+  }
+
+  /** The window variant (`WINDOWS` key) of glass tile `i`, whether it is still there or not. */
+  windowKey(i) {
+    const v = this.wallVar[i];
+    return v === 0xffff ? undefined : this.variants[v]?.name;
+  }
+
+  /** A window's state: the DM `state` plus whether it is screwed down. An unscrewed window does not seal the tile (window.dm CanAtmosPass). */
+  setWindowState(i, state, anchored) {
+    this.ws[i] = (state & WS.STATE) | (anchored ? 0 : WS.UNANCHORED);
+    this.airBlock[i] = anchored ? 1 : 0;
+  }
+
+  /** The grille on a tile whose window is gone is cut away (deconstruct()): open floor now. */
+  removeGrille(c, r) {
+    const i = r * this.W + c;
+    this.grille[i] = 0;
+    this.ws[i] &= ~WS.GRILLE_LOOSE;
+    if (this.breached.has(i)) this.solid[i] = 0;
+  }
+
+  /** A grille is put up again on a hole (rods, grille.dm / the stack recipe). */
+  addGrille(c, r) {
+    const i = r * this.W + c;
+    this.grille[i] = 1;
+    this.ws[i] &= ~WS.GRILLE_LOOSE;
+    if (this.breached.has(i)) this.solid[i] = 1;
+  }
+
+  /** A window is put on a grille: it stands there, loose (not screwed down), and does not seal yet. */
+  restoreWindow(c, r, key) {
+    const i = r * this.W + c;
+    const v = this.variants.findIndex((x) => x.glass && x.name === key);
+    if (v < 0 || !this.grille[i]) return false;
+    this.kind[i] = KIND.WALL;
+    this.wallVar[i] = v;
+    this.glass[i] = 1;
+    this.solid[i] = 1;
+    this.setWindowState(i, WS.OUT_OF_FRAME, false);
+    this.hp.set(i, WINDOWS[key]?.hp ?? 30);
+    this.breached.delete(i);
+    return true;
   }
 
   /** True if tile `i` touches space (or lattice over space) directly: air leaves through it. */
@@ -90,6 +160,8 @@ export class World {
     this.glass[i] = 0;
     this.solid[i] = 1;
     this.airBlock[i] = 1;
+    this.grille[i] = 0;
+    this.ws[i] = 0;
     this.hp.set(i, 500);
     this.breached.delete(i);
   }

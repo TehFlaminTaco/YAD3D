@@ -1,0 +1,40 @@
+# item types to document (DM path, in-game name)
+/obj/item/pickaxe/emergency	emergency disembarkation tool
+/obj/item/pinpointer/nuke	pinpointer
+/obj/item/plunger	plunger
+/obj/item/pneumatic_cannon/pie	pie cannon
+/obj/item/radio/off	station bounced radio
+/obj/item/raw_anomaly_core/random	random raw core
+/obj/item/rcl/pre_loaded	rapid pipe cleaner layer
+/obj/item/reagent_containers/blood/random	blood pack
+/obj/item/reagent_containers/chem_pack	intravenous medicine bag
+/obj/item/reagent_containers/food/drinks/soda_cans/canned_laughter	Canned Laughter
+/obj/item/reagent_containers/food/snacks/grown/grapes	bunch of grapes
+/obj/item/reagent_containers/food/snacks/grown/poppy	poppy
+/obj/item/reagent_containers/food/snacks/meat/slab/monkey	monkey meat
+/obj/item/reagent_containers/food/snacks/pie/cream	banana cream pie
+/obj/item/reagent_containers/glass/beaker/cryoxadone	beaker
+/obj/item/reagent_containers/glass/bottle/ammonia	ammonia bottle
+/obj/item/reagent_containers/glass/bottle/epinephrine	epinephrine bottle
+/obj/item/reagent_containers/glass/bottle/morphine	morphine bottle
+/obj/item/reagent_containers/glass/bottle/multiver	multiver bottle
+/obj/item/reagent_containers/glass/bottle/nutrient/ez	bottle of E-Z-Nutrient
+/obj/item/reagent_containers/glass/bottle/nutrient/rh	bottle of Robust Harvest
+/obj/item/reagent_containers/glass/bottle/toxin	toxin bottle
+/obj/item/reagent_containers/glass/bowl	bowl
+/obj/item/reagent_containers/glass/bucket	bucket
+/obj/item/reagent_containers/glass/rag	damp rag
+/obj/item/reagent_containers/hypospray/cmo	hypospray
+/obj/item/reagent_containers/hypospray/medipen	epinephrine medipen
+/obj/item/reagent_containers/hypospray/medipen/survival	survival emergency medipen
+/obj/item/reagent_containers/pill/patch/aiuri	aiuri patch (burn)
+/obj/item/reagent_containers/spray/cleaner	space cleaner
+/obj/item/reagent_containers/spray/pepper	pepperspray
+/obj/item/reagent_containers/spray/waterflower	water flower
+/obj/item/reagent_containers/syringe/antiviral	syringe (spaceacillin)
+/obj/item/reagent_containers/syringe/lethal/execution	lethal injection syringe
+/obj/item/restraints/legcuffs/beartrap	bear trap
+/obj/item/retractor	retractor
+/obj/item/roulette_wheel_beacon	roulette wheel beacon
+/obj/item/scalpel	scalpel
+/obj/item/seeds/garlic	pack of garlic seeds

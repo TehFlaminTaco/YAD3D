@@ -1,0 +1,116 @@
+# item types to document (DM path, in-game name)
+/obj/item/storage/toolbox/mechanical	mechanical toolbox
+/obj/item/storage/toolbox/emergency	emergency toolbox
+/obj/item/storage/box/survival	box
+/obj/item/storage/belt/utility/atmostech	toolbelt
+/obj/item/storage/backpack/industrial	industrial backpack
+/obj/item/storage/box/survival/engineer	box
+/obj/item/storage/box/beanbag	box of beanbags
+/obj/item/storage/backpack/botany	botany backpack
+/obj/item/storage/backpack/captain	captain's backpack
+/obj/item/storage/backpack/cultpack	trophy rack
+/obj/item/storage/backpack/chemistry	chemistry backpack
+/obj/item/storage/box/survival/medical	box
+/obj/item/storage/belt/utility/chief/full	Chief Engineer's toolbelt
+/obj/item/storage/backpack/medic	medical backpack
+/obj/item/storage/backpack/clown	Giggles von Honkerton
+/obj/item/storage/box/hug/survival	box of hugs
+/obj/item/storage/box/evidence	evidence bag box
+/obj/item/storage/backpack/genetics	genetics backpack
+/obj/item/storage/box/ids	box of spare IDs
+/obj/item/storage/backpack/security	security backpack
+/obj/item/storage/box/survival/security	box
+/obj/item/storage/backpack/mime	Parcel Parceaux
+/obj/item/storage/belt/medical/paramedic	medical belt
+/obj/item/storage/backpack/science	science backpack
+/obj/item/storage/belt/utility/full	toolbelt
+/obj/item/storage/backpack/explorer	explorer bag
+/obj/item/storage/box/survival/mining	box
+/obj/item/storage/belt/utility/full/engi	toolbelt
+/obj/item/storage/backpack/virology	virology backpack
+/obj/item/clipboard	clipboard
+/obj/item/folder/blue	folder
+/obj/item/folder/documents	folder- 'TOP SECRET'
+/obj/item/folder/red	folder
+/obj/item/folder/white	folder
+/obj/item/folder/yellow	folder
+/obj/item/storage/backpack/duffelbag/med/surgery	surgical duffel bag
+/obj/item/storage/backpack/duffelbag/sec/surgery	surgical duffel bag
+/obj/item/storage/bag/plants/portaseeder	portable seed extractor
+/obj/item/storage/bag/trash	trash bag
+/obj/item/storage/bag/tray/cafeteria	cafeteria tray
+/obj/item/storage/belt/medical	medical belt
+/obj/item/storage/belt/utility	toolbelt
+/obj/item/storage/book/bible	bible
+/obj/item/storage/box/beakers	box of beakers
+/obj/item/storage/box/bodybags	body bags
+/obj/item/storage/box/chemimp	boxed chemical implant kit
+/obj/item/storage/box/deputy	box of deputy armbands
+/obj/item/storage/box/disks	diskette box
+/obj/item/storage/box/disks_nanite	nanite program disks box
+/obj/item/storage/box/donkpockets	box of donk-pockets
+/obj/item/storage/box/drinkingglasses	box of drinking glasses
+/obj/item/storage/box/firingpins	box of standard firing pins
+/obj/item/storage/box/flashbangs	box of flashbangs (WARNING)
+/obj/item/storage/box/gloves	box of latex gloves
+/obj/item/storage/box/handcuffs	box of spare handcuffs
+/obj/item/storage/box/hug	box of hugs
+/obj/item/storage/box/lights/mixed	box of replacement lights
+/obj/item/storage/box/lights/tubes	box of replacement tubes
+/obj/item/storage/box/masks	box of sterile masks
+/obj/item/storage/box/matches	matchbox
+/obj/item/storage/box/monkeycubes	monkey cube box
+/obj/item/storage/box/mousetraps	box of Pest-B-Gon mousetraps
+/obj/item/storage/box/pdas	spare PDAs
+/obj/item/storage/box/prisoner	box of prisoner IDs
+/obj/item/storage/box/rubbershot	box of rubber shots
+/obj/item/storage/box/rxglasses	box of prescription glasses
+/obj/item/storage/box/seccarts	box of PDA security cartridges
+/obj/item/storage/box/shipping	box of shipping supplies
+/obj/item/storage/box/syringes	box of syringes
+/obj/item/storage/box/teargas	box of tear gas grenades (WARNING)
+/obj/item/storage/box/trackimp	boxed tracking implant kit
+/obj/item/storage/briefcase	briefcase
+/obj/item/storage/crayons	box of crayons
+/obj/item/storage/fancy/candle_box	candle pack
+/obj/item/storage/fancy/cigarettes	Space Cigarettes packet
+/obj/item/storage/fancy/donut_box	donut box
+/obj/item/storage/fancy/egg_box	egg box
+/obj/item/storage/lockbox/loyalty	lockbox of mindshield implants
+/obj/item/storage/lockbox/medal	medal box
+/obj/item/storage/photo_album	photo album
+/obj/item/storage/photo_album/prison	photo album
+/obj/item/storage/pod	emergency space suits
+/obj/item/storage/secure/briefcase	secure briefcase
+/obj/item/storage/secure/safe	secure safe
+/obj/item/storage/secure/safe/hos	head of security's safe
+/obj/item/storage/toolbox/drone	mechanical toolbox
+/obj/item/storage/toolbox/electrical	electrical toolbox
+/obj/item/storage/belt/champion	championship belt
+/obj/item/storage/backpack/satchel/cap	captain's satchel
+/obj/item/storage/backpack/duffelbag/captain	captain's duffel bag
+/obj/item/storage/box/silver_ids	box of spare silver IDs
+/obj/item/storage/belt/sabre	sabre sheath
+/obj/item/storage/photo_album/captain	photo album (Captain)
+/obj/item/storage/box/pillbottles	box of pill bottles
+/obj/item/storage/box/medigels	box of medical gels
+/obj/item/storage/photo_album/cmo	photo album (Chief Medical Officer)
+/obj/item/storage/belt/holster/detective/full	detective's holster
+/obj/item/storage/box/rxglasses/spyglasskit	spyglass kit
+/obj/item/storage/photo_album/ce	photo album (Chief Engineer)
+/obj/item/storage/box/emptysandbags	box of empty sandbags
+/obj/item/storage/lockbox/medal/service	service award box
+/obj/item/storage/photo_album/hop	photo album (Head of Personnel)
+/obj/item/storage/lockbox/medal/sec	security medal box
+/obj/item/storage/photo_album/hos	photo album (Head of Security)
+/obj/item/storage/box/lethalshot	box of lethal shotgun shots
+/obj/item/storage/backpack/satchel	satchel
+/obj/item/storage/backpack/satchel/leather/withwallet	leather satchel
+/obj/item/storage/lockbox/medal/cargo	cargo award box
+/obj/item/storage/photo_album/qm	photo album (Quartermaster)
+/obj/item/storage/lockbox/medal/sci	science medal box
+/obj/item/storage/photo_album/rd	photo album (Research Director)
+/obj/item/storage/box/zipties	box of spare zipties
+/obj/item/storage/backpack/duffelbag/engineering	industrial duffel bag
+/obj/item/storage/backpack/satchel/eng	industrial satchel
+/obj/item/storage/backpack/satchel/explorer	explorer satchel

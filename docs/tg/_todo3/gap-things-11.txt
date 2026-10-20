@@ -1,0 +1,5 @@
+# DM path <TAB> in-game name <TAB> how many are placed on BoxStation (if any)
+/obj/structure/filingcabinet/employment	filing cabinet	(x1 on BoxStation)
+/obj/structure/filingcabinet/filingcabinet	filing cabinet	(x2 on BoxStation)
+/obj/structure/kitchenspike	meat spike	(x2 on BoxStation)
+/obj/structure/toilet/greyscale	toilet	(x9 on BoxStation)

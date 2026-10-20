@@ -1,4 +1,4 @@
-const SWALLOW = new Set(['Tab', 'Space', 'F1', 'F2', 'F4', 'KeyT', 'KeyY', 'KeyM', 'KeyO', 'Enter', 'Slash', 'Backquote', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+const SWALLOW = new Set(['Tab', 'Space', 'F1', 'F2', 'F3', 'F4', 'KeyT', 'KeyY', 'KeyM', 'KeyO', 'Enter', 'Slash', 'Backquote', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 // While you play, Ctrl (or Cmd) is held for dragging and a W, S or D under it is a browser shortcut: Ctrl+W closes the tab, Ctrl+S saves the
 // page, Ctrl+D bookmarks, Ctrl+P prints. The page swallows every such chord it is allowed to (the browser reserves Ctrl+W, Ctrl+T and Ctrl+N

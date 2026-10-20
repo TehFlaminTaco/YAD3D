@@ -102,7 +102,7 @@ export class LevelMesh {
         if (k === KIND.FLOOR || k === KIND.LATTICE) {
           this.floorQuad(ao, c, r, world.floorCell[i]);
           if (k === KIND.FLOOR && world.roof[i]) this.ceilingQuad(ao, c, r, lvl.ceiling);
-          if (world.breached.has(i)) this.grillePanels(ao, c, r, world.variants[world.wallVar[i]]);   // the window is gone, the grille is not
+          if (world.breached.has(i) && world.grille[i]) this.grillePanels(ao, c, r, world.variants[world.wallVar[i]]);   // the window is gone, the grille is not (until it is cut)
           const tb = this.tableAt.get(i);
           if (tb) this.tableBox(ao, this.tableAt, tb, c, r);
         } else if (k === KIND.WALL) {
@@ -195,8 +195,7 @@ export class LevelMesh {
       if (!world.inb(nc, nr)) continue;
       const nk = world.kind[nr * world.W + nc];
       if (glass) { if (nk !== KIND.WALL) open.push(d); }
-      else if (nk === KIND.SPACE) continue;
-      else if (nk !== KIND.WALL || world.glass[nr * world.W + nc]) open.push(d);
+      else if (nk !== KIND.WALL || world.glass[nr * world.W + nc]) open.push(d);       // including space: you can float out and look back at the hull
     }
     const conn = (cc, rr) => (glass ? world.kind[rr * world.W + cc] === KIND.WALL && world.inb(cc, rr)
       : world.inb(cc, rr) && world.opaque(cc, rr));

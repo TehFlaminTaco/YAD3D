@@ -1,6 +1,8 @@
 import { SLOTS, TILE } from '../shared/config.js';
 import { describeState, storageReason, fitsSlot, EQUIP_ORDER } from '../shared/items.js';
 
+const MAGBOOT_SLOW = 0.65;
+
 /**
  * SS13 inventory rules, server side. An item lives in exactly one place (item.loc):
  *   {t:'floor'} | {t:'hand', mob, i} | {t:'slot', mob, slot} | {t:'box', box} | {t:'closet', cl} | {t:'cuffs', mob}
@@ -75,6 +77,8 @@ export function recalc(sim, mob) {
   addId(mob.hands[0]); addId(mob.hands[1]);
   mob.access = acc;
   if (mob.internals && !internalsSource(mob)) mob.internals = false;
+  if (mob.jetOn && !mob.worn.back?.def.jetpack) mob.jetOn = false;            // took it off
+  if (mob.magOn && !mob.worn.shoes?.def.magboots) mob.magOn = false;
   mob.dirty = true;
 }
 
@@ -87,7 +91,7 @@ export function internalsSource(mob) {
 }
 
 export function spaceSafe(mob) { return !!(mob.worn.suit?.def.spaceSuit && mob.worn.head?.def.spaceHelmet); }
-export function moveSlow(mob) { return mob.worn.suit?.def.slow ?? 1; }
+export function moveSlow(mob) { return (mob.worn.suit?.def.slow ?? 1) * (mob.magOn ? MAGBOOT_SLOW : 1); }       // magboots: slowdown_active = 2 (a space suit is 1)
 export function armorOf(mob) { return mob.worn.suit?.def.armor ?? 0; }
 export function allItems(mob) {
   const out = [];

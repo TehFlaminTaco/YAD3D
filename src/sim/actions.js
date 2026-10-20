@@ -1,4 +1,5 @@
-import { TILE, KIND, INTENTS, EYE } from '../shared/config.js';
+import { TILE, KIND, INTENTS, EYE, THROW_KICK } from '../shared/config.js';
+import { floatState } from '../shared/movement.js';
 import { clamp } from '../shared/util.js';
 import { storageReason, fitsSlot, describeState } from '../shared/items.js';
 import {
@@ -59,6 +60,8 @@ export class Actions {
       case 'intent': m.intent = INTENTS[clamp(msg.v | 0, 0, 3)]; m.dirty = true; break;
       case 'internals': this.toggleInternals(m); break;
       case 'light': this.toggleLight(m); break;
+      case 'jet': this.toggleJetpack(m); break;
+      case 'mag': this.toggleMagboots(m); break;
       case 'resist': if (!sim.people.resist(m) && m.busy) this.cancelBusy(m, 'stop'); break;
       case 'pull': sim.people.release(m); break;
       default: break;
@@ -75,6 +78,26 @@ export class Actions {
     m.internals = true;
     sim.tell(m, 'notice', 'You are now running on internals.');
     sim.sound('hiss', m.x, m.z, 0.5);
+  }
+
+  /** jetpack.dm: toggle_jetpack(). The one on your back; its stabilizers are always on (let go of the keys and it brakes you). */
+  toggleJetpack(m) {
+    const sim = this.sim, jp = m.worn.back?.def.jetpack ? m.worn.back : null;
+    if (!jp) { sim.tell(m, 'warning', 'You have no jetpack on your back.'); return; }
+    m.jetOn = !m.jetOn;
+    sim.tell(m, 'notice', `You turn the jetpack ${m.jetOn ? 'on' : 'off'}.`);
+    sim.sound('hiss', m.x, m.z, 0.3);
+    m.dirty = true;
+  }
+
+  /** magboots.dm attack_self(): the mag-pulse traction system. */
+  toggleMagboots(m) {
+    const sim = this.sim;
+    if (!m.worn.shoes?.def.magboots) { sim.tell(m, 'warning', 'You are not wearing magboots.'); return; }
+    m.magOn = !m.magOn;
+    sim.tell(m, 'notice', `You ${m.magOn ? 'enable' : 'disable'} the mag-pulse traction system.`);
+    sim.sound('beep', m.x, m.z, 0.3);
+    m.dirty = true;
   }
 
   lightItem(m) {
@@ -130,14 +153,18 @@ export class Actions {
       case 'prop': { const it = sim.props.interact[t.idx]; return it ? { k: 'prop', it, x: it.x, z: it.z } : undefined; }
       case 'mob': { const o = sim.mobs.get(t.id); return o && o !== m ? { k: 'mob', o, x: o.x, z: o.z } : undefined; }
       case 'breach': { const i = t.r * sim.world.W + t.c; return sim.world.breached.has(i) ? { k: 'breach', c: t.c, r: t.r, x: t.c * TILE + 1, z: t.r * TILE + 1 } : undefined; }
+      case 'window': case 'pane': {
+        const th = sim.windows.thing(t);
+        return th ? { k: t.k, c: t.c, r: t.r, d: t.d, x: th.x, z: th.z } : undefined;
+      }
       default: return undefined;
     }
   }
 
   inReach(m, t) {
     const d = Math.hypot(t.x - m.x, t.z - m.z);
-    if (d > REACH + (t.k === 'mob' ? 0.5 : 0)) return false;
-    if (t.k === 'door' || t.k === 'breach' || (t.k === 'prop' && t.it.kind === 'wm')) return true;
+    if (d > REACH + (t.k === 'mob' ? 0.5 : t.k === 'window' || t.k === 'pane' || t.k === 'breach' ? 1.3 : 0)) return false;       // a window's middle is a metre behind its face
+    if (t.k === 'door' || t.k === 'breach' || t.k === 'window' || t.k === 'pane' || (t.k === 'prop' && t.it.kind === 'wm')) return true;
     const wd = this.sim.world.raycast(m.x, m.z, t.x - m.x, t.z - m.z, d, 'shot');
     return wd >= d - 0.8;
   }
@@ -163,7 +190,8 @@ export class Actions {
       case 'fdoor': sim.firedoors.manualOpen(t.f, m); return;
       case 'prop': return this.clickProp(c, m, t.it, held, !!msg.alt);
       case 'mob': return this.clickMob(m, t.o, held, !!msg.alt);
-      case 'breach': return this.clickBreach(m, t, held);
+      case 'breach': return this.clickBreachTile(m, t, held);
+      case 'window': case 'pane': if (sim.windows.click(m, t, held)) return; return this.clickAir(m, held);
       default: return;
     }
   }
@@ -205,6 +233,15 @@ export class Actions {
       return;
     }
     sim.openDoor(idx, m);
+  }
+
+  /** A smashed or taken-apart window: the grille's tools first (wirecutters, screwdriver, rods, glass), then a metal plate welded over the hole. */
+  clickBreachTile(m, t, held) {
+    const sim = this.sim;
+    if (sim.windows.clickGrille(m, t, held)) return;
+    if (held?.def.sheet === 'metal') return this.clickBreach(m, t, held);
+    const lines = sim.windows.examine(t);
+    if (lines.length) sim.tell(m, 'info', lines.join(' '));
   }
 
   clickBreach(m, t, held) {
@@ -440,6 +477,8 @@ export class Actions {
     const hit = this.rayMobs(m, f, Math.min(maxd, wall));
     const dist = Math.min(maxd, wall) - 0.4;
     detach(sim, item);
+    // floating with nothing to brace on, the throw pushes you the other way (carbon.dm throw_item: newtonian_move(get_dir(target, src)))
+    if (floatState(sim.world, m, sim.moveCtx(m)).adrift) { m.vx -= f.x * THROW_KICK; m.vz -= f.z * THROW_KICK; }
     const x = m.x + f.x * Math.max(0.5, hit ? hit.dist - 0.5 : dist), z = m.z + f.z * Math.max(0.5, hit ? hit.dist - 0.5 : dist);
     const rec = place(sim, item, x, z);
     // everyone nearby sees it sail from the thrower's hand to where it lands
@@ -690,7 +729,7 @@ export class Actions {
     } else if (t.k === 'prop') {
       const it = sim.props.interact[t.idx];
       if (it) lines.push(...this.propText(it));
-    } else if (t.k === 'breach') lines.push(sim.world.ventsToSpace(t.r * sim.world.W + t.c) ? 'A hole in the hull. The air is rushing out into space.' : 'The window has been smashed out.');
+    } else if (t.k === 'breach' || t.k === 'window' || t.k === 'pane') lines.push(...sim.windows.examine(t));
     if (m && lines.length) sim.tellClient(c, 'info', lines.join(' '));
   }
 

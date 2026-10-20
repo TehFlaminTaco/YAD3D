@@ -1,0 +1,914 @@
+# Item types YAD3D knows (DM path, in-game name)
+/obj/item/crowbar	pocket crowbar
+/obj/item/wrench	wrench
+/obj/item/screwdriver	screwdriver
+/obj/item/wirecutters	wirecutters
+/obj/item/weldingtool	welding tool
+/obj/item/flashlight	flashlight
+/obj/item/storage/toolbox/mechanical	mechanical toolbox
+/obj/item/storage/toolbox/emergency	emergency toolbox
+/obj/item/extinguisher	fire extinguisher
+/obj/item/storage/firstaid/regular	first-aid kit
+/obj/item/storage/firstaid/fire	burn treatment kit
+/obj/item/storage/firstaid/toxin	toxin treatment kit
+/obj/item/storage/firstaid/o2	oxygen deprivation treatment kit
+/obj/item/storage/firstaid/brute	brute trauma treatment kit
+/obj/item/healthanalyzer	health analyzer
+/obj/item/stack/medical/bruise_pack	bruise pack
+/obj/item/stack/medical/ointment	ointment
+/obj/item/tank/internals/oxygen	oxygen tank
+/obj/item/tank/internals/emergency_oxygen	emergency oxygen tank
+/obj/item/clothing/mask/breath	breath mask
+/obj/item/clothing/mask/gas	gas mask
+/obj/item/clothing/suit/space/emergency	space suit
+/obj/item/clothing/head/helmet/space/emergency	space helmet
+/obj/item/clothing/suit/space/hardsuit/engine	engineering hardsuit
+/obj/item/card/id	identification card
+/obj/item/pda	PDA
+/obj/item/radio	station bounced radio
+/obj/item/stock_parts/cell	power cell
+/obj/item/stack/sheet/metal	metal
+/obj/item/stack/sheet/glass	glass
+/obj/item/gun/energy/e_gun	energy gun
+/obj/item/gun/energy/e_gun/mini	miniature energy gun
+/obj/item/gun/energy/laser	laser gun
+/obj/item/melee/baton	stun baton
+/obj/item/fireaxe	fire axe
+/obj/item/clothing/gloves/color/yellow	insulated gloves
+/obj/item/clothing/head/hardhat	hard hat
+/obj/item/reagent_containers/food/drinks/soda_cans/cola	Space Cola
+/obj/item/reagent_containers/food/snacks/chips	chips
+/obj/item/reagent_containers/food/drinks/coffee	robust coffee
+/obj/item/reagent_containers/hypospray/medipen	epinephrine medipen
+/obj/item/multitool	multitool
+/obj/item/paper	paper
+/obj/item/pen	pen
+/obj/item/lighter	Zippo lighter
+/obj/item/storage/box	box
+/obj/item/stack/sheet/plasteel	plasteel
+/obj/item/clothing/head/welding	welding helmet
+/obj/item/geiger_counter	Geiger counter
+/obj/item/assembly/igniter	igniter
+/obj/item/stock_parts/cell/high	high-capacity power cell
+/obj/item/clothing/suit/hazardvest	hazard vest
+/obj/item/clothing/under/color/grey	grey jumpsuit
+/obj/item/clothing/shoes/sneakers/black	black shoes
+/obj/item/storage/backpack	backpack
+/obj/item/radio/headset	radio headset
+/obj/item/storage/box/survival	box
+/obj/item/clothing/under/rank/engineering/atmospheric_technician	atmospheric technician's jumpsuit
+/obj/item/radio/headset/headset_eng	engineering radio headset
+/obj/item/storage/belt/utility/atmostech	toolbelt
+/obj/item/pda/atmos	atmospherics PDA
+/obj/item/analyzer	analyzer
+/obj/item/storage/backpack/industrial	industrial backpack
+/obj/item/storage/box/survival/engineer	box
+/obj/item/modular_computer/tablet/preset/advanced	tablet computer
+/obj/item/clothing/under/rank/civilian/bartender	bartender's uniform
+/obj/item/clothing/suit/armor/vest	armor vest
+/obj/item/clothing/shoes/laceup	laceup shoes
+/obj/item/clothing/glasses/sunglasses/reagent	beer goggles
+/obj/item/radio/headset/headset_srv	service radio headset
+/obj/item/pda/bar	bartender PDA
+/obj/item/storage/box/beanbag	box of beanbags
+/obj/item/clothing/under/rank/civilian/hydroponics	botanist's jumpsuit
+/obj/item/clothing/suit/apron	apron
+/obj/item/clothing/gloves/botanic_leather	botanist's leather gloves
+/obj/item/pda/botanist	botanist PDA
+/obj/item/plant_analyzer	plant analyzer
+/obj/item/storage/backpack/botany	botany backpack
+/obj/item/clothing/under/rank/captain	captain's jumpsuit
+/obj/item/clothing/suit/armor/vest/capcarapace	captain's carapace
+/obj/item/clothing/shoes/sneakers/brown	brown shoes
+/obj/item/clothing/gloves/color/captain	captain's gloves
+/obj/item/clothing/glasses/sunglasses	sunglasses
+/obj/item/radio/headset/heads/captain/alt	the captain's bowman headset
+/obj/item/clothing/head/caphat	captain's hat
+/obj/item/pda/captain	captain PDA
+/obj/item/card/id/gold	gold identification card
+/obj/item/storage/backpack/captain	captain's backpack
+/obj/item/melee/classic_baton/telescopic	telescopic baton
+/obj/item/station_charter	station charter
+/obj/item/clothing/under/rank/cargo/tech	cargo technician's jumpsuit
+/obj/item/radio/headset/headset_cargo	supply radio headset
+/obj/item/pda/cargo	cargo technician PDA
+/obj/item/clothing/under/rank/civilian/chaplain	chaplain's jumpsuit
+/obj/item/pda/chaplain	chaplain PDA
+/obj/item/storage/backpack/cultpack	trophy rack
+/obj/item/stamp/chap	chaplain's rubber stamp
+/obj/item/camera/spooky	camera obscura
+/obj/item/clothing/under/rank/medical/chemist	chemist's jumpsuit
+/obj/item/clothing/suit/toggle/labcoat/chemist	chemist labcoat
+/obj/item/clothing/shoes/sneakers/white	white shoes
+/obj/item/clothing/glasses/science	science goggles
+/obj/item/radio/headset/headset_med	medical radio headset
+/obj/item/pda/chemist	chemist PDA
+/obj/item/storage/backpack/chemistry	chemistry backpack
+/obj/item/storage/box/survival/medical	box
+/obj/item/clothing/under/rank/engineering/chief_engineer	chief engineer's jumpsuit
+/obj/item/clothing/gloves/color/black	black gloves
+/obj/item/radio/headset/heads/ce	the chief engineer's headset
+/obj/item/clothing/head/hardhat/white	hard hat
+/obj/item/storage/belt/utility/chief/full	Chief Engineer's toolbelt
+/obj/item/card/id/silver	silver identification card
+/obj/item/pda/heads/ce	chief engineer PDA
+/obj/item/clothing/under/rank/medical/chief_medical_officer	chief medical officer's jumpsuit
+/obj/item/clothing/suit/toggle/labcoat/cmo	chief medical officer's labcoat
+/obj/item/radio/headset/heads/cmo	the chief medical officer's headset
+/obj/item/pda/heads/cmo	chief medical officer PDA
+/obj/item/pinpointer/crew	crew pinpointer
+/obj/item/flashlight/pen/paramedic	paramedic penlight
+/obj/item/storage/backpack/medic	medical backpack
+/obj/item/clothing/under/rank/civilian/clown	clown suit
+/obj/item/clothing/shoes/clown_shoes	clown shoes
+/obj/item/clothing/mask/gas/clown_hat	clown wig and mask
+/obj/item/pda/clown	clown PDA
+/obj/item/bikehorn	bike horn
+/obj/item/storage/backpack/clown	Giggles von Honkerton
+/obj/item/storage/box/hug/survival	box of hugs
+/obj/item/stamp/clown	clown's rubber stamp
+/obj/item/reagent_containers/spray/waterflower	water flower
+/obj/item/reagent_containers/food/snacks/grown/banana	banana
+/obj/item/instrument/bikehorn	gilded bike horn
+/obj/item/clothing/under/rank/civilian/chef	cook's suit
+/obj/item/clothing/suit/toggle/chef	chef's apron
+/obj/item/clothing/mask/fakemoustache/italian	italian moustache
+/obj/item/clothing/head/chefhat	chef's hat
+/obj/item/pda/cook	cook PDA
+/obj/item/sharpener	whetstone
+/obj/item/clothing/under/rank/civilian/curator	sensible suit
+/obj/item/pda/curator	curator PDA
+/obj/item/laser_pointer	laser pointer
+/obj/item/key/displaycase	display case key
+/obj/item/choice_beacon/hero	heroic beacon
+/obj/item/soapstone	soapstone
+/obj/item/barcodescanner	barcode scanner
+/obj/item/clothing/under/rank/security/detective	hard-worn suit
+/obj/item/clothing/suit/det_suit	trenchcoat
+/obj/item/radio/headset/headset_sec/alt	security bowman headset
+/obj/item/clothing/mask/cigarette	cigarette
+/obj/item/clothing/head/fedora/det_hat	detective's fedora
+/obj/item/clothing/neck/tie/detective	loose tie
+/obj/item/pda/detective	detective PDA
+/obj/item/toy/crayon/white	crayon
+/obj/item/storage/box/evidence	evidence bag box
+/obj/item/detective_scanner	forensic scanner
+/obj/item/melee/classic_baton	police baton
+/obj/item/clothing/under/rank/rnd/geneticist	geneticist's jumpsuit
+/obj/item/clothing/suit/toggle/labcoat/genetics	geneticist labcoat
+/obj/item/radio/headset/headset_sci	science radio headset
+/obj/item/pda/geneticist	geneticist PDA
+/obj/item/sequence_scanner	genetic sequence scanner
+/obj/item/flashlight/pen	penlight
+/obj/item/storage/backpack/genetics	genetics backpack
+/obj/item/clothing/under/rank/civilian/head_of_personnel	head of personnel's jumpsuit
+/obj/item/radio/headset/heads/hop	the head of personnel's headset
+/obj/item/clothing/head/hopcap	head of personnel's cap
+/obj/item/pda/heads/hop	head of personnel PDA
+/obj/item/storage/box/ids	box of spare IDs
+/obj/item/clothing/under/rank/security/head_of_security	head of security's jumpsuit
+/obj/item/clothing/suit/armor/hos/trenchcoat	armored trenchcoat
+/obj/item/clothing/shoes/jackboots	jackboots
+/obj/item/clothing/glasses/hud/security/sunglasses	security HUDSunglasses
+/obj/item/radio/headset/heads/hos/alt	the head of security's bowman headset
+/obj/item/clothing/head/hos/beret	head of security beret
+/obj/item/pda/heads/hos	head of security PDA
+/obj/item/restraints/handcuffs	handcuffs
+/obj/item/assembly/flash/handheld	flash
+/obj/item/storage/backpack/security	security backpack
+/obj/item/storage/box/survival/security	box
+/obj/item/melee/baton/loaded	stun baton
+/obj/item/clothing/under/rank/civilian/janitor	janitor's jumpsuit
+/obj/item/pda/janitor	janitor PDA
+/obj/item/clothing/under/rank/civilian/lawyer/bluesuit	blue suit
+/obj/item/clothing/suit/toggle/lawyer	blue suit jacket
+/obj/item/radio/headset/headset_srvsec	law and order headset
+/obj/item/pda/lawyer	lawyer PDA
+/obj/item/clothing/accessory/lawyers_badge	attorney's badge
+/obj/item/clothing/under/rank/medical/doctor	medical doctor's jumpsuit
+/obj/item/clothing/suit/toggle/labcoat	labcoat
+/obj/item/pda/medical	medical PDA
+/obj/item/clothing/under/rank/civilian/mime	mime's outfit
+/obj/item/clothing/suit/toggle/suspenders	suspenders
+/obj/item/clothing/gloves/color/white	white gloves
+/obj/item/clothing/mask/gas/mime	mime mask
+/obj/item/clothing/head/frenchberet	french beret
+/obj/item/pda/mime	mime PDA
+/obj/item/storage/backpack/mime	Parcel Parceaux
+/obj/item/stamp/mime	mime's rubber stamp
+/obj/item/book/mimery	Guide to Dank Mimery
+/obj/item/reagent_containers/food/drinks/bottle/bottleofnothing	bottle of nothing
+/obj/item/clothing/under/rank/medical/paramedic	paramedic jumpsuit
+/obj/item/clothing/suit/toggle/labcoat/paramedic	paramedic's jacket
+/obj/item/clothing/shoes/sneakers/blue	blue shoes
+/obj/item/clothing/gloves/color/latex/nitrile	nitrile gloves
+/obj/item/clothing/head/soft/paramedic	paramedic cap
+/obj/item/storage/belt/medical/paramedic	medical belt
+/obj/item/roller	roller bed
+/obj/item/clothing/under/rank/prisoner	prison jumpsuit
+/obj/item/clothing/shoes/sneakers/orange	orange shoes
+/obj/item/card/id/prisoner	prisoner ID card
+/obj/item/clothing/under/suit/black	black suit
+/obj/item/radio/headset/headset_srvmed	psychology headset
+/obj/item/storage/pill_bottle/mannitol	bottle of mannitol pills
+/obj/item/storage/pill_bottle/psicodine	bottle of psicodine pills
+/obj/item/storage/pill_bottle/paxpsych	pax pills
+/obj/item/storage/pill_bottle/happinesspsych	happiness pills
+/obj/item/storage/pill_bottle/lsdpsych	mindbreaker toxin pills
+/obj/item/clothing/under/rank/cargo/qm	quartermaster's jumpsuit
+/obj/item/pda/quartermaster	quartermaster PDA
+/obj/item/clothing/under/rank/rnd/research_director	research director's vest suit
+/obj/item/radio/headset/heads/rd	the research director's headset
+/obj/item/pda/heads/rd	research director PDA
+/obj/item/storage/backpack/science	science backpack
+/obj/item/clothing/under/rank/rnd/roboticist	roboticist's jumpsuit
+/obj/item/storage/belt/utility/full	toolbelt
+/obj/item/pda/roboticist	roboticist PDA
+/obj/item/clothing/under/rank/rnd/scientist	scientist's jumpsuit
+/obj/item/clothing/suit/toggle/labcoat/science	scientist labcoat
+/obj/item/pda/toxins	scientist PDA
+/obj/item/clothing/under/rank/security/officer	security jumpsuit
+/obj/item/clothing/suit/armor/vest/alt	armor vest
+/obj/item/clothing/head/helmet/sec	helmet
+/obj/item/pda/security	security PDA
+/obj/item/gun/energy/disabler	disabler
+/obj/item/clothing/under/rank/cargo/miner/lavaland	shaft miner's jumpsuit
+/obj/item/clothing/shoes/workboots/mining	mining boots
+/obj/item/radio/headset/headset_cargo/mining	mining radio headset
+/obj/item/pda/shaftminer	shaft miner PDA
+/obj/item/reagent_containers/hypospray/medipen/survival	survival emergency medipen
+/obj/item/storage/bag/ore	mining satchel
+/obj/item/storage/backpack/explorer	explorer bag
+/obj/item/storage/box/survival/mining	box
+/obj/item/flashlight/seclite	seclite
+/obj/item/kitchen/knife/combat/survival	survival knife
+/obj/item/mining_voucher	mining voucher
+/obj/item/stack/marker_beacon/ten	marker beacon
+/obj/item/clothing/under/rank/engineering/engineer	engineer's jumpsuit
+/obj/item/clothing/shoes/workboots	work boots
+/obj/item/storage/belt/utility/full/engi	toolbelt
+/obj/item/pda/engineering	engineering PDA
+/obj/item/t_scanner	T-ray scanner
+/obj/item/clothing/under/rank/medical/virologist	virologist's jumpsuit
+/obj/item/clothing/suit/toggle/labcoat/virologist	virologist labcoat
+/obj/item/clothing/mask/surgical	sterile mask
+/obj/item/pda/viro	virology PDA
+/obj/item/storage/backpack/virology	virology backpack
+/obj/item/clothing/under/rank/security/warden	security suit
+/obj/item/clothing/suit/armor/vest/warden/alt	warden's armored jacket
+/obj/item/clothing/head/warden	warden's police hat
+/obj/item/pda/warden	warden PDA
+/obj/item/ai_module/core/freeformcore	'Freeform' Core AI Module
+/obj/item/ai_module/core/full/asimov	'Asimov' Core AI Module
+/obj/item/ai_module/core/full/custom	Default Core AI Module
+/obj/item/ai_module/reset	'Reset' AI module
+/obj/item/ai_module/reset/purge	'Purge' AI Module
+/obj/item/ai_module/supplied/freeform	'Freeform' AI Module
+/obj/item/ai_module/supplied/oxygen	'OxygenIsToxicToHumans' AI Module
+/obj/item/ai_module/supplied/protect_station	'ProtectStation' AI Module
+/obj/item/ai_module/supplied/quarantine	'Quarantine' AI Module
+/obj/item/ai_module/zeroth/onehuman	'OneHuman' AI Module
+/obj/item/aicard	intelliCard
+/obj/item/airlock_painter	airlock painter
+/obj/item/ammo_box/a357	speed loader (.357)
+/obj/item/assault_pod/mining	Landing Field Designator
+/obj/item/assembly/prox_sensor	proximity sensor
+/obj/item/assembly/signaler	remote signaling device
+/obj/item/assembly/timer	timer
+/obj/item/beacon	tracking beacon
+/obj/item/bedsheet	bedsheet
+/obj/item/bedsheet/captain	captain's bedsheet
+/obj/item/bedsheet/dorms	random dorms bedsheet
+/obj/item/bedsheet/medical	medical blanket
+/obj/item/bedsheet/red	bedsheet
+/obj/item/bikehorn/rubberducky	rubber ducky
+/obj/item/book/codex_gigas	Codex Gigas
+/obj/item/book/manual/chef_recipes	Chef Recipes
+/obj/item/book/manual/hydroponics_pod_people	The Human Harvest: From Seed to Market
+/obj/item/book/manual/wiki/atmospherics	Lexica Atmosia
+/obj/item/book/manual/wiki/barman_recipes	Barman Recipes: Mixing Drinks and Changing Lives
+/obj/item/book/manual/wiki/chemistry	Chemistry Textbook
+/obj/item/book/manual/wiki/cooking_to_serve_man	To Serve Man
+/obj/item/book/manual/wiki/engineering_construction	Station Repairs and Construction
+/obj/item/book/manual/wiki/engineering_hacking	Hacking
+/obj/item/book/manual/wiki/grenades	DIY Chemical Grenades
+/obj/item/book/manual/wiki/infections	Infections - Making your own pandemic!
+/obj/item/book/manual/wiki/medicine	Medical Space Compendium, Volume 638
+/obj/item/book/manual/wiki/plumbing	Chemical Factories Without Narcotics
+/obj/item/book/manual/wiki/robotics_cyborgs	Robotics for Dummies
+/obj/item/book/manual/wiki/security_space_law	Space Law
+/obj/item/book/manual/wiki/tcomms	Subspace Telecommunications And You
+/obj/item/book/manual/wiki/toxins	Toxins or: How I Learned to Stop Worrying and Love the Maxcap
+/obj/item/camera	camera
+/obj/item/camera/detective	Detective's camera
+/obj/item/camera_film	film cartridge
+/obj/item/cartridge/atmos	BreatheDeep cartridge
+/obj/item/cartridge/engineering	Power-ON cartridge
+/obj/item/cartridge/lawyer	P.R.O.V.E. cartridge
+/obj/item/cartridge/quartermaster	space parts & space vendors cartridge
+/obj/item/cartridge/signal/toxins	Signal Ace 2 cartridge
+/obj/item/cautery	cautery
+/obj/item/chair/wood	wooden chair
+/obj/item/cigbutt	cigarette butt
+/obj/item/cigbutt/cigarbutt	cigar butt
+/obj/item/circuitboard/aicore	AI core (AI Core Board)
+/obj/item/circuitboard/computer/operating	Operating Computer (Computer Board)
+/obj/item/circuitboard/machine/chem_dispenser/drinks	Soda Dispenser (Machine Board)
+/obj/item/circuitboard/machine/monkey_recycler	Monkey Recycler (Machine Board)
+/obj/item/circuitboard/machine/paystand	Pay Stand (Machine Board)
+/obj/item/circuitboard/machine/seed_extractor	Seed Extractor (Machine Board)
+/obj/item/circuitboard/machine/stasis	Lifeform Stasis Unit (Machine Board)
+/obj/item/circular_saw	circular saw
+/obj/item/clipboard	clipboard
+/obj/item/clothing/ears/earmuffs	earmuffs
+/obj/item/clothing/glasses/hud/health	health scanner HUD
+/obj/item/clothing/glasses/meson	optical meson scanner
+/obj/item/clothing/glasses/meson/engine	engineering scanner goggles
+/obj/item/clothing/glasses/welding	welding goggles
+/obj/item/clothing/gloves/color/fyellow	budget insulated gloves
+/obj/item/clothing/gloves/color/latex	latex gloves
+/obj/item/clothing/gloves/color/orange	orange gloves
+/obj/item/clothing/gloves/color/rainbow	rainbow gloves
+/obj/item/clothing/head/bearpelt	bear pelt hat
+/obj/item/clothing/head/hardhat/orange	hard hat
+/obj/item/clothing/head/hardhat/red	firefighter helmet
+/obj/item/clothing/head/helmet	helmet
+/obj/item/clothing/head/helmet/alt	bulletproof helmet
+/obj/item/clothing/head/helmet/riot	riot helmet
+/obj/item/clothing/head/mailman	mailman's hat
+/obj/item/clothing/head/radiation	radiation hood
+/obj/item/clothing/head/soft	cargo cap
+/obj/item/clothing/head/soft/grey	grey cap
+/obj/item/clothing/head/soft/rainbow	rainbow cap
+/obj/item/clothing/head/that	top-hat
+/obj/item/clothing/mask/balaclava	balaclava
+/obj/item/clothing/mask/cigarette/cigar	premium cigar
+/obj/item/clothing/mask/gas/sechailer	security gas mask
+/obj/item/clothing/neck/stethoscope	stethoscope
+/obj/item/clothing/shoes/magboots	magboots
+/obj/item/clothing/shoes/sneakers/rainbow	rainbow shoes
+/obj/item/clothing/shoes/winterboots	winter boots
+/obj/item/clothing/suit/armor/bulletproof	bulletproof armor
+/obj/item/clothing/suit/armor/riot	riot suit
+/obj/item/clothing/suit/fire/firefighter	emergency firesuit
+/obj/item/clothing/suit/hooded/ablative	ablative trenchcoat
+/obj/item/clothing/suit/hooded/wintercoat/science	science winter coat
+/obj/item/clothing/suit/ianshirt	worn shirt
+/obj/item/clothing/suit/radiation	radiation suit
+/obj/item/clothing/suit/straight_jacket	straight jacket
+/obj/item/clothing/under/color/lightpurple	purple jumpsuit
+/obj/item/clothing/under/color/rainbow	rainbow jumpsuit
+/obj/item/clothing/under/misc/burial	burial garments
+/obj/item/clothing/under/misc/mailman	mailman's jumpsuit
+/obj/item/clothing/under/rank/prisoner/skirt	prison jumpskirt
+/obj/item/clothing/under/suit/black/skirt	black suitskirt
+/obj/item/clothing/under/suit/black_really	executive suit
+/obj/item/clothing/under/suit/red	red suit
+/obj/item/coin/diamond	coin
+/obj/item/coin/gold	coin
+/obj/item/coin/iron	coin
+/obj/item/coin/plasma	coin
+/obj/item/coin/silver	coin
+/obj/item/construction/plumbing	Plumbing Constructor
+/obj/item/crowbar/large	crowbar
+/obj/item/crowbar/red	pocket crowbar
+/obj/item/cultivator	cultivator
+/obj/item/dest_tagger	destination tagger
+/obj/item/disk/nuclear	nuclear authentication disk
+/obj/item/electronics/airalarm	air alarm electronics
+/obj/item/electronics/airlock	airlock electronics
+/obj/item/electronics/apc	power control module
+/obj/item/electropack	electropack
+/obj/item/flashlight/lamp	desk lamp
+/obj/item/flashlight/lamp/bananalamp	banana lamp
+/obj/item/flashlight/lamp/green	desk lamp
+/obj/item/flashlight/lantern	lantern
+/obj/item/folder	folder
+/obj/item/folder/blue	folder
+/obj/item/folder/documents	folder- 'TOP SECRET'
+/obj/item/folder/red	folder
+/obj/item/folder/white	folder
+/obj/item/folder/yellow	folder
+/obj/item/gavelblock	gavel block
+/obj/item/gavelhammer	gavel hammer
+/obj/item/grenade/barrier	barrier grenade
+/obj/item/grenade/chem_grenade	chemical grenade
+/obj/item/grenade/chem_grenade/cleaner	cleaner grenade
+/obj/item/grenade/chem_grenade/smart_metal_foam	smart metal foam grenade
+/obj/item/gun/ballistic/revolver/russian	Russian revolver
+/obj/item/gun/ballistic/shotgun/doublebarrel	double-barreled shotgun
+/obj/item/gun/ballistic/shotgun/riot	riot shotgun
+/obj/item/gun/energy/e_gun/dragnet	DRAGnet
+/obj/item/gun/energy/ionrifle	ion rifle
+/obj/item/gun/energy/laser/practice	practice laser gun
+/obj/item/gun/energy/temperature/security	security temperature gun
+/obj/item/gun/syringe	syringe gun
+/obj/item/hand_labeler	hand labeler
+/obj/item/hand_tele	hand tele
+/obj/item/hatchet	hatchet
+/obj/item/hemostat	hemostat
+/obj/item/instrument/eguitar	electric guitar
+/obj/item/instrument/guitar	guitar
+/obj/item/instrument/harmonica	harmonica
+/obj/item/instrument/violin	space violin
+/obj/item/key/janitor	key
+/obj/item/key/security	key
+/obj/item/kitchen/fork	fork
+/obj/item/kitchen/fork/plastic	plastic fork
+/obj/item/kitchen/knife	kitchen knife
+/obj/item/kitchen/knife/plastic	plastic knife
+/obj/item/kitchen/rollingpin	rolling pin
+/obj/item/kitchen/spoon/plastic	plastic spoon
+/obj/item/latexballon	latex glove
+/obj/item/lighter/greyscale	cheap lighter
+/obj/item/lipstick/random	lipstick
+/obj/item/melee/chainofcommand	chain of command
+/obj/item/mmi	Man-Machine Interface
+/obj/item/mop	mop
+/obj/item/nanite_remote	nanite remote control
+/obj/item/nanite_scanner	nanite scanner
+/obj/item/newspaper	newspaper
+/obj/item/nullrod	null rod
+/obj/item/paicard	personal AI device
+/obj/item/paper/crumpled	paper scrap
+/obj/item/paper/fluff/holodeck/disclaimer	Holodeck Disclaimer
+/obj/item/paper/fluff/jobs/security/beepsky_mom	Note from Beepsky's Mom
+/obj/item/paper/guides/jobs/engi/gravity_gen	paper- 'Generate your own gravity!'
+/obj/item/paper/guides/jobs/hydroponics	paper- 'Greetings from Billy Bob'
+/obj/item/paper/monitorkey	monitor decryption key
+/obj/item/paper/pamphlet/gateway	pamphlet
+/obj/item/paper_bin	paper bin
+/obj/item/paper_bin/carbon	carbon paper bin
+/obj/item/paper_bin/construction	construction paper bin
+/obj/item/pen/blue	pen
+/obj/item/pen/invisible	pen
+/obj/item/pen/red	pen
+/obj/item/pickaxe	pickaxe
+/obj/item/pickaxe/emergency	emergency disembarkation tool
+/obj/item/pinpointer/nuke	pinpointer
+/obj/item/pipe_dispenser	Rapid Pipe Dispenser (RPD)
+/obj/item/plunger	plunger
+/obj/item/radio/off	station bounced radio
+/obj/item/raw_anomaly_core/random	random raw core
+/obj/item/razor	electric razor
+/obj/item/rcl/pre_loaded	rapid pipe cleaner layer
+/obj/item/reagent_containers/blood	blood pack
+/obj/item/reagent_containers/blood/random	blood pack
+/obj/item/reagent_containers/chem_pack	intravenous medicine bag
+/obj/item/reagent_containers/dropper	dropper
+/obj/item/reagent_containers/food/condiment/enzyme	universal enzyme
+/obj/item/reagent_containers/food/condiment/flour	flour sack
+/obj/item/reagent_containers/food/condiment/peppermill	pepper mill
+/obj/item/reagent_containers/food/condiment/rice	rice sack
+/obj/item/reagent_containers/food/condiment/saltshaker	salt shaker
+/obj/item/reagent_containers/food/condiment/sugar	sugar sack
+/obj/item/reagent_containers/food/drinks/beer	space beer
+/obj/item/reagent_containers/food/drinks/bottle/holywater	flask of holy water
+/obj/item/reagent_containers/food/drinks/bottle/vodka/badminka	Badminka vodka
+/obj/item/reagent_containers/food/drinks/bottle/whiskey	Uncle Git's special reserve
+/obj/item/reagent_containers/food/drinks/drinkingglass	drinking glass
+/obj/item/reagent_containers/food/drinks/drinkingglass/shotglass	shot glass
+/obj/item/reagent_containers/food/drinks/flask/gold	captain's flask
+/obj/item/reagent_containers/food/drinks/shaker	shaker
+/obj/item/reagent_containers/food/snacks/baguette	baguette
+/obj/item/reagent_containers/food/snacks/breadslice/plain	bread slice
+/obj/item/reagent_containers/food/snacks/donut	donut
+/obj/item/reagent_containers/food/snacks/energybar	High-power energy bars
+/obj/item/reagent_containers/food/snacks/grown/citrus/orange	orange
+/obj/item/reagent_containers/food/snacks/grown/cocoapod	cocoa pod
+/obj/item/reagent_containers/food/snacks/grown/grapes	bunch of grapes
+/obj/item/reagent_containers/food/snacks/grown/harebell	harebell
+/obj/item/reagent_containers/food/snacks/grown/onion	onion
+/obj/item/reagent_containers/food/snacks/grown/poppy	poppy
+/obj/item/reagent_containers/food/snacks/grown/potato	potato
+/obj/item/reagent_containers/food/snacks/grown/watermelon	watermelon
+/obj/item/reagent_containers/food/snacks/grown/wheat	wheat
+/obj/item/reagent_containers/food/snacks/meat/rawcutlet/plain	raw cutlet
+/obj/item/reagent_containers/food/snacks/mint	mint
+/obj/item/reagent_containers/food/snacks/monkeycube	monkey cube
+/obj/item/reagent_containers/food/snacks/pie/cream	banana cream pie
+/obj/item/reagent_containers/glass/beaker	beaker
+/obj/item/reagent_containers/glass/beaker/cryoxadone	beaker
+/obj/item/reagent_containers/glass/beaker/large	large beaker
+/obj/item/reagent_containers/glass/bottle/ammonia	ammonia bottle
+/obj/item/reagent_containers/glass/bottle/epinephrine	epinephrine bottle
+/obj/item/reagent_containers/glass/bottle/morphine	morphine bottle
+/obj/item/reagent_containers/glass/bottle/multiver	multiver bottle
+/obj/item/reagent_containers/glass/bottle/nutrient/ez	bottle of E-Z-Nutrient
+/obj/item/reagent_containers/glass/bottle/nutrient/rh	bottle of Robust Harvest
+/obj/item/reagent_containers/glass/bowl	bowl
+/obj/item/reagent_containers/glass/bucket	bucket
+/obj/item/reagent_containers/glass/rag	damp rag
+/obj/item/reagent_containers/pill/patch/aiuri	aiuri patch (burn)
+/obj/item/reagent_containers/spray/cleaner	space cleaner
+/obj/item/reagent_containers/spray/pepper	pepperspray
+/obj/item/reagent_containers/spray/pestspray	pest spray
+/obj/item/reagent_containers/spray/plantbgone	Plant-B-Gone
+/obj/item/reagent_containers/syringe	syringe
+/obj/item/reagent_containers/syringe/antiviral	syringe (spaceacillin)
+/obj/item/restraints/handcuffs/cable/zipties	zipties
+/obj/item/restraints/legcuffs/beartrap	bear trap
+/obj/item/retractor	retractor
+/obj/item/scalpel	scalpel
+/obj/item/seeds/ambrosia	pack of ambrosia vulgaris seeds
+/obj/item/seeds/apple	pack of apple seeds
+/obj/item/seeds/banana	pack of banana seeds
+/obj/item/seeds/carrot	pack of carrot seeds
+/obj/item/seeds/cocoapod	pack of cocoa pod seeds
+/obj/item/seeds/garlic	pack of garlic seeds
+/obj/item/seeds/grape	pack of grape seeds
+/obj/item/seeds/grass	pack of grass seeds
+/obj/item/seeds/onion	pack of onion seeds
+/obj/item/seeds/orange	pack of orange seeds
+/obj/item/seeds/potato	pack of potato seeds
+/obj/item/seeds/pumpkin	pack of pumpkin seeds
+/obj/item/seeds/sugarcane	pack of sugarcane seeds
+/obj/item/seeds/tomato	pack of tomato seeds
+/obj/item/seeds/tower	pack of tower-cap mycelium
+/obj/item/seeds/watermelon	pack of watermelon seeds
+/obj/item/seeds/wheat	pack of wheat seeds
+/obj/item/shard	shard
+/obj/item/shield/riot	riot shield
+/obj/item/shovel	shovel
+/obj/item/shovel/spade	spade
+/obj/item/slime_scanner	slime scanner
+/obj/item/soap/deluxe	soap
+/obj/item/soap/nanotrasen	soap
+/obj/item/stack/ducts/fifty	stack of duct
+/obj/item/stack/license_plates/empty/fifty	empty license plate
+/obj/item/stack/medical/gauze	medical gauze
+/obj/item/stack/ore/iron	iron ore
+/obj/item/stack/ore/silver	silver ore
+/obj/item/stack/package_wrap	package wrapper
+/obj/item/stack/pipe_cleaner_coil/random	pipe cleaner coil
+/obj/item/stack/sheet/cardboard	cardboard
+/obj/item/stack/sheet/glass/fifty	glass
+/obj/item/stack/sheet/metal/fifty	metal
+/obj/item/stack/sheet/metal/five	metal
+/obj/item/stack/sheet/mineral/plasma	solid plasma
+/obj/item/stack/sheet/rglass	reinforced glass
+/obj/item/stack/spacecash/c10	space cash
+/obj/item/stack/spacecash/c100	space cash
+/obj/item/stack/spacecash/c200	space cash
+/obj/item/stack/tile/plasteel	floor tile
+/obj/item/stack/wrapping_paper	wrapping paper
+/obj/item/stamp	GRANTED rubber stamp
+/obj/item/stamp/captain	captain's rubber stamp
+/obj/item/stamp/ce	chief engineer's rubber stamp
+/obj/item/stamp/cmo	chief medical officer's rubber stamp
+/obj/item/stamp/denied	DENIED rubber stamp
+/obj/item/stamp/hop	head of personnel's rubber stamp
+/obj/item/stamp/hos	head of security's rubber stamp
+/obj/item/stamp/law	law office's rubber stamp
+/obj/item/stamp/qm	quartermaster's rubber stamp
+/obj/item/stamp/rd	research director's rubber stamp
+/obj/item/stock_parts/capacitor	capacitor
+/obj/item/stock_parts/cell/emproof	EMP-proof cell
+/obj/item/stock_parts/cell/high/plus	high-capacity power cell+
+/obj/item/stock_parts/cell/potato	potato battery
+/obj/item/stock_parts/manipulator	micro-manipulator
+/obj/item/stock_parts/matter_bin	matter bin
+/obj/item/stock_parts/micro_laser	micro-laser
+/obj/item/stock_parts/micro_laser/high	high-power micro-laser
+/obj/item/stock_parts/scanning_module	scanning module
+/obj/item/stock_parts/subspace/amplifier	subspace amplifier
+/obj/item/stock_parts/subspace/analyzer	subspace wavelength analyzer
+/obj/item/stock_parts/subspace/ansible	subspace ansible
+/obj/item/stock_parts/subspace/crystal	ansible crystal
+/obj/item/stock_parts/subspace/filter	hyperwave filter
+/obj/item/stock_parts/subspace/transmitter	subspace transmitter
+/obj/item/stock_parts/subspace/treatment	subspace treatment disk
+/obj/item/storage/backpack/duffelbag/med/surgery	surgical duffel bag
+/obj/item/storage/backpack/duffelbag/sec/surgery	surgical duffel bag
+/obj/item/storage/bag/plants/portaseeder	portable seed extractor
+/obj/item/storage/bag/trash	trash bag
+/obj/item/storage/bag/tray/cafeteria	cafeteria tray
+/obj/item/storage/belt/medical	medical belt
+/obj/item/storage/belt/utility	toolbelt
+/obj/item/storage/book/bible	bible
+/obj/item/storage/box/beakers	box of beakers
+/obj/item/storage/box/bodybags	body bags
+/obj/item/storage/box/chemimp	boxed chemical implant kit
+/obj/item/storage/box/deputy	box of deputy armbands
+/obj/item/storage/box/disks	diskette box
+/obj/item/storage/box/disks_nanite	nanite program disks box
+/obj/item/storage/box/donkpockets	box of donk-pockets
+/obj/item/storage/box/drinkingglasses	box of drinking glasses
+/obj/item/storage/box/firingpins	box of standard firing pins
+/obj/item/storage/box/flashbangs	box of flashbangs (WARNING)
+/obj/item/storage/box/gloves	box of latex gloves
+/obj/item/storage/box/handcuffs	box of spare handcuffs
+/obj/item/storage/box/hug	box of hugs
+/obj/item/storage/box/lights/mixed	box of replacement lights
+/obj/item/storage/box/lights/tubes	box of replacement tubes
+/obj/item/storage/box/masks	box of sterile masks
+/obj/item/storage/box/matches	matchbox
+/obj/item/storage/box/monkeycubes	monkey cube box
+/obj/item/storage/box/mousetraps	box of Pest-B-Gon mousetraps
+/obj/item/storage/box/pdas	spare PDAs
+/obj/item/storage/box/prisoner	box of prisoner IDs
+/obj/item/storage/box/rubbershot	box of rubber shots
+/obj/item/storage/box/rxglasses	box of prescription glasses
+/obj/item/storage/box/seccarts	box of PDA security cartridges
+/obj/item/storage/box/shipping	box of shipping supplies
+/obj/item/storage/box/syringes	box of syringes
+/obj/item/storage/box/teargas	box of tear gas grenades (WARNING)
+/obj/item/storage/box/trackimp	boxed tracking implant kit
+/obj/item/storage/briefcase	briefcase
+/obj/item/storage/crayons	box of crayons
+/obj/item/storage/fancy/candle_box	candle pack
+/obj/item/storage/fancy/cigarettes	Space Cigarettes packet
+/obj/item/storage/fancy/donut_box	donut box
+/obj/item/storage/fancy/egg_box	egg box
+/obj/item/storage/lockbox/loyalty	lockbox of mindshield implants
+/obj/item/storage/lockbox/medal	medal box
+/obj/item/storage/photo_album	photo album
+/obj/item/storage/photo_album/prison	photo album
+/obj/item/storage/pill_bottle/dice	bag of dice
+/obj/item/storage/pill_bottle/mutadone	bottle of mutadone pills
+/obj/item/storage/pod	emergency space suits
+/obj/item/storage/secure/briefcase	secure briefcase
+/obj/item/storage/secure/safe	secure safe
+/obj/item/storage/secure/safe/hos	head of security's safe
+/obj/item/storage/toolbox/drone	mechanical toolbox
+/obj/item/storage/toolbox/electrical	electrical toolbox
+/obj/item/surgical_drapes	surgical drapes
+/obj/item/tank/internals/anesthetic	anesthetic tank
+/obj/item/tank/internals/emergency_oxygen/engi	extended-capacity emergency oxygen tank
+/obj/item/tank/internals/oxygen/red	oxygen tank
+/obj/item/tank/internals/plasma	plasma tank
+/obj/item/tank/jetpack/carbondioxide	jetpack (carbon dioxide)
+/obj/item/taperecorder	universal recorder
+/obj/item/target	shooting target
+/obj/item/target/alien	shooting target
+/obj/item/target/alien/anchored	shooting target
+/obj/item/target/clown	shooting target
+/obj/item/target/syndicate	shooting target
+/obj/item/toner	toner cartridge
+/obj/item/toy/beach_ball/holoball	basketball
+/obj/item/toy/cards/deck	deck of cards
+/obj/item/toy/cards/deck/cas	CAS deck (white)
+/obj/item/toy/cards/deck/cas/black	CAS deck (black)
+/obj/item/toy/dummy	ventriloquist dummy
+/obj/item/toy/plush/moth	moth plushie
+/obj/item/toy/plush/slimeplushie	slime plushie
+/obj/item/toy/sword	toy sword
+/obj/item/transfer_valve	tank transfer valve
+/obj/item/trash/boritos	boritos bag
+/obj/item/trash/can	crushed can
+/obj/item/trash/candy	candy
+/obj/item/trash/chips	chips
+/obj/item/trash/plate	plate
+/obj/item/trash/sosjerky	Scaredy's Private Reserve Beef Jerky
+/obj/item/watertank	backpack water tank
+/obj/item/wirerod	wired rod
+/obj/item/wrench/medical	medical wrench
+/obj/item/clothing/under/shorts/purple	purple athletic shorts
+/obj/item/clothing/under/shorts/grey	grey athletic shorts
+/obj/item/clothing/under/shorts/black	black athletic shorts
+/obj/item/clothing/under/shorts/red	red athletic shorts
+/obj/item/clothing/under/shorts/blue	blue athletic shorts
+/obj/item/clothing/under/shorts/green	green athletic shorts
+/obj/item/clothing/under/costume/jabroni	jabroni outfit
+/obj/item/clothing/suit/bomb_suit	bomb suit
+/obj/item/clothing/under/color/black	black jumpsuit
+/obj/item/clothing/head/bomb_hood	bomb hood
+/obj/item/clothing/suit/bomb_suit/security	bomb suit
+/obj/item/clothing/head/bomb_hood/security	bomb hood
+/obj/item/clothing/gloves/boxing/blue	boxing gloves
+/obj/item/clothing/gloves/boxing/green	boxing gloves
+/obj/item/clothing/gloves/boxing/yellow	boxing gloves
+/obj/item/clothing/gloves/boxing	boxing gloves
+/obj/item/bodypart/l_arm/robot/surplus	surplus prosthetic left arm
+/obj/item/bodypart/r_arm/robot/surplus	surplus prosthetic right arm
+/obj/item/bodypart/l_leg/robot/surplus	surplus prosthetic left leg
+/obj/item/bodypart/r_leg/robot/surplus	surplus prosthetic right leg
+/obj/item/stack/sheet/mineral/gold	gold
+/obj/item/storage/belt/champion	championship belt
+/obj/item/circuitboard/computer/solar_control	Solar Control (Computer Board)
+/obj/item/paper/guides/jobs/engi/solars	paper- 'Going green! Setup your own solar array instructions.'
+/obj/item/electronics/tracker	tracker electronics
+/obj/item/megaphone/clown	clown's megaphone
+/obj/item/reagent_containers/food/drinks/soda_cans/canned_laughter	Canned Laughter
+/obj/item/pneumatic_cannon/pie	pie cannon
+/obj/item/storage/firstaid/emergency	emergency first-aid kit
+/obj/item/storage/bag/bio	bio bag
+/obj/item/clothing/suit/bio_suit/general	bio suit
+/obj/item/clothing/head/bio_hood/general	bio hood
+/obj/item/clothing/suit/bio_suit/janitor	bio suit
+/obj/item/clothing/head/bio_hood/janitor	bio hood
+/obj/item/clothing/suit/bio_suit/scientist	bio suit
+/obj/item/clothing/head/bio_hood/scientist	bio hood
+/obj/item/clothing/suit/bio_suit/security	bio suit
+/obj/item/clothing/head/bio_hood/security	bio hood
+/obj/item/clothing/suit/bio_suit/virology	bio suit
+/obj/item/clothing/head/bio_hood/virology	bio hood
+/obj/item/gun/energy/laser/bluetag	laser tag gun
+/obj/item/clothing/suit/bluetag	blue laser tag armor
+/obj/item/clothing/head/helmet/bluetaghelm	blue laser tag helmet
+/obj/item/gun/energy/laser/redtag	laser tag gun
+/obj/item/clothing/suit/redtag	red laser tag armor
+/obj/item/clothing/head/helmet/redtaghelm	red laser tag helmet
+/obj/item/clothing/mask/luchador	Luchador Mask
+/obj/item/clothing/mask/luchador/rudos	Rudos Mask
+/obj/item/clothing/mask/luchador/tecnicos	Tecnicos Mask
+/obj/item/holosign_creator/atmos	ATMOS holofan projector
+/obj/item/watertank/atmos	backpack firefighter tank
+/obj/item/clothing/suit/fire/atmos	firesuit
+/obj/item/clothing/mask/gas/atmos	atmospheric gas mask
+/obj/item/clothing/head/hardhat/atmos	atmospheric technician's firefighting helmet
+/obj/item/clothing/glasses/meson/engine/tray	optical t-ray scanner
+/obj/item/extinguisher/advanced	advanced fire extinguisher
+/obj/item/etherealballdeployer	Portable Ethereal Disco Ball
+/obj/item/roulette_wheel_beacon	roulette wheel beacon
+/obj/item/clothing/suit/hooded/wintercoat/captain	captain's winter coat
+/obj/item/storage/backpack/satchel/cap	captain's satchel
+/obj/item/storage/backpack/duffelbag/captain	captain's duffel bag
+/obj/item/clothing/neck/cloak/cap	captain's cloak
+/obj/item/clothing/neck/petcollar	pet collar
+/obj/item/pet_carrier	pet carrier
+/obj/item/clothing/under/rank/captain/skirt	captain's jumpskirt
+/obj/item/clothing/under/rank/captain/parade	captain's parade uniform
+/obj/item/clothing/suit/armor/vest/capcarapace/alt	captain's parade jacket
+/obj/item/clothing/head/caphat/parade	captain's parade cap
+/obj/item/clothing/suit/captunic	captain's parade tunic
+/obj/item/clothing/head/crown/fancy	magnificent crown
+/obj/item/cartridge/captain	Value-PAK cartridge
+/obj/item/storage/box/silver_ids	box of spare silver IDs
+/obj/item/radio/headset/heads/captain	the captain's headset
+/obj/item/clothing/glasses/sunglasses/gar/supergar	giga gar glasses
+/obj/item/storage/belt/sabre	sabre sheath
+/obj/item/door_remote/captain	command door remote
+/obj/item/card/id/captains_spare	captain's spare ID
+/obj/item/storage/photo_album/captain	photo album (Captain)
+/obj/item/storage/box/pillbottles	box of pill bottles
+/obj/item/storage/box/medigels	box of medical gels
+/obj/item/clothing/neck/cloak/cmo	chief medical officer's cloak
+/obj/item/clothing/suit/bio_suit/cmo	bio suit
+/obj/item/clothing/head/bio_hood/cmo	bio hood
+/obj/item/clothing/under/rank/medical/chief_medical_officer/skirt	chief medical officer's jumpskirt
+/obj/item/cartridge/cmo	Med-U DELUXE cartridge
+/obj/item/megaphone/command	command megaphone
+/obj/item/defibrillator/compact/loaded	compact defibrillator
+/obj/item/healthanalyzer/advanced	advanced health analyzer
+/obj/item/reagent_containers/hypospray/cmo	hypospray
+/obj/item/autosurgeon/cmo	autosurgeon
+/obj/item/door_remote/chief_medical_officer	medical door remote
+/obj/item/wallframe/defib_mount	unhooked defibrillator mount
+/obj/item/circuitboard/machine/techfab/department/medical	Departmental Techfab (Machine Board) - Medical
+/obj/item/storage/photo_album/cmo	photo album (Chief Medical Officer)
+/obj/item/paper/fluff/jobs/security/court_judgement	paper- 'Judgement'
+/obj/item/clothing/suit/judgerobe	judge's robe
+/obj/item/clothing/head/powdered_wig	powdered wig
+/obj/item/radio/headset/headset_sec	security radio headset
+/obj/item/holosign_creator/security	security holobarrier projector
+/obj/item/clothing/suit/armor/vest/det_suit	detective's armor vest
+/obj/item/storage/belt/holster/detective/full	detective's holster
+/obj/item/binoculars	binoculars
+/obj/item/storage/box/rxglasses/spyglasskit	spyglass kit
+/obj/item/clothing/neck/cloak/ce	chief engineer's cloak
+/obj/item/clothing/under/rank/engineering/chief_engineer/skirt	chief engineer's jumpskirt
+/obj/item/clothing/head/hardhat/weldhat/white	welding hard hat
+/obj/item/tank/jetpack/suit	hardsuit jetpack upgrade
+/obj/item/cartridge/ce	Power-On DELUXE cartridge
+/obj/item/areaeditor/blueprints	station blueprints
+/obj/item/holosign_creator/engineering	engineering holobarrier projector
+/obj/item/door_remote/chief_engineer	engineering door remote
+/obj/item/circuitboard/machine/techfab/department/engineering	Departmental Techfab (Machine Board) - Engineering
+/obj/item/storage/photo_album/ce	photo album (Chief Engineer)
+/obj/item/inducer	inducer
+/obj/item/storage/box/emptysandbags	box of empty sandbags
+/obj/item/storage/bag/construction	construction bag
+/obj/item/implanter/exile	implanter (exile)
+/obj/item/implantcase/exile	implant case - 'Exile'
+/obj/item/reagent_containers/food/condiment/milk	space milk
+/obj/item/reagent_containers/food/condiment/soymilk	soy milk
+/obj/item/reagent_containers/food/snacks/meat/slab/monkey	monkey meat
+/obj/item/clothing/neck/cloak/hop	head of personnel's cloak
+/obj/item/storage/lockbox/medal/service	service award box
+/obj/item/clothing/under/rank/civilian/head_of_personnel/skirt	head of personnel's jumpskirt
+/obj/item/cartridge/hop	HumanResources9001 cartridge
+/obj/item/door_remote/civilian	civilian door remote
+/obj/item/circuitboard/machine/techfab/department/service	Departmental Techfab - Service (Machine Board)
+/obj/item/storage/photo_album/hop	photo album (Head of Personnel)
+/obj/item/clothing/neck/cloak/hos	head of security's cloak
+/obj/item/cartridge/hos	R.O.B.U.S.T. DELUXE cartridge
+/obj/item/radio/headset/heads/hos	the head of security's headset
+/obj/item/clothing/under/rank/security/head_of_security/parade/female	head of security's parade uniform
+/obj/item/clothing/under/rank/security/head_of_security/parade	head of security's parade uniform
+/obj/item/clothing/suit/armor/vest/leather	security overcoat
+/obj/item/clothing/suit/armor/hos	armored greatcoat
+/obj/item/clothing/under/rank/security/head_of_security/skirt	head of security's jumpskirt
+/obj/item/clothing/under/rank/security/head_of_security/alt	head of security's turtleneck
+/obj/item/clothing/under/rank/security/head_of_security/alt/skirt	head of security's turtleneck skirt
+/obj/item/clothing/head/hos	head of security cap
+/obj/item/clothing/glasses/hud/security/sunglasses/eyepatch	eyepatch HUD
+/obj/item/clothing/glasses/hud/security/sunglasses/gars/supergars	giga HUD gar glasses
+/obj/item/clothing/under/rank/security/head_of_security/grey	head of security's grey jumpsuit
+/obj/item/storage/lockbox/medal/sec	security medal box
+/obj/item/megaphone/sec	security megaphone
+/obj/item/clothing/mask/gas/sechailer/swat	SWAT mask
+/obj/item/shield/riot/tele	telescopic shield
+/obj/item/storage/belt/security/full	security belt
+/obj/item/gun/energy/e_gun/hos	X-01 MultiPhase Energy Gun
+/obj/item/circuitboard/machine/techfab/department/security	Departmental Techfab (Machine Board) - Security
+/obj/item/storage/photo_album/hos	photo album (Head of Security)
+/obj/item/secateurs	secateurs
+/obj/item/reagent_containers/syringe/lethal/execution	lethal injection syringe
+/obj/item/storage/box/lethalshot	box of lethal shotgun shots
+/obj/item/reagent_containers/glass/bottle/toxin	toxin bottle
+/obj/item/clothing/mask/breath/medical	medical mask
+/obj/item/defibrillator/loaded	defibrillator
+/obj/item/stack/sheet/mineral/sandbags	sandbags
+/obj/item/pickaxe/mini	compact pickaxe
+/obj/item/storage/bag/plants	plant bag
+/obj/item/t_scanner/adv_mining_scanner/lesser	automatic mining scanner
+/obj/item/gun/energy/kinetic_accelerator	proto-kinetic accelerator
+/obj/item/survivalcapsule	bluespace shelter capsule
+/obj/item/storage/backpack/duffelbag	duffel bag
+/obj/item/storage/backpack/satchel	satchel
+/obj/item/storage/backpack/satchel/leather/withwallet	leather satchel
+/obj/item/instrument/piano_synth	synthesizer
+/obj/item/clothing/mask/muzzle	muzzle
+/obj/item/clothing/glasses/blindfold	blindfold
+/obj/item/clothing/neck/cloak/qm	quartermaster's cloak
+/obj/item/storage/lockbox/medal/cargo	cargo award box
+/obj/item/clothing/under/rank/cargo/qm/skirt	quartermaster's jumpskirt
+/obj/item/clothing/gloves/fingerless	fingerless gloves
+/obj/item/megaphone/cargo	supply megaphone
+/obj/item/export_scanner	export scanner
+/obj/item/door_remote/quartermaster	supply door remote
+/obj/item/circuitboard/machine/techfab/department/cargo	Departmental Techfab (Machine Board) - Cargo
+/obj/item/storage/photo_album/qm	photo album (Quartermaster)
+/obj/item/circuitboard/machine/ore_silo	Ore Silo (Machine Board)
+/obj/item/card/id/departmental_budget/car	departmental card (FUCK)
+/obj/item/clothing/neck/cloak/rd	research director's cloak
+/obj/item/clothing/under/rank/rnd/research_director/skirt	research director's vest suitskirt
+/obj/item/clothing/under/rank/rnd/research_director/alt	research director's tan suit
+/obj/item/clothing/under/rank/rnd/research_director/alt/skirt	research director's tan suitskirt
+/obj/item/clothing/under/rank/rnd/research_director/turtleneck	research director's turtleneck
+/obj/item/clothing/under/rank/rnd/research_director/turtleneck/skirt	research director's turtleneck skirt
+/obj/item/cartridge/rd	Signal Ace DELUXE cartridge
+/obj/item/storage/lockbox/medal/sci	science medal box
+/obj/item/clothing/suit/armor/reactive/teleport	reactive teleport armor
+/obj/item/door_remote/research_director	research door remote
+/obj/item/circuitboard/machine/techfab/department/science	Departmental Techfab (Machine Board) - Science
+/obj/item/storage/photo_album/rd	photo album (Research Director)
+/obj/item/clothing/accessory/armband/cargo	cargo bay guard armband
+/obj/item/encryptionkey/headset_cargo	supply radio encryption key
+/obj/item/clothing/accessory/armband/engine	engineering guard armband
+/obj/item/encryptionkey/headset_eng	engineering radio encryption key
+/obj/item/clothing/accessory/armband/medblue	medical guard armband
+/obj/item/encryptionkey/headset_med	medical radio encryption key
+/obj/item/clothing/accessory/armband/science	science guard armband
+/obj/item/encryptionkey/headset_sci	science radio encryption key
+/obj/item/clothing/suit/armor/vest/warden	warden's jacket
+/obj/item/clothing/head/warden/drill	warden's campaign hat
+/obj/item/clothing/head/beret/sec/navywarden	warden's beret
+/obj/item/clothing/under/rank/security/warden/formal	warden's formal uniform
+/obj/item/clothing/under/rank/security/warden/skirt	warden's suitskirt
+/obj/item/storage/box/zipties	box of spare zipties
+/obj/item/clothing/gloves/krav_maga/sec	krav maga gloves
+/obj/item/door_remote/head_of_security	security door remote
+/obj/item/stack/cable_coil	cable coil
+/obj/item/clothing/under/color/jumpskirt/black	black jumpskirt
+/obj/item/clothing/suit/jacket/leather	leather jacket
+/obj/item/clothing/suit/jacket/leather/overcoat	leather overcoat
+/obj/item/clothing/head/soft/black	black cap
+/obj/item/clothing/mask/bandana/black	black bandana
+/obj/item/clothing/mask/bandana/skull	skull bandana
+/obj/item/clothing/accessory/pocketprotector	pocket protector
+/obj/item/storage/backpack/duffelbag/engineering	industrial duffel bag
+/obj/item/storage/backpack/satchel/eng	industrial satchel
+/obj/item/clothing/suit/hooded/wintercoat/engineering	engineering winter coat
+/obj/item/clothing/under/color/green	green jumpsuit
+/obj/item/clothing/under/color/jumpskirt/green	green jumpskirt
+/obj/item/clothing/mask/bandana/green	green bandana
+/obj/item/clothing/under/color/jumpskirt/grey	grey jumpskirt
+/obj/item/clothing/under/misc/assistantformal	assistant's formal uniform
+/obj/item/clothing/suit/hooded/wintercoat	winter coat
+/obj/item/storage/backpack/satchel/explorer	explorer satchel
+/obj/item/clothing/suit/jacket	bomber jacket
+/obj/item/clothing/under/color/white	white jumpsuit
+/obj/item/clothing/under/color/jumpskirt/white	white jumpskirt
+/obj/item/clothing/under/color/blue	blue jumpsuit
+/obj/item/clothing/under/color/jumpskirt/blue	blue jumpskirt
+/obj/item/clothing/under/color/yellow	yellow jumpsuit
+/obj/item/clothing/under/color/jumpskirt/yellow	yellow jumpskirt
+/obj/item/clothing/under/color/orange	orange jumpsuit
+/obj/item/clothing/under/color/jumpskirt/orange	orange jumpskirt
+/obj/item/clothing/under/color/pink	pink jumpsuit
+/obj/item/clothing/under/color/jumpskirt/pink	pink jumpskirt
+/obj/item/clothing/under/color/red	red jumpsuit
+/obj/item/clothing/under/color/jumpskirt/red	red jumpskirt
+/obj/item/clothing/under/color/darkblue	darkblue jumpsuit
+/obj/item/clothing/under/color/jumpskirt/darkblue	darkblue jumpskirt
+/obj/item/clothing/under/color/teal	teal jumpsuit
+/obj/item/clothing/under/color/jumpskirt/teal	teal jumpskirt
+/obj/item/clothing/under/color/jumpskirt/lightpurple	lightpurple jumpskirt
+/obj/item/clothing/mask/bandana/red	red bandana
+/obj/item/clothing/mask/bandana/blue	blue bandana
+/obj/item/clothing/mask/bandana/gold	gold bandana
+/obj/item/clothing/under/misc/pj/red	PJs
+/obj/item/clothing/under/misc/pj/blue	PJs
+/obj/item/clothing/head/soft/mime	white cap

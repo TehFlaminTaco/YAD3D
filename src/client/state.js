@@ -17,7 +17,7 @@ export class Replica {
     this.props = buildPropData(world, this.rects, this.level.props, this.level);
     this.doors = this.props.doors.map((p) => new DoorCore(world, p, p.fr.length - 2));
     this.fdoors = this.props.fdoors.map((p, idx) => ({
-      idx, c: p.x, r: p.y, i: p.y * world.W + p.x, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, closed: false, name: p.n || 'firelock', s: p.s,
+      idx, c: p.x, r: p.y, i: p.y * world.W + p.x, x: p.x * TILE + TILE / 2, z: p.y * TILE + TILE / 2, closed: false, name: p.n || 'firelock', s: p.s, yaw: p.yaw,
     }));
     const na = world.areas.length;
     this.power = { state: 'normal', battery: 1, areaOn: new Uint8Array(na).fill(1), areaLights: new Uint8Array(na).fill(1) };
@@ -28,6 +28,7 @@ export class Replica {
     this.jobs = welcome.jobs;
     this.me = welcome.you;
     this.name = welcome.name;
+    this.debug = !!welcome.debug;            // the server was started with --debug: the debug menu exists
     this.self = null;                        // private state: inventory, vitals, access
     this.you = null;                         // last authoritative position
     this.env = { p: 101, o2: 21, tox: 0, area: 0 };
@@ -45,6 +46,7 @@ export class Replica {
     this.power.state = w.power.state; this.power.battery = w.power.battery;
     w.areaOn.forEach((v, i) => { this.power.areaOn[i] = v; });
     w.areaLights.forEach((v, i) => { this.power.areaLights[i] = v; });
+    this.world.gravityOn = w.gravity !== false;
     for (const ev of w.tiles) this.setTile(ev);
     for (const [c, r, d] of w.panes) this.killPane(c, r, d);
     for (const [i, cs, g] of w.closets || []) this.setCloset(i, cs, !!g);
@@ -61,6 +63,7 @@ export class Replica {
     w.kind[i] = ev.kind; w.wallVar[i] = ev.wall; w.glass[i] = ev.glass; w.solid[i] = ev.solid; w.airBlock[i] = ev.air;
     w.floorCell[i] = ev.floor; w.roof[i] = ev.roof; w.areaIdx[i] = ev.area;
     if (ev.brk) w.breached.add(i); else w.breached.delete(i);
+    w.grille[i] = ev.gr ?? w.grille[i]; w.ws[i] = ev.ws ?? w.ws[i];
   }
 
   setCloset(i, cs, gone) {
@@ -101,7 +104,7 @@ export class Replica {
       if (kind === KIND.WALL) {
         w.solid[i] = 1; w.airBlock[i] = 1;
         if (wall !== 0xffff && w.variants[wall].glass) w.glass[i] = 1;
-      } else if (kind === KIND.SPACE) w.solid[i] = 1;
+      }
       tiles.push([i % w.W, Math.floor(i / w.W)]);
     }
     buildPropData(w, this.rects, ov.props, this.level, this.props);
@@ -141,6 +144,7 @@ export class Replica {
       case 'self': this.self = ev; break;
       case 'round': this.round = ev; this.roundAt = performance.now(); break;
       case 'alert': this.alert = ev.level; break;
+      case 'grav': this.world.gravityOn = !!ev.on; break;
       case 'evac': this.applyEvac(); return;
       default: break;
     }

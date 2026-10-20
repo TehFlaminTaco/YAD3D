@@ -13,14 +13,15 @@ const HELP = [
     ['Q', 'Drop'], ['R', 'Throw mode: your next click throws what you hold'],
   ]],
   ['Yourself', [
-    ['I', 'Look yourself over: clothes, pockets, injuries'], ['Tab', 'Your PDA: time, location, air, map'],
+    ['I', 'Equipment: the rest of what you wear (the blank button above your bag does the same)'], ['Tab', 'Your PDA: time, location, air, map'],
     ['V', 'Internals (mask and air tank)'], ['F', 'Flashlight'], ['B', 'Stop what you are doing; resist (a grab, handcuffs, a locker)'],
-    ['P', 'Let go of whoever you are holding'],
+    ['P', 'Let go of whoever you are holding'], ['J', 'Jetpack on your back on or off'], ['K', 'Magboots on or off'],
+    ['No gravity', 'Without gravity you cannot steer unless you hold on to something (a wall, a locker, lattice) or have a jetpack on; throwing something pushes you the other way'],
   ]],
   ['Talking', [
     ['T', 'Say  (; common radio, :h department, :e :m :s :n :u :v :c other channels)'], ['Y', 'Whisper'], ['M', 'Emote'], ['O', 'OOC'],
   ]],
-  ['Other', [['F1', 'This list'], ['F2', 'Mute'], ['F4', 'Fullscreen (and Ctrl+W, Ctrl+T cannot close the page by accident)'], ['Esc', 'Close the top window']]],
+  ['Other', [['F1', 'This list'], ['F2', 'Mute'], ['F3', 'Debug menu (a server started with --debug, or ?debug)'], ['F4', 'Fullscreen (and Ctrl+W, Ctrl+T cannot close the page by accident)'], ['Esc', 'Close the top window']]],
 ];
 // Two columns that come out about the same height.
 const HELP_COLS = [['Moving', 'Hands'], ['Yourself', 'Talking', 'Other']];

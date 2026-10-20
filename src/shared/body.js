@@ -19,6 +19,7 @@ export class Body {
     this.lastHit = null;
     this.critTime = 0;
     this.regen = opts.regen ?? 0.03;
+    this.god = false;             // debug: nothing hurts
   }
 
   get health() { return this.max - this.brute - this.burn - this.tox - this.oxy; }
@@ -27,7 +28,7 @@ export class Body {
   get fraction() { return clamp(this.health / this.max, -1, 1); }
 
   damage(type, amount, src) {
-    if (this.dead || amount <= 0) return 0;
+    if (this.dead || amount <= 0 || this.god) return 0;
     this[type] = clamp(this[type] + amount, 0, this.max * 2);
     this.hurtFlash = Math.min(1, this.hurtFlash + amount / 25);
     this.lastHit = src || type;

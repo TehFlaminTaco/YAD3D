@@ -25,7 +25,7 @@ export class LocalConnection {
     const { Sim } = await import('../sim/sim.js');
     const a = this.assets;
     this.sim = new Sim({ level: a.level, rects: a.rects, jobsJson: a.jobsJson, contents: a.contents, closets: a.closets, chars: a.chars }, {
-      bots: this.opts.bots ?? 14, autostart: this.opts.autostart ?? 0, god: !!this.opts.god,
+      bots: this.opts.bots ?? 14, autostart: this.opts.autostart ?? 0, god: !!this.opts.god, debug: !!this.opts.debug,
     });
     this.client = this.sim.addClient(name, (m) => this.deliver(m));
     this.sim.handle(this.client, { t: 'hello', look });

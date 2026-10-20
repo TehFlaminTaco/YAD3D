@@ -42,7 +42,7 @@ async function main() {
   } else {
     conn = new LocalConnection(assets, {
       bots: q.has('bots') ? +q.get('bots') : 14, autostart: q.has('autostart') ? +q.get('autostart') : 6,
-      lag: q.has('lag') ? +q.get('lag') : 0, god: q.has('god'),
+      lag: q.has('lag') ? +q.get('lag') : 0, god: q.has('god'), debug: q.has('debug'),
     });
   }
   const game = new Game(document.getElementById('view'), assets, conn, opts, art);

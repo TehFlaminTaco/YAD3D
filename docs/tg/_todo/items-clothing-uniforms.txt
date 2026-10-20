@@ -1,0 +1,101 @@
+# item types to document (DM path, in-game name)
+/obj/item/clothing/under/color/grey	grey jumpsuit
+/obj/item/clothing/under/rank/engineering/atmospheric_technician	atmospheric technician's jumpsuit
+/obj/item/clothing/under/rank/civilian/bartender	bartender's uniform
+/obj/item/clothing/under/rank/civilian/hydroponics	botanist's jumpsuit
+/obj/item/clothing/under/rank/captain	captain's jumpsuit
+/obj/item/clothing/under/rank/cargo/tech	cargo technician's jumpsuit
+/obj/item/clothing/under/rank/civilian/chaplain	chaplain's jumpsuit
+/obj/item/clothing/under/rank/medical/chemist	chemist's jumpsuit
+/obj/item/clothing/under/rank/engineering/chief_engineer	chief engineer's jumpsuit
+/obj/item/clothing/under/rank/medical/chief_medical_officer	chief medical officer's jumpsuit
+/obj/item/clothing/under/rank/civilian/clown	clown suit
+/obj/item/clothing/under/rank/civilian/chef	cook's suit
+/obj/item/clothing/under/rank/civilian/curator	sensible suit
+/obj/item/clothing/under/rank/security/detective	hard-worn suit
+/obj/item/clothing/neck/tie/detective	loose tie
+/obj/item/clothing/under/rank/rnd/geneticist	geneticist's jumpsuit
+/obj/item/clothing/under/rank/civilian/head_of_personnel	head of personnel's jumpsuit
+/obj/item/clothing/under/rank/security/head_of_security	head of security's jumpsuit
+/obj/item/clothing/under/rank/civilian/janitor	janitor's jumpsuit
+/obj/item/clothing/under/rank/civilian/lawyer/bluesuit	blue suit
+/obj/item/clothing/under/rank/medical/doctor	medical doctor's jumpsuit
+/obj/item/clothing/under/rank/civilian/mime	mime's outfit
+/obj/item/clothing/under/rank/medical/paramedic	paramedic jumpsuit
+/obj/item/clothing/under/rank/prisoner	prison jumpsuit
+/obj/item/clothing/under/suit/black	black suit
+/obj/item/clothing/under/rank/cargo/qm	quartermaster's jumpsuit
+/obj/item/clothing/under/rank/rnd/research_director	research director's vest suit
+/obj/item/clothing/under/rank/rnd/roboticist	roboticist's jumpsuit
+/obj/item/clothing/under/rank/rnd/scientist	scientist's jumpsuit
+/obj/item/clothing/under/rank/security/officer	security jumpsuit
+/obj/item/clothing/under/rank/cargo/miner/lavaland	shaft miner's jumpsuit
+/obj/item/clothing/under/rank/engineering/engineer	engineer's jumpsuit
+/obj/item/clothing/under/rank/medical/virologist	virologist's jumpsuit
+/obj/item/clothing/under/rank/security/warden	security suit
+/obj/item/clothing/neck/stethoscope	stethoscope
+/obj/item/clothing/under/color/lightpurple	purple jumpsuit
+/obj/item/clothing/under/color/rainbow	rainbow jumpsuit
+/obj/item/clothing/under/misc/burial	burial garments
+/obj/item/clothing/under/misc/mailman	mailman's jumpsuit
+/obj/item/clothing/under/rank/prisoner/skirt	prison jumpskirt
+/obj/item/clothing/under/suit/black/skirt	black suitskirt
+/obj/item/clothing/under/suit/black_really	executive suit
+/obj/item/clothing/under/suit/red	red suit
+/obj/item/clothing/under/shorts/purple	purple athletic shorts
+/obj/item/clothing/under/shorts/grey	grey athletic shorts
+/obj/item/clothing/under/shorts/black	black athletic shorts
+/obj/item/clothing/under/shorts/red	red athletic shorts
+/obj/item/clothing/under/shorts/blue	blue athletic shorts
+/obj/item/clothing/under/shorts/green	green athletic shorts
+/obj/item/clothing/under/costume/jabroni	jabroni outfit
+/obj/item/clothing/under/color/black	black jumpsuit
+/obj/item/clothing/neck/cloak/cap	captain's cloak
+/obj/item/clothing/neck/petcollar	pet collar
+/obj/item/clothing/under/rank/captain/skirt	captain's jumpskirt
+/obj/item/clothing/under/rank/captain/parade	captain's parade uniform
+/obj/item/clothing/neck/cloak/cmo	chief medical officer's cloak
+/obj/item/clothing/under/rank/medical/chief_medical_officer/skirt	chief medical officer's jumpskirt
+/obj/item/clothing/neck/cloak/ce	chief engineer's cloak
+/obj/item/clothing/under/rank/engineering/chief_engineer/skirt	chief engineer's jumpskirt
+/obj/item/clothing/neck/cloak/hop	head of personnel's cloak
+/obj/item/clothing/under/rank/civilian/head_of_personnel/skirt	head of personnel's jumpskirt
+/obj/item/clothing/neck/cloak/hos	head of security's cloak
+/obj/item/clothing/under/rank/security/head_of_security/parade/female	head of security's parade uniform
+/obj/item/clothing/under/rank/security/head_of_security/parade	head of security's parade uniform
+/obj/item/clothing/under/rank/security/head_of_security/skirt	head of security's jumpskirt
+/obj/item/clothing/under/rank/security/head_of_security/alt	head of security's turtleneck
+/obj/item/clothing/under/rank/security/head_of_security/alt/skirt	head of security's turtleneck skirt
+/obj/item/clothing/under/rank/security/head_of_security/grey	head of security's grey jumpsuit
+/obj/item/clothing/neck/cloak/qm	quartermaster's cloak
+/obj/item/clothing/under/rank/cargo/qm/skirt	quartermaster's jumpskirt
+/obj/item/clothing/neck/cloak/rd	research director's cloak
+/obj/item/clothing/under/rank/rnd/research_director/skirt	research director's vest suitskirt
+/obj/item/clothing/under/rank/rnd/research_director/alt	research director's tan suit
+/obj/item/clothing/under/rank/rnd/research_director/alt/skirt	research director's tan suitskirt
+/obj/item/clothing/under/rank/rnd/research_director/turtleneck	research director's turtleneck
+/obj/item/clothing/under/rank/rnd/research_director/turtleneck/skirt	research director's turtleneck skirt
+/obj/item/clothing/under/rank/security/warden/formal	warden's formal uniform
+/obj/item/clothing/under/rank/security/warden/skirt	warden's suitskirt
+/obj/item/clothing/under/color/jumpskirt/black	black jumpskirt
+/obj/item/clothing/under/color/green	green jumpsuit
+/obj/item/clothing/under/color/jumpskirt/green	green jumpskirt
+/obj/item/clothing/under/color/jumpskirt/grey	grey jumpskirt
+/obj/item/clothing/under/misc/assistantformal	assistant's formal uniform
+/obj/item/clothing/under/color/blue	blue jumpsuit
+/obj/item/clothing/under/color/jumpskirt/blue	blue jumpskirt
+/obj/item/clothing/under/color/yellow	yellow jumpsuit
+/obj/item/clothing/under/color/jumpskirt/yellow	yellow jumpskirt
+/obj/item/clothing/under/color/orange	orange jumpsuit
+/obj/item/clothing/under/color/jumpskirt/orange	orange jumpskirt
+/obj/item/clothing/under/color/pink	pink jumpsuit
+/obj/item/clothing/under/color/jumpskirt/pink	pink jumpskirt
+/obj/item/clothing/under/color/red	red jumpsuit
+/obj/item/clothing/under/color/jumpskirt/red	red jumpskirt
+/obj/item/clothing/under/color/darkblue	darkblue jumpsuit
+/obj/item/clothing/under/color/jumpskirt/darkblue	darkblue jumpskirt
+/obj/item/clothing/under/color/teal	teal jumpsuit
+/obj/item/clothing/under/color/jumpskirt/teal	teal jumpskirt
+/obj/item/clothing/under/color/jumpskirt/lightpurple	lightpurple jumpskirt
+/obj/item/clothing/under/misc/pj/red	PJs
+/obj/item/clothing/under/misc/pj/blue	PJs

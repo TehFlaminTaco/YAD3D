@@ -6,6 +6,12 @@ export const EYE = 1.45;
 export const PLAYER_R = 0.32;
 export const REACH = 2.6;
 
+// ---- zero gravity (SS13 Process_Spacemove, in metres)
+export const GRIP_REACH = 0.9;        // how far past your body you can reach to hold on to a wall, a locker, a window frame
+export const DRIFT_MAX = 4;           // m/s: the fastest you can coast
+export const THROW_KICK = 2.2;        // m/s you are pushed the other way by throwing something with nothing to brace on
+export const WIND_PUSH = 3;           // how hard escaping air shoves you while you float (m/s gained per m/s of wind, per second)
+
 // BYOND direction bitflags
 export const N = 1, S = 2, E = 4, W = 8;
 export const OPP = { 1: 2, 2: 1, 4: 8, 8: 4 };

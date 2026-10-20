@@ -1,0 +1,29 @@
+# DM path <TAB> in-game name <TAB> how many are placed on BoxStation (if any)
+/obj/item/clothing/suit/judgerobe	judge's robe
+/obj/item/clothing/suit/space/emergency	space suit
+/obj/item/clothing/under/color/rainbow	rainbow jumpsuit	(x1 on BoxStation)
+/obj/item/clothing/under/misc/assistantformal	assistant's formal uniform
+/obj/item/coin/diamond	coin	(x3 on BoxStation)
+/obj/item/coin/gold	coin	(x2 on BoxStation)
+/obj/item/coin/iron	coin	(x4 on BoxStation)
+/obj/item/coin/plasma	coin	(x1 on BoxStation)
+/obj/item/coin/silver	coin	(x2 on BoxStation)
+/obj/item/defibrillator/compact/loaded	compact defibrillator
+/obj/item/defibrillator/loaded	defibrillator
+/obj/item/electronics/airalarm	air alarm electronics	(x1 on BoxStation)
+/obj/item/electronics/tracker	tracker electronics
+/obj/item/electropack	electropack	(x2 on BoxStation)
+/obj/item/hemostat	hemostat	(x2 on BoxStation)
+/obj/item/implantcase/exile	implant case - 'Exile'
+/obj/item/implanter/exile	implanter (exile)
+/obj/item/melee/baton/loaded	stun baton
+/obj/item/mmi	Man-Machine Interface	(x3 on BoxStation)
+/obj/item/pickaxe/emergency	emergency disembarkation tool	(x2 on BoxStation)
+/obj/item/pinpointer/nuke	pinpointer	(x1 on BoxStation)
+/obj/item/radio/off	station bounced radio	(x15 on BoxStation)
+/obj/item/reagent_containers/blood/random	blood pack	(x6 on BoxStation)
+/obj/item/reagent_containers/food/snacks/meat/slab/monkey	monkey meat
+/obj/item/reagent_containers/glass/beaker/cryoxadone	beaker	(x4 on BoxStation)
+/obj/item/reagent_containers/glass/bottle/ammonia	ammonia bottle	(x1 on BoxStation)
+/obj/item/reagent_containers/glass/bottle/epinephrine	epinephrine bottle	(x5 on BoxStation)
+/obj/item/reagent_containers/glass/bottle/morphine	morphine bottle	(x1 on BoxStation)

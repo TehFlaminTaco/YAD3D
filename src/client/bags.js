@@ -84,11 +84,11 @@ export class Bags {
     const el = w.el;
     const p = this.pos.get(id);
     if (p) { el.style.left = p[0] + 'px'; el.style.top = p[1] + 'px'; el.style.bottom = 'auto'; return; }
-    // default: stacked up the left side, above your left hand (the right side is where you look yourself over)
+    // default: stacked up the left side, above your key slots (and the equipment grid when it is open)
     const S = this.game.ui.S;
-    el.style.left = Math.round(innerWidth * 0.025) + 'px';
+    el.style.left = Math.round(3 * this.game.ui.P) + 'px';
     el.style.top = 'auto';
-    el.style.bottom = `${Math.round(innerHeight * 0.3 + k * (el.offsetHeight + 4 * S))}px`;
+    el.style.bottom = `${Math.round(this.game.inv.topEdge() + 4 * S + k * (el.offsetHeight + 4 * S))}px`;
   }
 
   dragMove(e) {

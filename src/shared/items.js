@@ -38,6 +38,8 @@ export const BEHAVIORS = [
   ['/obj/item/stack/medical/ointment', { heal: { burn: 28 }, stack: 6 }],
   ['/obj/item/reagent_containers/hypospray/medipen', { heal: { brute: 15, burn: 15, tox: 15, oxy: 30 }, stack: 1, single: true }],
   ['/obj/item/healthanalyzer', { scanner: true }],
+  ['/obj/item/tank/jetpack', { jetpack: { cap: 900 } }],             // propellant, not air: a carbon dioxide jetpack is not for breathing
+  ['/obj/item/clothing/shoes/magboots', { magboots: true }],
   ['/obj/item/tank/internals/emergency_oxygen', { tank: { cap: 300 } }],
   ['/obj/item/tank/internals', { tank: { cap: 1500 } }],
   ['/obj/item/clothing/mask/breath', { internals: true }],
@@ -54,6 +56,10 @@ export const BEHAVIORS = [
   ['/obj/item/stack/sheet/metal', { sheet: 'metal', stack: 10 }],
   ['/obj/item/stack/sheet/plasteel', { sheet: 'metal', stack: 10 }],
   ['/obj/item/stack/sheet/glass', { sheet: 'glass', stack: 10 }],
+  ['/obj/item/stack/sheet/rglass', { sheet: 'rglass', stack: 10 }],
+  ['/obj/item/stack/sheet/plasmaglass', { sheet: 'plasmaglass', stack: 10 }],
+  ['/obj/item/stack/sheet/plasmarglass', { sheet: 'plasmarglass', stack: 10 }],
+  ['/obj/item/stack/rods', { sheet: 'rods', stack: 1 }],
   ['/obj/item/stack/cable_coil', { stack: 30 }],
   ['/obj/item/reagent_containers/food/drinks', { consume: { msg: 'You take a swig.' } }],
   ['/obj/item/reagent_containers/food/snacks', { consume: { heal: 3, msg: 'You eat it.' } }],
@@ -105,6 +111,7 @@ export function makeItemData(db, path, extra = {}) {
   const it = { id: 0, path, name: extra.name || info.n, sprite: info.s, w: info.w, slots: info.sl, force: info.f, def, ...extra };
   if (def.gun) it.shots = def.gun.shots;
   if (def.tank) it.gas = def.tank.cap;
+  if (def.jetpack) it.gas = def.jetpack.cap;
   if (def.tool === 'welder') { it.fuel = def.fuel; it.lit = false; }
   if (def.charges) it.charges = def.charges;
   if (def.stack) it.amount = extra.amount ?? def.stack;
@@ -116,6 +123,7 @@ export function describeState(it) {
   const d = it.def;
   if (d.gun) return `${it.shots}/${d.gun.shots} charges`;
   if (d.tank) return `${Math.round(it.gas / d.tank.cap * 100)}% air`;
+  if (d.jetpack) return `${Math.round(it.gas / d.jetpack.cap * 100)}% gas`;
   if (d.tool === 'welder') return `fuel ${Math.ceil(it.fuel)}${it.lit ? ', lit' : ''}`;
   if (d.charges) return `${it.charges} charges`;
   if (it.amount !== undefined && d.stack > 1) return `x${it.amount}`;

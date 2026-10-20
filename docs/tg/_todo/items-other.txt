@@ -1,0 +1,103 @@
+# item types to document (DM path, in-game name)
+/obj/item/modular_computer/tablet/preset/advanced	tablet computer
+/obj/item/plant_analyzer	plant analyzer
+/obj/item/instrument/bikehorn	gilded bike horn
+/obj/item/sharpener	whetstone
+/obj/item/laser_pointer	laser pointer
+/obj/item/key/displaycase	display case key
+/obj/item/choice_beacon/hero	heroic beacon
+/obj/item/barcodescanner	barcode scanner
+/obj/item/detective_scanner	forensic scanner
+/obj/item/sequence_scanner	genetic sequence scanner
+/obj/item/mining_voucher	mining voucher
+/obj/item/stack/marker_beacon/ten	marker beacon
+/obj/item/airlock_painter	airlock painter
+/obj/item/assault_pod/mining	Landing Field Designator
+/obj/item/chair/wood	wooden chair
+/obj/item/circuitboard/aicore	AI core (AI Core Board)
+/obj/item/circuitboard/machine/chem_dispenser/drinks	Soda Dispenser (Machine Board)
+/obj/item/circuitboard/machine/monkey_recycler	Monkey Recycler (Machine Board)
+/obj/item/circuitboard/machine/paystand	Pay Stand (Machine Board)
+/obj/item/circuitboard/machine/seed_extractor	Seed Extractor (Machine Board)
+/obj/item/circuitboard/machine/stasis	Lifeform Stasis Unit (Machine Board)
+/obj/item/construction/plumbing	Plumbing Constructor
+/obj/item/dest_tagger	destination tagger
+/obj/item/disk/nuclear	nuclear authentication disk
+/obj/item/gavelblock	gavel block
+/obj/item/gavelhammer	gavel hammer
+/obj/item/hand_tele	hand tele
+/obj/item/instrument/eguitar	electric guitar
+/obj/item/instrument/guitar	guitar
+/obj/item/instrument/harmonica	harmonica
+/obj/item/instrument/violin	space violin
+/obj/item/key/janitor	key
+/obj/item/key/security	key
+/obj/item/latexballon	latex glove
+/obj/item/nanite_remote	nanite remote control
+/obj/item/nanite_scanner	nanite scanner
+/obj/item/newspaper	newspaper
+/obj/item/pipe_dispenser	Rapid Pipe Dispenser (RPD)
+/obj/item/plunger	plunger
+/obj/item/raw_anomaly_core/random	random raw core
+/obj/item/rcl/pre_loaded	rapid pipe cleaner layer
+/obj/item/shovel	shovel
+/obj/item/shovel/spade	spade
+/obj/item/slime_scanner	slime scanner
+/obj/item/stack/ducts/fifty	stack of duct
+/obj/item/stack/license_plates/empty/fifty	empty license plate
+/obj/item/stack/ore/iron	iron ore
+/obj/item/stack/ore/silver	silver ore
+/obj/item/stack/package_wrap	package wrapper
+/obj/item/stack/pipe_cleaner_coil/random	pipe cleaner coil
+/obj/item/stack/sheet/glass/fifty	glass
+/obj/item/stack/sheet/metal/fifty	metal
+/obj/item/stack/sheet/metal/five	metal
+/obj/item/stack/wrapping_paper	wrapping paper
+/obj/item/stock_parts/subspace/amplifier	subspace amplifier
+/obj/item/stock_parts/subspace/analyzer	subspace wavelength analyzer
+/obj/item/stock_parts/subspace/ansible	subspace ansible
+/obj/item/stock_parts/subspace/crystal	ansible crystal
+/obj/item/stock_parts/subspace/filter	hyperwave filter
+/obj/item/stock_parts/subspace/transmitter	subspace transmitter
+/obj/item/stock_parts/subspace/treatment	subspace treatment disk
+/obj/item/tank/internals/emergency_oxygen/engi	extended-capacity emergency oxygen tank
+/obj/item/tank/internals/oxygen/red	oxygen tank
+/obj/item/tank/jetpack/carbondioxide	jetpack (carbon dioxide)
+/obj/item/toner	toner cartridge
+/obj/item/transfer_valve	tank transfer valve
+/obj/item/watertank	backpack water tank
+/obj/item/wirerod	wired rod
+/obj/item/stack/sheet/mineral/gold	gold
+/obj/item/circuitboard/computer/solar_control	Solar Control (Computer Board)
+/obj/item/pneumatic_cannon/pie	pie cannon
+/obj/item/watertank/atmos	backpack firefighter tank
+/obj/item/etherealballdeployer	Portable Ethereal Disco Ball
+/obj/item/roulette_wheel_beacon	roulette wheel beacon
+/obj/item/pet_carrier	pet carrier
+/obj/item/door_remote/captain	command door remote
+/obj/item/autosurgeon/cmo	autosurgeon
+/obj/item/door_remote/chief_medical_officer	medical door remote
+/obj/item/circuitboard/machine/techfab/department/medical	Departmental Techfab (Machine Board) - Medical
+/obj/item/tank/jetpack/suit	hardsuit jetpack upgrade
+/obj/item/areaeditor/blueprints	station blueprints
+/obj/item/door_remote/chief_engineer	engineering door remote
+/obj/item/circuitboard/machine/techfab/department/engineering	Departmental Techfab (Machine Board) - Engineering
+/obj/item/inducer	inducer
+/obj/item/door_remote/civilian	civilian door remote
+/obj/item/circuitboard/machine/techfab/department/service	Departmental Techfab - Service (Machine Board)
+/obj/item/circuitboard/machine/techfab/department/security	Departmental Techfab (Machine Board) - Security
+/obj/item/secateurs	secateurs
+/obj/item/stack/sheet/mineral/sandbags	sandbags
+/obj/item/survivalcapsule	bluespace shelter capsule
+/obj/item/instrument/piano_synth	synthesizer
+/obj/item/export_scanner	export scanner
+/obj/item/door_remote/quartermaster	supply door remote
+/obj/item/circuitboard/machine/techfab/department/cargo	Departmental Techfab (Machine Board) - Cargo
+/obj/item/circuitboard/machine/ore_silo	Ore Silo (Machine Board)
+/obj/item/door_remote/research_director	research door remote
+/obj/item/circuitboard/machine/techfab/department/science	Departmental Techfab (Machine Board) - Science
+/obj/item/encryptionkey/headset_cargo	supply radio encryption key
+/obj/item/encryptionkey/headset_eng	engineering radio encryption key
+/obj/item/encryptionkey/headset_med	medical radio encryption key
+/obj/item/encryptionkey/headset_sci	science radio encryption key
+/obj/item/door_remote/head_of_security	security door remote

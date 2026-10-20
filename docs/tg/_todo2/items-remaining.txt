@@ -1,0 +1,270 @@
+# item types still undocumented (DM path, in-game name)
+/obj/item/storage/firstaid/regular	first-aid kit
+/obj/item/storage/firstaid/fire	burn treatment kit
+/obj/item/storage/firstaid/toxin	toxin treatment kit
+/obj/item/storage/firstaid/o2	oxygen deprivation treatment kit
+/obj/item/storage/firstaid/brute	brute trauma treatment kit
+/obj/item/stack/medical/bruise_pack	bruise pack
+/obj/item/stack/medical/ointment	ointment
+/obj/item/clothing/suit/space/emergency	space suit
+/obj/item/clothing/head/helmet/space/emergency	space helmet
+/obj/item/fireaxe	fire axe
+/obj/item/reagent_containers/hypospray/medipen	epinephrine medipen
+/obj/item/storage/box	box
+/obj/item/storage/box/survival	box
+/obj/item/pda/atmos	atmospherics PDA
+/obj/item/storage/box/survival/engineer	box
+/obj/item/modular_computer/tablet/preset/advanced	tablet computer
+/obj/item/pda/bar	bartender PDA
+/obj/item/pda/botanist	botanist PDA
+/obj/item/clothing/shoes/sneakers/brown	brown shoes
+/obj/item/pda/captain	captain PDA
+/obj/item/pda/cargo	cargo technician PDA
+/obj/item/pda/chaplain	chaplain PDA
+/obj/item/camera/spooky	camera obscura
+/obj/item/clothing/shoes/sneakers/white	white shoes
+/obj/item/pda/chemist	chemist PDA
+/obj/item/storage/box/survival/medical	box
+/obj/item/pda/heads/ce	chief engineer PDA
+/obj/item/pda/heads/cmo	chief medical officer PDA
+/obj/item/clothing/shoes/clown_shoes	clown shoes
+/obj/item/pda/clown	clown PDA
+/obj/item/reagent_containers/spray/waterflower	water flower
+/obj/item/pda/cook	cook PDA
+/obj/item/sharpener	whetstone
+/obj/item/pda/curator	curator PDA
+/obj/item/key/displaycase	display case key
+/obj/item/choice_beacon/hero	heroic beacon
+/obj/item/soapstone	soapstone
+/obj/item/barcodescanner	barcode scanner
+/obj/item/pda/detective	detective PDA
+/obj/item/pda/geneticist	geneticist PDA
+/obj/item/pda/heads/hop	head of personnel PDA
+/obj/item/pda/heads/hos	head of security PDA
+/obj/item/melee/baton/loaded	stun baton
+/obj/item/pda/janitor	janitor PDA
+/obj/item/pda/lawyer	lawyer PDA
+/obj/item/pda/medical	medical PDA
+/obj/item/clothing/gloves/color/white	white gloves
+/obj/item/pda/mime	mime PDA
+/obj/item/book/mimery	Guide to Dank Mimery
+/obj/item/clothing/shoes/sneakers/blue	blue shoes
+/obj/item/clothing/head/soft/paramedic	paramedic cap
+/obj/item/clothing/shoes/sneakers/orange	orange shoes
+/obj/item/storage/pill_bottle/mannitol	bottle of mannitol pills
+/obj/item/storage/pill_bottle/psicodine	bottle of psicodine pills
+/obj/item/storage/pill_bottle/paxpsych	pax pills
+/obj/item/storage/pill_bottle/happinesspsych	happiness pills
+/obj/item/storage/pill_bottle/lsdpsych	mindbreaker toxin pills
+/obj/item/pda/quartermaster	quartermaster PDA
+/obj/item/pda/heads/rd	research director PDA
+/obj/item/pda/roboticist	roboticist PDA
+/obj/item/pda/toxins	scientist PDA
+/obj/item/pda/security	security PDA
+/obj/item/pda/shaftminer	shaft miner PDA
+/obj/item/reagent_containers/hypospray/medipen/survival	survival emergency medipen
+/obj/item/storage/bag/ore	mining satchel
+/obj/item/storage/box/survival/mining	box
+/obj/item/mining_voucher	mining voucher
+/obj/item/stack/marker_beacon/ten	marker beacon
+/obj/item/pda/engineering	engineering PDA
+/obj/item/ai_module/core/freeformcore	'Freeform' Core AI Module
+/obj/item/ai_module/core/full/asimov	'Asimov' Core AI Module
+/obj/item/ai_module/core/full/custom	Default Core AI Module
+/obj/item/ai_module/reset	'Reset' AI module
+/obj/item/ai_module/reset/purge	'Purge' AI Module
+/obj/item/ai_module/supplied/freeform	'Freeform' AI Module
+/obj/item/ai_module/supplied/oxygen	'OxygenIsToxicToHumans' AI Module
+/obj/item/ai_module/supplied/protect_station	'ProtectStation' AI Module
+/obj/item/ai_module/supplied/quarantine	'Quarantine' AI Module
+/obj/item/ai_module/zeroth/onehuman	'OneHuman' AI Module
+/obj/item/airlock_painter	airlock painter
+/obj/item/ammo_box/a357	speed loader (.357)
+/obj/item/assault_pod/mining	Landing Field Designator
+/obj/item/assembly/prox_sensor	proximity sensor
+/obj/item/assembly/timer	timer
+/obj/item/bikehorn/rubberducky	rubber ducky
+/obj/item/camera	camera
+/obj/item/camera/detective	Detective's camera
+/obj/item/camera_film	film cartridge
+/obj/item/cautery	cautery
+/obj/item/chair/wood	wooden chair
+/obj/item/circuitboard/computer/operating	Operating Computer (Computer Board)
+/obj/item/circular_saw	circular saw
+/obj/item/clothing/gloves/color/rainbow	rainbow gloves
+/obj/item/clothing/head/helmet	helmet
+/obj/item/clothing/head/soft/grey	grey cap
+/obj/item/clothing/head/soft/rainbow	rainbow cap
+/obj/item/clothing/head/that	top-hat
+/obj/item/clothing/shoes/sneakers/rainbow	rainbow shoes
+/obj/item/clothing/under/color/rainbow	rainbow jumpsuit
+/obj/item/coin/diamond	coin
+/obj/item/coin/gold	coin
+/obj/item/coin/iron	coin
+/obj/item/coin/plasma	coin
+/obj/item/coin/silver	coin
+/obj/item/construction/plumbing	Plumbing Constructor
+/obj/item/dest_tagger	destination tagger
+/obj/item/disk/nuclear	nuclear authentication disk
+/obj/item/electronics/airalarm	air alarm electronics
+/obj/item/electropack	electropack
+/obj/item/gavelblock	gavel block
+/obj/item/gavelhammer	gavel hammer
+/obj/item/grenade/barrier	barrier grenade
+/obj/item/grenade/chem_grenade	chemical grenade
+/obj/item/grenade/chem_grenade/cleaner	cleaner grenade
+/obj/item/gun/ballistic/revolver/russian	Russian revolver
+/obj/item/gun/ballistic/shotgun/doublebarrel	double-barreled shotgun
+/obj/item/gun/ballistic/shotgun/riot	riot shotgun
+/obj/item/gun/syringe	syringe gun
+/obj/item/hand_labeler	hand labeler
+/obj/item/hand_tele	hand tele
+/obj/item/hemostat	hemostat
+/obj/item/key/janitor	key
+/obj/item/key/security	key
+/obj/item/kitchen/rollingpin	rolling pin
+/obj/item/latexballon	latex glove
+/obj/item/mmi	Man-Machine Interface
+/obj/item/nanite_remote	nanite remote control
+/obj/item/newspaper	newspaper
+/obj/item/paper/fluff/holodeck/disclaimer	Holodeck Disclaimer
+/obj/item/paper/fluff/jobs/security/beepsky_mom	Note from Beepsky's Mom
+/obj/item/paper/guides/jobs/engi/gravity_gen	paper- 'Generate your own gravity!'
+/obj/item/paper/guides/jobs/hydroponics	paper- 'Greetings from Billy Bob'
+/obj/item/paper/monitorkey	monitor decryption key
+/obj/item/paper/pamphlet/gateway	pamphlet
+/obj/item/paper_bin	paper bin
+/obj/item/paper_bin/carbon	carbon paper bin
+/obj/item/pickaxe/emergency	emergency disembarkation tool
+/obj/item/pinpointer/nuke	pinpointer
+/obj/item/plunger	plunger
+/obj/item/radio/off	station bounced radio
+/obj/item/raw_anomaly_core/random	random raw core
+/obj/item/rcl/pre_loaded	rapid pipe cleaner layer
+/obj/item/reagent_containers/blood/random	blood pack
+/obj/item/reagent_containers/chem_pack	intravenous medicine bag
+/obj/item/reagent_containers/food/snacks/grown/grapes	bunch of grapes
+/obj/item/reagent_containers/food/snacks/grown/poppy	poppy
+/obj/item/reagent_containers/food/snacks/pie/cream	banana cream pie
+/obj/item/reagent_containers/glass/beaker/cryoxadone	beaker
+/obj/item/reagent_containers/glass/bottle/ammonia	ammonia bottle
+/obj/item/reagent_containers/glass/bottle/epinephrine	epinephrine bottle
+/obj/item/reagent_containers/glass/bottle/morphine	morphine bottle
+/obj/item/reagent_containers/glass/bottle/multiver	multiver bottle
+/obj/item/reagent_containers/glass/bottle/nutrient/ez	bottle of E-Z-Nutrient
+/obj/item/reagent_containers/glass/bottle/nutrient/rh	bottle of Robust Harvest
+/obj/item/reagent_containers/glass/bowl	bowl
+/obj/item/reagent_containers/glass/bucket	bucket
+/obj/item/reagent_containers/glass/rag	damp rag
+/obj/item/reagent_containers/pill/patch/aiuri	aiuri patch (burn)
+/obj/item/reagent_containers/spray/cleaner	space cleaner
+/obj/item/reagent_containers/spray/pepper	pepperspray
+/obj/item/reagent_containers/syringe/antiviral	syringe (spaceacillin)
+/obj/item/restraints/legcuffs/beartrap	bear trap
+/obj/item/retractor	retractor
+/obj/item/scalpel	scalpel
+/obj/item/seeds/garlic	pack of garlic seeds
+/obj/item/seeds/grape	pack of grape seeds
+/obj/item/seeds/potato	pack of potato seeds
+/obj/item/seeds/pumpkin	pack of pumpkin seeds
+/obj/item/seeds/sugarcane	pack of sugarcane seeds
+/obj/item/seeds/tomato	pack of tomato seeds
+/obj/item/soap/deluxe	soap
+/obj/item/soap/nanotrasen	soap
+/obj/item/stack/ducts/fifty	stack of duct
+/obj/item/stack/license_plates/empty/fifty	empty license plate
+/obj/item/stack/medical/gauze	medical gauze
+/obj/item/stack/package_wrap	package wrapper
+/obj/item/stack/pipe_cleaner_coil/random	pipe cleaner coil
+/obj/item/stack/sheet/glass/fifty	glass
+/obj/item/stack/sheet/metal/fifty	metal
+/obj/item/stack/sheet/metal/five	metal
+/obj/item/stack/sheet/mineral/plasma	solid plasma
+/obj/item/stack/spacecash/c10	space cash
+/obj/item/stack/spacecash/c100	space cash
+/obj/item/stack/spacecash/c200	space cash
+/obj/item/stack/wrapping_paper	wrapping paper
+/obj/item/stock_parts/cell/emproof	EMP-proof cell
+/obj/item/stock_parts/cell/high/plus	high-capacity power cell+
+/obj/item/stock_parts/cell/potato	potato battery
+/obj/item/storage/box/prisoner	box of prisoner IDs
+/obj/item/storage/box/shipping	box of shipping supplies
+/obj/item/storage/pill_bottle/dice	bag of dice
+/obj/item/storage/pill_bottle/mutadone	bottle of mutadone pills
+/obj/item/surgical_drapes	surgical drapes
+/obj/item/target	shooting target
+/obj/item/target/alien	shooting target
+/obj/item/target/alien/anchored	shooting target
+/obj/item/target/clown	shooting target
+/obj/item/target/syndicate	shooting target
+/obj/item/toner	toner cartridge
+/obj/item/toy/beach_ball/holoball	basketball
+/obj/item/toy/cards/deck/cas	CAS deck (white)
+/obj/item/toy/plush/slimeplushie	slime plushie
+/obj/item/toy/sword	toy sword
+/obj/item/transfer_valve	tank transfer valve
+/obj/item/wirerod	wired rod
+/obj/item/clothing/gloves/boxing/blue	boxing gloves
+/obj/item/clothing/gloves/boxing/green	boxing gloves
+/obj/item/clothing/gloves/boxing/yellow	boxing gloves
+/obj/item/bodypart/l_arm/robot/surplus	surplus prosthetic left arm
+/obj/item/bodypart/r_arm/robot/surplus	surplus prosthetic right arm
+/obj/item/bodypart/l_leg/robot/surplus	surplus prosthetic left leg
+/obj/item/bodypart/r_leg/robot/surplus	surplus prosthetic right leg
+/obj/item/stack/sheet/mineral/gold	gold
+/obj/item/paper/guides/jobs/engi/solars	paper- 'Going green! Setup your own solar array instructions.'
+/obj/item/electronics/tracker	tracker electronics
+/obj/item/reagent_containers/food/drinks/soda_cans/canned_laughter	Canned Laughter
+/obj/item/pneumatic_cannon/pie	pie cannon
+/obj/item/storage/firstaid/emergency	emergency first-aid kit
+/obj/item/storage/bag/bio	bio bag
+/obj/item/clothing/head/helmet/bluetaghelm	blue laser tag helmet
+/obj/item/clothing/head/helmet/redtaghelm	red laser tag helmet
+/obj/item/clothing/mask/luchador/rudos	Rudos Mask
+/obj/item/clothing/mask/luchador/tecnicos	Tecnicos Mask
+/obj/item/etherealballdeployer	Portable Ethereal Disco Ball
+/obj/item/roulette_wheel_beacon	roulette wheel beacon
+/obj/item/pet_carrier	pet carrier
+/obj/item/clothing/head/crown/fancy	magnificent crown
+/obj/item/defibrillator/compact/loaded	compact defibrillator
+/obj/item/reagent_containers/hypospray/cmo	hypospray
+/obj/item/autosurgeon/cmo	autosurgeon
+/obj/item/paper/fluff/jobs/security/court_judgement	paper- 'Judgement'
+/obj/item/clothing/suit/judgerobe	judge's robe
+/obj/item/clothing/head/powdered_wig	powdered wig
+/obj/item/storage/belt/holster/detective/full	detective's holster
+/obj/item/storage/box/rxglasses/spyglasskit	spyglass kit
+/obj/item/areaeditor/blueprints	station blueprints
+/obj/item/inducer	inducer
+/obj/item/storage/box/emptysandbags	box of empty sandbags
+/obj/item/storage/bag/construction	construction bag
+/obj/item/implanter/exile	implanter (exile)
+/obj/item/reagent_containers/food/snacks/meat/slab/monkey	monkey meat
+/obj/item/shield/riot/tele	telescopic shield
+/obj/item/storage/belt/security/full	security belt
+/obj/item/reagent_containers/syringe/lethal/execution	lethal injection syringe
+/obj/item/reagent_containers/glass/bottle/toxin	toxin bottle
+/obj/item/defibrillator/loaded	defibrillator
+/obj/item/stack/sheet/mineral/sandbags	sandbags
+/obj/item/t_scanner/adv_mining_scanner/lesser	automatic mining scanner
+/obj/item/survivalcapsule	bluespace shelter capsule
+/obj/item/storage/backpack/duffelbag	duffel bag
+/obj/item/clothing/mask/muzzle	muzzle
+/obj/item/clothing/gloves/fingerless	fingerless gloves
+/obj/item/export_scanner	export scanner
+/obj/item/card/id/departmental_budget/car	departmental card (FUCK)
+/obj/item/clothing/suit/armor/reactive/teleport	reactive teleport armor
+/obj/item/clothing/suit/jacket/leather	leather jacket
+/obj/item/clothing/suit/jacket/leather/overcoat	leather overcoat
+/obj/item/clothing/head/soft/black	black cap
+/obj/item/clothing/mask/bandana/black	black bandana
+/obj/item/clothing/mask/bandana/skull	skull bandana
+/obj/item/clothing/suit/hooded/wintercoat/engineering	engineering winter coat
+/obj/item/clothing/mask/bandana/green	green bandana
+/obj/item/clothing/suit/jacket	bomber jacket
+/obj/item/clothing/under/color/white	white jumpsuit
+/obj/item/clothing/under/color/jumpskirt/white	white jumpskirt
+/obj/item/clothing/mask/bandana/red	red bandana
+/obj/item/clothing/mask/bandana/blue	blue bandana
+/obj/item/clothing/mask/bandana/gold	gold bandana
+/obj/item/clothing/head/soft/mime	white cap

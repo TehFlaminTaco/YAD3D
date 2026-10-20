@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 const RUNE_LIFE = 5;             // seconds a line of speech hangs over someone's head
 const RUNE_RANGE = 18;           // metres
-
+const RUNE_GAP = 0.12;           // metres between the top of someone's picture and their words
+const RUNE_EDGE = 6;             // pixels kept clear at the top of the screen
 const nameColor = (name) => {
   let h = 0;
   for (const ch of name || '') h = (h * 33 + ch.charCodeAt(0)) >>> 0;
@@ -75,6 +76,8 @@ export class Hud {
 
   // ---------------------------------------------------------------- runechat
   addBubble(id, text) {
+    // not your own: your head is the camera, and your mob's record is never moved (you are predicted), so it would hang where you spawned
+    if (id === this.game.rep.you?.id) return;
     let sp = this.speakers.get(id);
     if (!sp) {
       const box = document.createElement('div');
@@ -104,10 +107,15 @@ export class Hud {
       const m = g.rep.mobs.get(id);
       if (!sp.lines.length || !m) { sp.box.remove(); this.speakers.delete(id); continue; }
       const dist = Math.hypot(m.x - g.pred.x, m.z - g.pred.z);
-      this.v.set(m.x, m.dead ? 0.8 : 2.0, m.z).project(g.camera);
-      const vis = this.v.z < 1 && Math.abs(this.v.x) < 1.1 && Math.abs(this.v.y) < 1.1 && dist < RUNE_RANGE && g.rep.world.los(g.pred.x, g.pred.z, m.x, m.z);
+      // sits just above the top of the picture as it is drawn (a corgi, a person lying down and a carp are not 2 m tall)
+      this.v.set(m.x, (g.view.mobViews.get(id)?.top ?? 1.8) + RUNE_GAP, m.z).project(g.camera);
+      const vis = this.v.z < 1 && Math.abs(this.v.x) < 1.1 && this.v.y > -1.1 && this.v.y < 3 && dist < RUNE_RANGE && g.rep.world.los(g.pred.x, g.pred.z, m.x, m.z);
       sp.box.style.display = vis ? 'block' : 'none';
-      if (vis) sp.box.style.transform = `translate(-50%, -100%) translate(${((this.v.x + 1) / 2 * innerWidth).toFixed(0)}px, ${((1 - this.v.y) / 2 * innerHeight).toFixed(0)}px)`;
+      if (!vis) continue;
+      // up close the head is above the top of the screen: keep the words on it
+      const px = (this.v.x + 1) / 2 * innerWidth, py = (1 - this.v.y) / 2 * innerHeight;
+      const y = py < RUNE_EDGE + sp.box.offsetHeight ? RUNE_EDGE + sp.box.offsetHeight : py;
+      sp.box.style.transform = `translate(-50%, -100%) translate(${px.toFixed(0)}px, ${y.toFixed(0)}px)`;
     }
   }
 

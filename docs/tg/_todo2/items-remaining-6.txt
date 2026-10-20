@@ -1,0 +1,40 @@
+# item types to document (DM path, in-game name)
+/obj/item/seeds/grape	pack of grape seeds
+/obj/item/seeds/potato	pack of potato seeds
+/obj/item/seeds/pumpkin	pack of pumpkin seeds
+/obj/item/seeds/sugarcane	pack of sugarcane seeds
+/obj/item/seeds/tomato	pack of tomato seeds
+/obj/item/sharpener	whetstone
+/obj/item/shield/riot/tele	telescopic shield
+/obj/item/soap/deluxe	soap
+/obj/item/soap/nanotrasen	soap
+/obj/item/soapstone	soapstone
+/obj/item/stack/ducts/fifty	stack of duct
+/obj/item/stack/license_plates/empty/fifty	empty license plate
+/obj/item/stack/marker_beacon/ten	marker beacon
+/obj/item/stack/medical/bruise_pack	bruise pack
+/obj/item/stack/medical/gauze	medical gauze
+/obj/item/stack/medical/ointment	ointment
+/obj/item/stack/package_wrap	package wrapper
+/obj/item/stack/pipe_cleaner_coil/random	pipe cleaner coil
+/obj/item/stack/sheet/glass/fifty	glass
+/obj/item/stack/sheet/metal/fifty	metal
+/obj/item/stack/sheet/metal/five	metal
+/obj/item/stack/sheet/mineral/gold	gold
+/obj/item/stack/sheet/mineral/plasma	solid plasma
+/obj/item/stack/sheet/mineral/sandbags	sandbags
+/obj/item/stack/spacecash/c10	space cash
+/obj/item/stack/spacecash/c100	space cash
+/obj/item/stack/spacecash/c200	space cash
+/obj/item/stack/wrapping_paper	wrapping paper
+/obj/item/stock_parts/cell/emproof	EMP-proof cell
+/obj/item/stock_parts/cell/high/plus	high-capacity power cell+
+/obj/item/stock_parts/cell/potato	potato battery
+/obj/item/storage/backpack/duffelbag	duffel bag
+/obj/item/storage/bag/bio	bio bag
+/obj/item/storage/bag/construction	construction bag
+/obj/item/storage/bag/ore	mining satchel
+/obj/item/storage/belt/holster/detective/full	detective's holster
+/obj/item/storage/belt/security/full	security belt
+/obj/item/storage/box	box
+/obj/item/storage/box/emptysandbags	box of empty sandbags

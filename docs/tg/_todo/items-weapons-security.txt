@@ -1,0 +1,39 @@
+# item types to document (DM path, in-game name)
+/obj/item/gun/energy/e_gun	energy gun
+/obj/item/gun/energy/e_gun/mini	miniature energy gun
+/obj/item/gun/energy/laser	laser gun
+/obj/item/melee/classic_baton/telescopic	telescopic baton
+/obj/item/bikehorn	bike horn
+/obj/item/melee/classic_baton	police baton
+/obj/item/assembly/flash/handheld	flash
+/obj/item/melee/baton/loaded	stun baton
+/obj/item/gun/energy/disabler	disabler
+/obj/item/ammo_box/a357	speed loader (.357)
+/obj/item/bikehorn/rubberducky	rubber ducky
+/obj/item/electropack	electropack
+/obj/item/grenade/barrier	barrier grenade
+/obj/item/grenade/chem_grenade/cleaner	cleaner grenade
+/obj/item/grenade/chem_grenade/smart_metal_foam	smart metal foam grenade
+/obj/item/gun/ballistic/revolver/russian	Russian revolver
+/obj/item/gun/ballistic/shotgun/doublebarrel	double-barreled shotgun
+/obj/item/gun/ballistic/shotgun/riot	riot shotgun
+/obj/item/gun/energy/e_gun/dragnet	DRAGnet
+/obj/item/gun/energy/ionrifle	ion rifle
+/obj/item/gun/energy/laser/practice	practice laser gun
+/obj/item/gun/energy/temperature/security	security temperature gun
+/obj/item/gun/syringe	syringe gun
+/obj/item/hatchet	hatchet
+/obj/item/melee/chainofcommand	chain of command
+/obj/item/nullrod	null rod
+/obj/item/pickaxe	pickaxe
+/obj/item/pickaxe/emergency	emergency disembarkation tool
+/obj/item/restraints/handcuffs/cable/zipties	zipties
+/obj/item/restraints/legcuffs/beartrap	bear trap
+/obj/item/toy/sword	toy sword
+/obj/item/gun/energy/laser/bluetag	laser tag gun
+/obj/item/gun/energy/laser/redtag	laser tag gun
+/obj/item/shield/riot/tele	telescopic shield
+/obj/item/storage/belt/security/full	security belt
+/obj/item/gun/energy/e_gun/hos	X-01 MultiPhase Energy Gun
+/obj/item/pickaxe/mini	compact pickaxe
+/obj/item/gun/energy/kinetic_accelerator	proto-kinetic accelerator

@@ -5,7 +5,7 @@ import { loadSimData } from '../src/sim/load.js';
 import { Sim } from '../src/sim/sim.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
 import { CL } from '../src/shared/closets.js';
-import { recalc, place } from '../src/sim/inventory.js';
+import { recalc, place, attach, detach } from '../src/sim/inventory.js';
 import { HIDE } from '../src/shared/looks.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,8 +13,8 @@ const DATA = loadSimData(root);
 let pass = 0, fail = 0;
 const ok = (cond, name) => { if (cond) pass++; else { fail++; console.log('  FAIL:', name); } };
 
-function setup() {
-  const sim = new Sim(DATA, { bots: 0 });
+function setup(opts = {}) {
+  const sim = new Sim(DATA, { bots: 0, ...opts });
   const inbox = { a: [], b: [] };
   const A = sim.addClient('Alice', (m) => inbox.a.push(m));
   const B = sim.addClient('Bob', (m) => inbox.b.push(m));
@@ -657,6 +657,223 @@ section('structures', () => {
 });
 
 
+section('observers and ghosts', () => {
+  const { sim, A, B, b, step, inbox } = setup();
+  // an observer from the lobby walks where they push
+  const C = sim.addClient('Cara', () => {});
+  sim.handle(C, { t: 'lobby', op: 'observe' });
+  ok(C.state === 'ghost' && !C.mob, 'observing makes you a ghost with no body');
+  const z0 = C.ghost.z;
+  const walkN = (c, seq0, n) => sim.handle(c, { t: 'input', list: Array.from({ length: n }, (_, k) => ({ seq: seq0 + k, dt: 0.05, f: 1, b: 0, l: 0, r: 0, run: 1, yaw: 0, pitch: 0 })) });
+  walkN(C, 1, 10); step(0.6);
+  ok(C.ghost.z < z0 - 2, 'an observer can move');
+  ok(C.lastSeq === 10, 'and the server acknowledges the inputs, so the client is not pulled back');
+  // someone who dies becomes a ghost that can fly about too
+  b.body.damage('brute', 999, 'test'); step(0.2);
+  ok(B.state === 'ghost' && !B.mob, 'the dead become ghosts');
+  const x0 = B.ghost.x;
+  sim.handle(B, { t: 'input', list: Array.from({ length: 10 }, (_, k) => ({ seq: 1 + k, dt: 0.05, f: 0, b: 0, l: 0, r: 1, run: 1, yaw: 0, pitch: 0 })) }); step(0.6);
+  ok(B.ghost.x > x0 + 2 && B.lastSeq === 10, 'a dead player can fly about');
+  void A; void inbox;
+});
+
+section('debug menu', () => {
+  // off unless the server was started with --debug
+  {
+    const { sim, A, a, inbox, step } = setup();
+    const floor0 = sim.floor.size;
+    sim.handle(A, { t: 'dbg', op: 'spawn', path: '/obj/item/crowbar', n: 1, where: 'hand' });
+    sim.handle(A, { t: 'dbg', op: 'god', on: true });
+    sim.handle(A, { t: 'dbg', op: 'mob', kind: 'carp', where: 'front' });
+    step(0.1);
+    ok(inbox.a.find((m) => m.t === 'welcome').debug === false, 'the welcome says the debug menu is off');
+    ok(!a.hands[0] && !a.hands[1] && sim.floor.size === floor0 && !a.body.god && ![...sim.mobs.values()].some((m) => m.kind === 'carp'), 'and every debug message is ignored');
+  }
+  const { sim, A, B, a, b, inbox, step, evs, floorTiles } = setup({ debug: true });
+  const w = sim.world, W = w.W;
+  const texts = (inb) => inb.filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((x) => x.e === 'msg').map((x) => x.text);
+  const dbg = (c, op, extra = {}) => { sim.handle(c, { t: 'dbg', op, ...extra }); step(0.1); };
+  ok(inbox.a.find((m) => m.t === 'welcome').debug === true, 'the welcome says the debug menu is on');
+  a.hands[0] = null; a.hands[1] = null; a.active = 0;
+
+  // --- spawning
+  dbg(A, 'spawn', { path: '/obj/item/crowbar', n: 1, where: 'hand' });
+  ok(a.hands[0]?.path === '/obj/item/crowbar', 'spawns an item into your hand');
+  dbg(A, 'spawn', { path: '/obj/item/wrench', n: 1, where: 'hand' });
+  dbg(A, 'spawn', { path: '/obj/item/screwdriver', n: 1, where: 'hand' });
+  ok(a.hands[1]?.path === '/obj/item/wrench' && [...sim.floor.values()].some((f) => f.item.path === '/obj/item/screwdriver' && Math.hypot(f.x - a.x, f.z - a.z) < 2), 'the second goes to the other hand and the third to the floor beside you');
+  const before = sim.floor.size;
+  dbg(A, 'spawn', { path: '/obj/item/pen', n: 4, where: 'front' });
+  ok(sim.floor.size === before + 4, 'spawns several at your feet');
+  dbg(A, 'spawn', { path: '/obj/item/stack/sheet/metal', n: 30, where: 'front' });
+  const sheets = [...sim.floor.values()].filter((f) => f.item.path === '/obj/item/stack/sheet/metal').pop();
+  ok(sheets && sheets.item.amount === 30, 'a stack is one thing with that many in it');
+  const n1 = sim.floor.size;
+  dbg(A, 'spawn', { path: '/obj/item/pen', n: 9999, where: 'front' });
+  ok(sim.floor.size === n1 + 25, 'a huge amount is capped');
+  const n0 = sim.floor.size;
+  dbg(A, 'spawn', { path: '/obj/not/a/thing', n: 1, where: 'front' });
+  dbg(A, 'spawn', { path: '__proto__', n: 1, where: 'front' });
+  dbg(A, 'spawn', { path: '/obj/item/pen', n: 'lots', where: 'look', at: ['x', null] });
+  ok(sim.floor.size === n0 + 1 && texts(inbox.a).includes('[Debug] No such item.'), 'rubbish is refused or made harmless');
+  const spot = [a.x + 6, a.z];
+  dbg(A, 'spawn', { path: '/obj/item/flashlight', n: 1, where: 'look', at: spot });
+  const lit = [...sim.floor.values()].find((f) => f.item.path === '/obj/item/flashlight' && Math.hypot(f.x - spot[0], f.z - spot[1]) < 3);
+  ok(lit && Math.hypot(lit.x - spot[0], lit.z - spot[1]) < 3, 'spawns where you are looking');
+
+  // --- creatures
+  dbg(A, 'mob', { kind: 'carp', where: 'front' });
+  ok([...sim.mobs.values()].some((m) => m.kind === 'carp'), 'spawns a space carp');
+  dbg(A, 'mob', { kind: 'corgi', where: 'front' });
+  ok([...sim.mobs.values()].some((m) => m.name === 'Ian' && m.kind === 'pet'), 'and Ian');
+  const crewBefore = sim.mobs.size;
+  dbg(A, 'mob', { kind: 'crew', job: 'not_a_job', where: 'front' });
+  dbg(A, 'mob', { kind: 'crew', job: 'bartender', where: 'front' });
+  const bar = [...sim.mobs.values()].find((m) => m.job === 'bartender');
+  ok(sim.mobs.size === crewBefore + 1 && Math.hypot(bar.x - a.x, bar.z - a.z) < 4, 'spawns crew in a job, next to you');
+  dbg(A, 'who');
+  const who = evs(inbox.a, 'dbg').pop();
+  ok(who?.k === 'who' && who.mobs.some((m) => m.id === bar.id && m.job === 'bartender') && who.mobs.find((m) => m.id === a.id).pl, 'the people list names everyone and marks players');
+  dbg(A, 'delete', { target: { k: 'mob', id: bar.id } });
+  ok(!sim.mobs.has(bar.id), 'removes someone who is not a player');
+  dbg(A, 'delete', { target: { k: 'mob', id: b.id } });
+  ok(sim.mobs.has(b.id), 'but not a player');
+  dbg(A, 'delete', { target: { k: 'item', id: lit.item.id } });
+  ok(!sim.floor.has(lit.item.id) && !sim.items.has(lit.item.id), 'removes a loose item');
+  const cl = sim.closets.list.find((it) => !it.gone && !(it.cs & CL.OPEN));
+  ok(w.collides(cl.x, cl.z, 0.1), 'a closed locker blocks');
+  dbg(A, 'delete', { target: { k: 'prop', idx: cl.idx } });
+  ok(cl.gone && !w.collides(cl.x, cl.z, 0.1), 'and once removed it stops blocking');
+
+  // --- you
+  a.body.damage('brute', 50, 'test');
+  dbg(A, 'heal');
+  ok(a.body.health === a.body.max, 'heals you');
+  dbg(A, 'god', { on: true });
+  sim.hurt(a, 500, 'brute', 'test');
+  ok(!a.dead && a.body.health === a.body.max && sim.selfState(A).dbg.god, 'god mode: nothing hurts');
+  dbg(A, 'god', { on: false });
+  dbg(A, 'kill');
+  ok(a.dead && A.state === 'ghost' && A.deadMob === a, 'kill kills, god mode or not');
+  dbg(A, 'revive');
+  ok(!a.dead && A.mob === a && A.state === 'playing' && !A.deadMob && a.body.health === a.body.max, 'revive brings a dead player back in their body');
+  dbg(A, 'speed', { v: 3 });
+  ok(sim.selfState(A).slow >= 2.9 && sim.selfState(A).dbg.speed === 3, 'speed is a multiplier the client can predict');
+  dbg(A, 'speed', { v: 99 });
+  ok(a.dbgSpeed === 6, 'capped');
+  dbg(A, 'speed', { v: 1 });
+  dbg(A, 'access');
+  ok(a.worn.id.access.length > 30 && a.access.has(10), 'every door opens for your ID');
+  const oldUniform = a.worn.uniform;
+  dbg(A, 'outfit', { job: 'captain' });
+  ok(a.worn.uniform && a.worn.uniform !== oldUniform && a.worn.uniform.path.includes('captain') && sim.floor.has(oldUniform.id), "wears another job's outfit, the old clothes on the floor");
+  dbg(A, 'outfit', { job: 'nonsense' });
+  ok(a.worn.uniform.path.includes('captain'), 'an unknown job changes nothing');
+
+  // --- noclip walks through a wall
+  const t0 = [...Array(W * w.H).keys()].find((i) => w.kind[i] === 1 && !w.solid[i] && w.kind[i + 1] === 2 && w.kind[i + 2] === 2 && w.kind[i + 3] === 2 && !w.dyn[i]);
+  const tc = t0 % W, tr = Math.floor(t0 / W);
+  let seq = 1000;
+  const walkEast = (n) => { a.x = tc * 2 + 1; a.z = tr * 2 + 1; a.vx = a.vz = 0; sim.handle(A, { t: 'input', list: Array.from({ length: n }, () => ({ seq: seq++, dt: 0.05, f: 1, b: 0, l: 0, r: 0, run: 1, yaw: -Math.PI / 2, pitch: 0 })) }); step(1); };
+  walkEast(20);
+  ok(a.x < (tc + 1) * 2 + 0.1, 'a wall stops you');
+  dbg(A, 'noclip', { on: true });
+  walkEast(20);
+  ok(a.x > (tc + 1) * 2 + 1 && sim.selfState(A).dbg.noclip, 'noclip lets you through it, and tells the client to predict that');
+  dbg(A, 'noclip', { on: false });
+
+  // --- going places
+  dbg(A, 'tp', { c: 120, r: 120 });
+  ok(Math.hypot(a.x - 241, a.z - 241) < 8, 'teleports to a tile');
+  const room = w.areas.findIndex((x) => /Bar$/i.test(x.n));
+  dbg(A, 'area', { idx: room });
+  ok(w.areaIdx[Math.floor(a.z / 2) * W + Math.floor(a.x / 2)] === room && !w.collides(a.x, a.z, 0.3), 'goes to a room, standing somewhere free in it');
+  dbg(A, 'bring', { id: b.id });
+  ok(Math.hypot(b.x - a.x, b.z - a.z) < 3, 'brings someone to you');
+  const ft = floorTiles[floorTiles.length >> 1];
+  b.x = (ft % W) * 2 + 1; b.z = Math.floor(ft / W) * 2 + 1;
+  dbg(A, 'goto', { id: b.id });
+  ok(Math.hypot(a.x - b.x, a.z - b.z) < 3, 'goes to someone');
+  dbg(A, 'bring', { id: 999999 }); dbg(A, 'area', { idx: -5 }); dbg(A, 'tp', { c: -9, r: 1e9 });
+  ok(Number.isFinite(a.x) && Number.isFinite(a.z), 'bad destinations do nothing odd');
+
+  // --- the station
+  dbg(A, 'alert', { level: 'red' });
+  ok(sim.director.level === 'red', 'sets the alert level');
+  dbg(A, 'alert', { level: 'purple' });
+  ok(sim.director.level === 'red', 'only real levels');
+  dbg(A, 'power', { state: 'battery' });
+  ok(sim.power.state === 'battery', 'power state');
+  const holes = w.breached.size;
+  dbg(A, 'strike');
+  ok(w.breached.size === holes + 1, 'a meteor breaks a window');
+  dbg(A, 'repair');
+  ok(w.breached.size === 0 && sim.power.state === 'normal', 'repair seals the hull and restores power');
+  dbg(A, 'shuttle', { what: 'call' });
+  ok(sim.director.evacState === 'called', "calls the shuttle (without Central Command's say-so)");
+  dbg(A, 'doors', { what: 'open' });
+  ok(sim.doors.every((d) => d.state !== 'closed'), 'opens every door');
+  dbg(A, 'doors', { what: 'close' });
+  ok(sim.doors.every((d) => d.state !== 'open'), 'and closes them');
+  const t1 = sim.round.time;
+  dbg(A, 'skip', { sec: 60 });
+  ok(sim.round.time >= t1 + 60, 'skips the clock ahead');
+  dbg(A, 'round', { what: 'end' });
+  ok(sim.round.state === 'ending', 'ends the round');
+
+  // --- an observer can use the menu too
+  const C = sim.addClient('Cara', () => {});
+  sim.handle(C, { t: 'lobby', op: 'observe' });
+  dbg(C, 'tp', { c: 100, r: 100 });
+  ok(Math.abs(C.ghost.x - 201) < 1, 'observers teleport');
+  void B;
+});
+
+section('door angles and wall mounts', () => {
+  const { sim } = setup();
+  const w = sim.world, W = w.W;
+  const doorAt = (c, r) => w.doorAt.get(r * W + c);
+  // the airlocks that come in threes stand in line with each other, whichever way the passage runs
+  ok([111, 112, 113].every((c) => doorAt(c, 110).yaw === 0) && [145].every((r) => [111, 112, 113].every((c) => doorAt(c, r).yaw === 0)), 'a row of three airlocks across a passage lies along the row, the middle one too');
+  ok([113, 114, 115].every((r) => doorAt(94, r).yaw === Math.PI / 2) && [125, 126, 127].every((r) => doorAt(130, r).yaw === Math.PI / 2), 'and a column of three lies along the column');
+  // a door between two walls lies along them; nothing is left undecided
+  let between = 0, wrong = 0;
+  for (const d of sim.doors) {
+    if (!Number.isFinite(d.yaw)) wrong++;
+    const wl = (c, r) => w.isWallLike(c, r);
+    if (wl(d.c - 1, d.r) && wl(d.c + 1, d.r)) { between++; if (d.yaw !== 0) wrong++; }
+    else if (wl(d.c, d.r - 1) && wl(d.c, d.r + 1)) { between++; if (d.yaw !== Math.PI / 2) wrong++; }
+  }
+  ok(between > 300 && wrong === 0, `every airlock has an angle, and those between two walls lie along them (${between})`);
+  // firelocks standing side by side in an open passage form a line across it
+  const f = (c, r) => sim.props.fdoors.find((x) => x.x === c && x.y === r);
+  ok([f(76, 114), f(77, 114), f(78, 114)].every((x) => x && x.yaw === Math.PI / 2) || [f(60, 114), f(94, 114)].every((x) => x && x.yaw === Math.PI / 2), 'firelocks in an open passage stand across it, not edge on');
+  ok(sim.props.fdoors.every((x) => Number.isFinite(x.yaw)), 'every firelock has an angle');
+
+  // every wall mount hangs on a wall: beside one if it stands on a floor tile, on the open face of it if it is part of the wall (signs)
+  const level = sim.level.props.filter((p) => p.k === 'wm');
+  const DVs = { 1: [0, -1], 2: [0, 1], 4: [1, 0], 8: [-1, 0] };
+  let bad = 0, onWall = 0;
+  for (const p of level) {
+    const [dc, dr] = DVs[p.sd], here = w.isWallLike(p.x, p.y), there = w.isWallLike(p.x + dc, p.y + dr);
+    if (p.ow) { onWall++; if (!here || there) bad++; } else if (!there) bad++;
+  }
+  ok(onWall > 90 && bad <= 40, `wall mounts are on a wall (${bad} of ${level.length} are not: mostly cameras and direction signs on pillars or door frames; ${onWall} signs and the like sit on wall tiles themselves)`);
+  // two mounts on the same stretch of wall do not share a plane, and the map's side-by-side offsets are kept
+  const wm = sim.props.interact.filter((it) => it.kind === 'wm');
+  const seen = new Map();
+  let same = 0;
+  for (const it of wm) {
+    const k = `${it.c},${it.r},${it.sd}`;
+    const dep = it.sd === 1 || it.sd === 2 ? it.z : it.x;
+    const list = seen.get(k) || [];
+    if (list.some((q) => Math.abs(q - dep) < 1e-6)) same++;
+    list.push(dep); seen.set(k, list);
+  }
+  ok(same === 0, `no two mounts on the same wall stretch lie in one plane (${same})`);
+  ok(level.filter((p) => p.lat).length > 100, 'mounts keep the map\'s sideways offsets');
+});
+
 section('chat', () => {
   const { sim, A, a, b, step, inbox, evs, floorTiles } = setup();
   const t = floorTiles[3], W = sim.world.W;
@@ -747,6 +964,368 @@ section('death -> ghost', () => {
   b.body.damage('brute', 500, 'test');
   step(0.2);
   ok(B.state === 'ghost' && !B.mob && b.dead, 'a dead player becomes a ghost');
+});
+
+section('zero gravity', () => {
+  const { sim, A, a, inbox, step, evs, hand } = setup({ debug: true });
+  const w = sim.world, R = 0.32 + 0.9;
+  const drive = (c, seq0, n, inp) => sim.handle(c, { t: 'input', list: Array.from({ length: n }, (_, k) => ({ seq: seq0 + k, dt: 0.05, f: 0, b: 0, l: 0, r: 0, run: 0, yaw: 0, pitch: 0, ...inp })) });
+  const centre = (c, r) => [c * TILE + 1, r * TILE + 1];
+  // a floor tile with nothing within arm's reach (a big room), and a tile of open space with space all round it
+  let room = -1, deep = -1;
+  for (let i = 0; i < w.W * w.H && (room < 0 || deep < 0); i++) {
+    const c = i % w.W, r = Math.floor(i / w.W), [x, z] = centre(c, r);
+    if (room < 0 && w.kind[i] === 1 && !w.solid[i] && w.areas[w.areaIdx[i]].c !== 'shuttle' && !w.hasGrip(x, z)) room = i;
+    if (deep < 0 && c > 8 && r > 8 && c < w.W - 9 && r < w.H - 9) {
+      let sp = true;
+      for (let dr = -4; dr <= 4 && sp; dr++) for (let dc = -4; dc <= 4; dc++) if (w.kindAt(c + dc, r + dr) !== 0) { sp = false; break; }
+      // and nothing to hold on to for the next several metres either way (props stand in open space too)
+      if (sp) { const [px, pz] = centre(c, r); for (let t = -6; t <= 6 && sp; t += 0.5) if (w.hasGrip(px, pz + t) || w.hasGrip(px + t, pz)) sp = false; }
+      if (sp) deep = i;
+    }
+  }
+  ok(room >= 0 && deep >= 0, 'found a big room and open space to test in');
+  const at = (i) => centre(i % w.W, Math.floor(i / w.W));
+
+  // open space is not solid, so you can leave the station
+  const [sx, sz] = at(deep);
+  ok(!w.collides(sx, sz, 0.32), 'open space does not block you');
+  ok(!w.hasGravity(sx, sz), 'there is no gravity in open space');
+  ok(!w.hasGravity(-5, 10), 'nor off the map');
+  const [rx, rz] = at(room);
+  ok(w.hasGravity(rx, rz), 'a station room has gravity while the generator runs');
+  const shuttle = (() => { for (let i = 0; i < w.W * w.H; i++) if (w.kind[i] === 1 && !w.solid[i] && w.areas[w.areaIdx[i]].c === 'shuttle') return i; return -1; })();
+  const lattice = (() => { for (let i = 0; i < w.W * w.H; i++) if (w.kind[i] === 3) return i; return -1; })();
+  ok(lattice >= 0 && !w.hasGravity(...at(lattice)), 'lattice is over space: no gravity there either');
+  ok(lattice >= 0 && w.hasGrip(...at(lattice)), 'but it gives you something to hold');
+
+  // with gravity you steer anywhere, as ever
+  a.x = rx; a.z = rz; a.vx = a.vz = 0;
+  drive(A, 1, 6, { f: 1, yaw: 0 }); step(0.4);
+  ok(a.z < rz - 0.4, 'gravity on: you walk');
+
+  // turning gravity off tells everybody and shakes their cameras
+  inbox.a.length = 0;
+  ok(sim.setGravity(false) === true && w.gravityOn === false, 'setGravity(false) switches it off');
+  step(0.1);
+  ok(evs(inbox.a, 'grav').some((e) => e.on === false), 'clients are told (grav event)');
+  ok(evs(inbox.a, 'shake').length > 0, 'cameras shake');
+  ok(sim.setGravity(false) === false, 'switching it off twice does nothing the second time');
+  ok(!w.hasGravity(rx, rz), 'a station room now has none');
+  ok(sim.worldState(A).gravity === false, 'a player who joins later is told');
+  ok(shuttle < 0 || w.hasGravity(...at(shuttle)), 'a shuttle keeps its own gravity');
+
+  // floating in a big room with nothing to hold: pushing keys does nothing
+  a.x = rx; a.z = rz; a.vx = a.vz = 0; a.stunned = 0;
+  drive(A, 100, 10, { f: 1, yaw: 0 }); step(0.6);
+  ok(Math.abs(a.z - rz) < 0.05 && Math.abs(a.x - rx) < 0.05, 'adrift: you cannot steer with nothing to push off');
+  ok(a.speedNow === 0, 'and a floating body does not walk (no footsteps for others to hear)');
+  // but whatever speed you had, you keep
+  a.vx = 0; a.vz = -2;
+  drive(A, 200, 10, { yaw: 0 }); step(0.6);
+  ok(a.z < rz - 0.8 && Math.abs(a.vz + 2) < 0.2, 'adrift: you coast at the speed you had');
+  ok(Math.abs(a.x - rx) < 0.05, 'in a straight line');
+  // and bump to a stop at the wall
+  a.x = rx; a.z = rz; a.vx = 0; a.vz = -4;
+  for (let k = 0; k < 8; k++) { drive(A, 300 + k * 10, 10, { yaw: 0 }); step(0.6); }
+  ok(Math.hypot(a.vx, a.vz) < 0.01, 'a wall stops you dead');
+  ok(w.hasGrip(a.x, a.z), 'you end up beside something you can hold');
+  // with a hold, you steer again, and can push off from it
+  drive(A, 400, 10, { b: 1, yaw: 0 }); step(0.6);
+  ok(a.z > rz - 8 && a.vz > 0.5, 'holding the wall you can push yourself away from it');
+  // the speed limit
+  a.x = sx; a.z = sz; a.vx = 9; a.vz = 0;
+  drive(A, 500, 4, { yaw: 0 }); step(0.2);
+  ok(Math.hypot(a.vx, a.vz) <= 4.01, 'you cannot coast faster than the drift limit');
+
+  // out in open space nothing ever stops you but the edge of the map
+  a.x = sx; a.z = sz; a.vx = 0; a.vz = 3;
+  drive(A, 600, 10, { yaw: 0 }); step(0.5); drive(A, 610, 10, { yaw: 0 }); step(0.6);        // the server takes half a second of input a tick
+  ok(a.z > sz + 2.5 && Math.abs(a.vz - 3) < 0.05, 'in open space you drift on and on');
+  // throwing something with nothing to brace on pushes you the other way
+  a.x = sx; a.z = sz; a.vx = a.vz = 0; a.yaw = 0; a.pitch = 0; a.cool = 0; a.throwMode = false;
+  a.hands[0] = a.hands[1] = null;
+  const brick = sim.newItem('/obj/item/crowbar'); hand(a, brick, 0); a.active = 0;
+  sim.actions.throwItem(a, brick);
+  ok(a.vz > 1, 'throwing north in open space sends you south');
+  // a gripped thrower stays put
+  a.x = rx; a.z = rz; a.vx = a.vz = 0;
+  w.gravityOn = true; const g = a.hands; void g;
+  w.gravityOn = false;
+  const [hx, hz] = (() => { for (let i = 0; i < w.W * w.H; i++) { const [x, z] = at(i); if (w.kind[i] === 1 && !w.solid[i] && w.hasGrip(x, z) && !w.hasGravity(x, z)) return [x, z]; } return [0, 0]; })();
+  a.x = hx; a.z = hz; a.vx = a.vz = 0; a.cool = 0;
+  const brick2 = sim.newItem('/obj/item/crowbar'); hand(a, brick2, 0); a.active = 0;
+  sim.actions.throwItem(a, brick2);
+  ok(Math.hypot(a.vx, a.vz) < 0.01, 'next to a wall the throw does not push you');
+
+  // an unconscious body keeps drifting, where gravity would have stopped it
+  a.x = sx; a.z = sz; a.vx = 0; a.vz = -2.5; a.stunned = 30;
+  drive(A, 700, 10, { yaw: 0 }); step(0.6);
+  ok(a.z < sz - 0.8, 'a stunned body keeps drifting');
+  sim.setGravity(true);
+  a.x = rx; a.z = rz; a.vx = 0; a.vz = -2.5; a.stunned = 30;
+  drive(A, 800, 10, { yaw: 0 }); step(0.6);
+  ok(Math.abs(a.z - rz) < 0.05, 'but with gravity it stops where it is');
+  a.stunned = 0;
+
+  // magboots hold you to a real floor; a jetpack lets you steer anywhere. Both are switched on with their keys, and need to be worn.
+  sim.setGravity(false);
+  a.x = rx; a.z = rz; a.vx = a.vz = 0;
+  sim.handle(A, { t: 'key', k: 'mag' });
+  ok(!a.magOn, 'K does nothing without magboots on');
+  const boots = sim.newItem('/obj/item/clothing/shoes/magboots');
+  if (a.worn.shoes) detach(sim, a.worn.shoes);
+  attach(sim, boots, { t: 'slot', mob: a, slot: 'shoes' });
+  sim.handle(A, { t: 'key', k: 'mag' });
+  ok(a.magOn === true, 'K switches the magboots on');
+  ok(sim.moveFactor(a) < 0.8, 'and they slow you down');
+  drive(A, 900, 8, { f: 1, yaw: 0 }); step(0.5);
+  ok(a.z < rz - 0.3, 'magboots on a floor: you can walk without gravity');
+  ok(a.speedNow > 0 || a.z < rz, 'and you get about');
+  a.x = sx; a.z = sz; a.vx = a.vz = 0;
+  drive(A, 910, 8, { f: 1, yaw: 0 }); step(0.5);
+  ok(Math.abs(a.z - sz) < 0.05, 'but magboots do nothing over open space');
+  a.x = rx; a.z = rz;
+  detach(sim, boots);
+  ok(!a.magOn, 'taking them off switches them off');
+
+  sim.handle(A, { t: 'key', k: 'jet' });
+  ok(!a.jetOn, 'J does nothing without a jetpack on your back');
+  const jp = sim.newItem('/obj/item/tank/jetpack/carbondioxide');
+  if (a.worn.back) detach(sim, a.worn.back);
+  attach(sim, jp, { t: 'slot', mob: a, slot: 'back' });
+  ok(jp.gas > 0, 'a jetpack comes with gas');
+  sim.handle(A, { t: 'key', k: 'jet' });
+  ok(a.jetOn === true, 'J switches the jetpack on');
+  a.x = sx; a.z = sz; a.vx = a.vz = 0;
+  const gas0 = jp.gas;
+  drive(A, 1000, 8, { f: 1, yaw: 0 }); step(0.5);
+  ok(a.z < sz - 0.4, 'a jetpack lets you steer in open space');
+  ok(jp.gas < gas0, 'thrusting uses its gas');
+  const gas1 = jp.gas;
+  drive(A, 1100, 10, { yaw: 0 }); step(0.6);
+  ok(Math.hypot(a.vx, a.vz) < 0.1, 'and it brakes you when you let go');
+  ok(jp.gas === gas1, 'which costs nothing');
+  jp.gas = 0.2;
+  drive(A, 1200, 8, { f: 1, yaw: 0 }); step(0.5);
+  ok(!a.jetOn, 'when the gas runs out the engines cut out');
+  a.jetOn = true;
+  detach(sim, jp);
+  ok(!a.jetOn, 'taking the jetpack off switches it off');
+  a.jetOn = false;
+  void sim.setGravity(true);
+
+  // the debug menu: gravity and "take me out"
+  sim.handle(A, { t: 'dbg', op: 'gravity', on: false });
+  ok(w.gravityOn === false, 'debug: gravity off');
+  sim.handle(A, { t: 'dbg', op: 'gravity' });
+  ok(w.gravityOn === true, 'debug: with no argument it flips');
+  sim.handle(A, { t: 'dbg', op: 'space' });
+  ok(w.kindAt(Math.floor(a.x / TILE), Math.floor(a.z / TILE)) === 0, 'debug: take me out puts you in open space');
+});
+
+section('windows and grilles', () => {
+  const { sim, A, a, inbox, step, evs, hand } = setup({ debug: true });
+  const w = sim.world, I = (c, r) => r * w.W + c;
+  const tool = (path, extra = {}) => { const it = sim.newItem(path, extra); hand(a, it, 0); a.active = 0; a.cool = 0; return it; };
+  const welder = () => { const it = tool('/obj/item/weldingtool'); it.lit = true; it.fuel = 20; return it; };
+  const click = (target) => { a.cool = 0; sim.handle(A, { t: 'click', target }); step(0.06); };       // a step, so the messages are sent
+  const said = (from) => inbox.a.slice(from).filter((m) => m.t === 'ev').flatMap((m) => m.list).filter((x) => x.e === 'msg').map((x) => x.text);
+  // an inside window of the given kind with open floor on one side, and a pane of the given kind
+  const find = (key) => {
+    for (let i = 0; i < w.W * w.H; i++) {
+      if (!w.glass[i] || w.breached.has(i) || w.windowKey(i) !== key || w.ventsToSpace(i)) continue;
+      const c = i % w.W, r = Math.floor(i / w.W);
+      for (const [dc, dr] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        if (w.kindAt(c + dc, r + dr) === 1 && !w.solid[I(c + dc, r + dr)] && !w.dyn[I(c + dc, r + dr)]) return { c, r, i, at: [(c + dc) * TILE + 1, (r + dr) * TILE + 1] };
+      }
+    }
+    return null;
+  };
+  const stand = (spot) => { a.x = spot.at[0]; a.z = spot.at[1]; a.vx = a.vz = 0; a.busy = null; a.stunned = 0; };
+  const floorAt = (x, z, path) => [...sim.floor.values()].filter((f) => f.item.path === path && Math.abs(f.x - x) < 0.6 && Math.abs(f.z - z) < 0.6);
+  const floorNear = (spot, path) => [...sim.floor.values()].filter((f) => f.item.path === path && Math.abs(f.x - (spot.c * TILE + 1)) < 1.2 && Math.abs(f.z - (spot.r * TILE + 1)) < 1.2);
+  const plain = find('window'), reinf = find('rwindow');
+  ok(plain && reinf, 'found an ordinary and a reinforced window to work on');
+  ok(w.grille[plain.i] === 1 && w.ws[reinf.i] === 8, 'every map window has its grille; a reinforced one starts fastened in its frame');
+
+  // ---- breaking one: TG removes the window and leaves its grille and what spawnDebris makes (a full-tile window: two shards; reinforced: two rods too)
+  stand(reinf);
+  sim.breachTile(reinf.c, reinf.r, 'shot'); step(0.1);
+  ok(w.breached.has(reinf.i) && !w.glass[reinf.i], 'the glass is gone');
+  ok(w.grille[reinf.i] === 1 && w.solid[reinf.i] === 1, 'its grille still stands, and still blocks the way');
+  ok(floorNear(reinf, '/obj/item/shard').length === 2, 'a smashed full-tile window leaves two shards');
+  const rods = floorNear(reinf, '/obj/item/stack/rods');
+  ok(rods.length === 1 && rods[0].item.amount === 2, 'a reinforced one leaves two rods');
+  ok(sim.windows.examine({ k: 'breach', c: reinf.c, r: reinf.r }).join(' ').startsWith('A flimsy framework of metal rods.'), 'the thing left is called a grille, with the real description');
+  ok(!sim.windows.examine({ k: 'breach', c: reinf.c, r: reinf.r }).join(' ').includes('broken window'), 'there is no "broken window"');
+  ok(evs(inbox.a, 'tile').some((e) => e.i === reinf.i && e.gr === 1 && e.brk === 1), 'clients are told the grille is still there');
+  // cutting the grille: no delay, no message, two rods, and the tile is open floor
+  tool('/obj/item/wirecutters');
+  const n0 = inbox.a.length;
+  click({ k: 'breach', c: reinf.c, r: reinf.r });
+  ok(w.grille[reinf.i] === 0 && w.solid[reinf.i] === 0, 'wirecutters cut the grille away at once');
+  ok(floorNear(reinf, '/obj/item/stack/rods').reduce((s, f) => s + f.item.amount, 0) === 4, 'and it gives two rods');
+  ok(said(n0).length === 0, 'without a word (grille.dm deconstruct() has no message)');
+  ok(w.breached.has(reinf.i), 'the hole is still a hole (the air still goes out)');
+  // 2 rods rebuild a grille: 1 s
+  const rodsIn = tool('/obj/item/stack/rods', { amount: 2 });
+  click({ k: 'breach', c: reinf.c, r: reinf.r }); step(1.3);
+  ok(w.grille[reinf.i] === 1 && w.solid[reinf.i] === 1, 'two rods build the grille again');
+  ok(!sim.items.has(rodsIn.id) || rodsIn.amount === 0, 'and are used up');
+  // screwdriver: loosen / fasten the grille; glass will not go on a loose one
+  tool('/obj/item/screwdriver');
+  click({ k: 'breach', c: reinf.c, r: reinf.r });
+  ok((w.ws[reinf.i] & 32) !== 0, 'a screwdriver unfastens the grille');
+  const glass = tool('/obj/item/stack/sheet/rglass', { amount: 3 });
+  let mark = inbox.a.length;
+  click({ k: 'breach', c: reinf.c, r: reinf.r });
+  ok(said(mark).includes('The grille needs to be fastened to the floor first!'), 'a loose grille takes no glass');
+  tool('/obj/item/screwdriver'); click({ k: 'breach', c: reinf.c, r: reinf.r });
+  ok((w.ws[reinf.i] & 32) === 0, 'and fastens it again');
+  // glass: needs two sheets, takes 2 s, and the window comes out loose
+  const one = tool('/obj/item/stack/sheet/rglass', { amount: 1 });
+  mark = inbox.a.length;
+  click({ k: 'breach', c: reinf.c, r: reinf.r });
+  ok(said(mark).includes('You need at least two sheets of glass for that!'), 'one sheet is not enough');
+  const two = tool('/obj/item/stack/sheet/rglass', { amount: 3 });
+  mark = inbox.a.length;
+  click({ k: 'breach', c: reinf.c, r: reinf.r });
+  ok(said(mark).includes('You start placing the window...'), 'glass on the grille starts placing a window');
+  step(1.0); ok(!w.glass[reinf.i], 'it takes 20 ds (2 s)');
+  step(1.3);
+  ok(w.glass[reinf.i] === 1 && w.windowKey(reinf.i) === 'rwindow' && w.kind[reinf.i] === 2, 'reinforced glass makes a reinforced window');
+  ok(two.amount === 1, 'and uses two of the sheets');
+  ok(said(mark).includes('You place the reinforced window on the grille.'), 'SS13\'s message');
+  ok(w.airBlock[reinf.i] === 0 && (w.ws[reinf.i] & 16) !== 0 && (w.ws[reinf.i] & 15) === 0, 'the new window is loose: it does not seal the tile yet');
+  void glass; void one;
+
+  // ---- put it back: screw it down (30 ds), then a reinforced one has to be levered into its frame (100 ds)
+  mark = inbox.a.length;
+  tool('/obj/item/screwdriver'); click({ k: 'window', c: reinf.c, r: reinf.r }); step(2.0);
+  ok(w.airBlock[reinf.i] === 0, 'screwing takes 3 s');
+  step(1.3);
+  ok(w.airBlock[reinf.i] === 1 && (w.ws[reinf.i] & 16) === 0, 'a screwed-down window seals the tile');
+  ok(said(mark).includes('You begin to screw the window to the floor...') && said(mark).includes('You fasten the window to the floor.'), 'with window.dm\'s messages');
+  tool('/obj/item/crowbar'); click({ k: 'window', c: reinf.c, r: reinf.r }); step(9.5);
+  ok((w.ws[reinf.i] & 15) === 0, 'levering it into the frame takes 10 s');
+  step(1);
+  ok((w.ws[reinf.i] & 15) === 8, 'and then it is secure again');
+
+  // ---- taking the reinforced window apart again: heat (harm intent), screwdriver, crowbar, wirecutters, wrench, then wrench
+  const seq = [];
+  const doStep = (path, secs, state, extra = {}) => {
+    const it = path === 'welder' ? welder() : tool(path);
+    if (extra.intent) { a.intent = extra.intent; }
+    mark = inbox.a.length;
+    click({ k: 'window', c: reinf.c, r: reinf.r });
+    step(secs - 0.3);
+    const before = w.ws[reinf.i] & 15;
+    step(0.6);
+    seq.push([before !== state, (w.ws[reinf.i] & 15) === state]);
+    a.intent = 'help';
+    return it;
+  };
+  a.intent = 'help';
+  tool('/obj/item/screwdriver'); click({ k: 'window', c: reinf.c, r: reinf.r }); step(0.5);
+  ok(!a.busy && (w.ws[reinf.i] & 15) === 8, 'a screwdriver does nothing to the one-way screws');
+  welder(); click({ k: 'window', c: reinf.c, r: reinf.r }); step(0.5);
+  ok(!a.busy, 'a welder on help intent does not heat them (it would repair)');
+  doStep('welder', 15, 7, { intent: 'harm' });
+  ok(seq.at(-1)[1], 'a lit welder on harm intent heats the screws in 15 s');
+  ok(said(mark).includes('You begin heating the security screws on the reinforced window...') && said(mark).includes('The security bolts are glowing white hot and look ready to be removed.'), 'with the real messages');
+  doStep('/obj/item/screwdriver', 5, 6);
+  ok(seq.at(-1)[1], 'a screwdriver takes the screws out in 5 s');
+  doStep('/obj/item/crowbar', 4, 5);
+  ok(seq.at(-1)[1], 'a crowbar pops the panel in 4 s');
+  doStep('/obj/item/wirecutters', 2, 4);
+  ok(seq.at(-1)[1], 'wirecutters cut the bars in 2 s');
+  ok(said(mark).includes('The panels falls out of the way exposing the frame bolts.'), 'DM\'s own typo and all');
+  ok(w.airBlock[reinf.i] === 1, 'it still seals the tile while it is bolted to the frame');
+  doStep('/obj/item/wrench', 4, 0);
+  ok(seq.at(-1)[1] && w.airBlock[reinf.i] === 0 && (w.ws[reinf.i] & 16) !== 0, 'a wrench frees it in 4 s, and it stops sealing');
+  mark = inbox.a.length;
+  tool('/obj/item/wrench'); click({ k: 'window', c: reinf.c, r: reinf.r }); step(2.5);
+  ok(w.glass[reinf.i] === 1, 'taking it apart takes 3 s');
+  step(1);
+  ok(!w.glass[reinf.i] && w.breached.has(reinf.i), 'and then the window is gone');
+  const sheets = floorAt(a.x, a.z, '/obj/item/stack/sheet/rglass');
+  ok(sheets.some((f) => f.item.amount === 2), 'leaving two sheets of reinforced glass at your feet (user.loc)');
+  ok(floorNear(reinf, '/obj/item/shard').length === 2, 'and no more shards than the two from the first smash');
+  ok(w.grille[reinf.i] === 1, 'the grille is still there: you cut that separately');
+  ok(said(mark).includes('You successfully disassemble the reinforced window.'), 'DM\'s message');
+
+  // ---- the plain window: screwdriver (3 s), wrench (3 s), two glass sheets
+  stand(plain);
+  mark = inbox.a.length;
+  tool('/obj/item/wrench'); click({ k: 'window', c: plain.c, r: plain.r }); step(0.5);
+  ok(!a.busy && w.glass[plain.i] === 1, 'a wrench does nothing while it is screwed to the floor');
+  tool('/obj/item/screwdriver'); click({ k: 'window', c: plain.c, r: plain.r }); step(3.4);
+  ok((w.ws[plain.i] & 16) !== 0 && w.airBlock[plain.i] === 0, 'unscrewing it takes 3 s and it stops sealing');
+  tool('/obj/item/wrench'); click({ k: 'window', c: plain.c, r: plain.r }); step(3.4);
+  ok(!w.glass[plain.i], 'then the wrench takes it apart');
+  const gl = floorAt(a.x, a.z, '/obj/item/stack/sheet/glass');
+  ok(gl.length === 1 && gl[0].item.amount === 2, 'two sheets of glass at your feet');
+  ok(floorNear(plain, '/obj/item/shard').length === 0, 'and no shards: taking a window apart is not breaking it');
+
+  // ---- empty hands knock; a damaged window can be welded whole again (help intent, 4 s)
+  const k2 = find('window');
+  stand(k2); a.hands[0] = a.hands[1] = null; a.intent = 'help'; mark = inbox.a.length;
+  click({ k: 'window', c: k2.c, r: k2.r });
+  ok(said(mark).includes('You knock on the window.'), 'knocking on a window');
+  w.hp.set(k2.i, 5); mark = inbox.a.length;
+  welder(); click({ k: 'window', c: k2.c, r: k2.r }); step(2);
+  ok(w.hp.get(k2.i) === 5, 'welding takes 4 s');
+  step(2.4);
+  ok(w.hp.get(k2.i) === 30, 'and then it is whole');
+  mark = inbox.a.length; click({ k: 'window', c: k2.c, r: k2.r });
+  ok(said(mark).includes('The window is already in good condition!'), 'a whole one says so');
+
+  // ---- a thin pane: one shard when smashed (and a rod if reinforced); taking it apart leaves only its glass
+  const pane = sim.props.panes.find((p) => !p.dead && p.tag === 'rwindow' && w.kindAt(p.c, p.r) === 1 && !w.solid[I(p.c, p.r)]);
+  ok(!!pane, 'found a reinforced pane');
+  if (pane) {
+    const centre = { c: pane.c, r: pane.r, at: [pane.c * TILE + 1, pane.r * TILE + 1] };
+    stand(centre);
+    const pane2 = sim.props.panes.find((p) => p !== pane && !p.dead && p.tag === 'rwindow' && w.kindAt(p.c, p.r) === 1 && !w.solid[I(p.c, p.r)]);
+    sim.shatterPane(pane);
+    ok(pane.dead, 'a pane breaks');
+    ok(floorNear(centre, '/obj/item/shard').length === 1, 'into one shard');
+    ok(floorNear(centre, '/obj/item/stack/rods').some((f) => f.item.amount === 1), 'and one rod');
+    if (pane2) {
+      const c2 = { c: pane2.c, r: pane2.r, at: [pane2.c * TILE + 1, pane2.r * TILE + 1] };
+      stand(c2);
+      const T = { k: 'pane', c: pane2.c, r: pane2.r, d: pane2.d };
+      const chain = [['welder', 15, 'harm'], ['/obj/item/screwdriver', 5], ['/obj/item/crowbar', 4], ['/obj/item/wirecutters', 2], ['/obj/item/wrench', 4], ['/obj/item/wrench', 3]];
+      for (const [path, secs, intent] of chain) {
+        if (path === 'welder') welder(); else tool(path);
+        a.intent = intent || 'help';
+        click(T); step(secs + 0.5);
+      }
+      a.intent = 'help';
+      ok(pane2.dead, 'a pane takes the same six steps to take apart');
+      ok(floorAt(a.x, a.z, '/obj/item/stack/sheet/rglass').some((f) => f.item.amount === 1), 'and gives one sheet of reinforced glass');
+      ok(floorNear(c2, '/obj/item/shard').length === 0, 'and no shards');
+    }
+  }
+
+  // ---- hull breach: a window that was keeping space out and is unscrewed lets the air out; re-fastening seals it
+  const out = (() => {
+    for (let i = 0; i < w.W * w.H; i++) {
+      if (!w.glass[i] || w.breached.has(i) || !w.ventsToSpace(i) || w.windowKey(i) !== 'window') continue;
+      const c = i % w.W, r = Math.floor(i / w.W);
+      for (const [dc, dr] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (w.kindAt(c + dc, r + dr) === 1 && !w.solid[I(c + dc, r + dr)]) return { c, r, i, at: [(c + dc) * TILE + 1, (r + dr) * TILE + 1] };
+    }
+    return null;
+  })();
+  if (out) {
+    stand(out);
+    tool('/obj/item/screwdriver'); click({ k: 'window', c: out.c, r: out.r }); step(3.4);
+    ok(w.airBlock[out.i] === 0, 'an outside window that is unscrewed no longer holds the air');
+    const patched0 = sim.director.stats.patched;
+    tool('/obj/item/screwdriver'); click({ k: 'window', c: out.c, r: out.r }); step(3.4);
+    ok(w.airBlock[out.i] === 1 && sim.director.stats.patched === patched0 + 1, 'screwing it back seals the hull again (and counts as a patch)');
+  }
 });
 
 console.log(`${pass} passed, ${fail} failed`);

@@ -1,0 +1,90 @@
+# item types to document (DM path, in-game name)
+/obj/item/paper	paper
+/obj/item/pen	pen
+/obj/item/lighter	Zippo lighter
+/obj/item/station_charter	station charter
+/obj/item/stamp/chap	chaplain's rubber stamp
+/obj/item/stamp/clown	clown's rubber stamp
+/obj/item/soapstone	soapstone
+/obj/item/toy/crayon/white	crayon
+/obj/item/stamp/mime	mime's rubber stamp
+/obj/item/book/mimery	Guide to Dank Mimery
+/obj/item/bedsheet/captain	captain's bedsheet
+/obj/item/bedsheet/dorms	random dorms bedsheet
+/obj/item/bedsheet/medical	medical blanket
+/obj/item/bedsheet/red	bedsheet
+/obj/item/book/codex_gigas	Codex Gigas
+/obj/item/book/manual/chef_recipes	Chef Recipes
+/obj/item/book/manual/hydroponics_pod_people	The Human Harvest: From Seed to Market
+/obj/item/book/manual/wiki/atmospherics	Lexica Atmosia
+/obj/item/book/manual/wiki/barman_recipes	Barman Recipes: Mixing Drinks and Changing Lives
+/obj/item/book/manual/wiki/chemistry	Chemistry Textbook
+/obj/item/book/manual/wiki/cooking_to_serve_man	To Serve Man
+/obj/item/book/manual/wiki/engineering_construction	Station Repairs and Construction
+/obj/item/book/manual/wiki/engineering_hacking	Hacking
+/obj/item/book/manual/wiki/grenades	DIY Chemical Grenades
+/obj/item/book/manual/wiki/infections	Infections - Making your own pandemic!
+/obj/item/book/manual/wiki/medicine	Medical Space Compendium, Volume 638
+/obj/item/book/manual/wiki/plumbing	Chemical Factories Without Narcotics
+/obj/item/book/manual/wiki/robotics_cyborgs	Robotics for Dummies
+/obj/item/book/manual/wiki/security_space_law	Space Law
+/obj/item/book/manual/wiki/tcomms	Subspace Telecommunications And You
+/obj/item/book/manual/wiki/toxins	Toxins or: How I Learned to Stop Worrying and Love the Maxcap
+/obj/item/cigbutt	cigarette butt
+/obj/item/cigbutt/cigarbutt	cigar butt
+/obj/item/coin/diamond	coin
+/obj/item/coin/gold	coin
+/obj/item/coin/iron	coin
+/obj/item/coin/plasma	coin
+/obj/item/coin/silver	coin
+/obj/item/hand_labeler	hand labeler
+/obj/item/lighter/greyscale	cheap lighter
+/obj/item/lipstick/random	lipstick
+/obj/item/mop	mop
+/obj/item/paper/crumpled	paper scrap
+/obj/item/paper/fluff/holodeck/disclaimer	Holodeck Disclaimer
+/obj/item/paper/fluff/jobs/security/beepsky_mom	Note from Beepsky's Mom
+/obj/item/paper/guides/jobs/engi/gravity_gen	paper- 'Generate your own gravity!'
+/obj/item/paper/guides/jobs/hydroponics	paper- 'Greetings from Billy Bob'
+/obj/item/paper/monitorkey	monitor decryption key
+/obj/item/paper/pamphlet/gateway	pamphlet
+/obj/item/paper_bin	paper bin
+/obj/item/paper_bin/carbon	carbon paper bin
+/obj/item/paper_bin/construction	construction paper bin
+/obj/item/pen/blue	pen
+/obj/item/pen/invisible	pen
+/obj/item/pen/red	pen
+/obj/item/razor	electric razor
+/obj/item/soap/deluxe	soap
+/obj/item/soap/nanotrasen	soap
+/obj/item/stack/spacecash/c10	space cash
+/obj/item/stack/spacecash/c100	space cash
+/obj/item/stack/spacecash/c200	space cash
+/obj/item/stamp	GRANTED rubber stamp
+/obj/item/stamp/captain	captain's rubber stamp
+/obj/item/stamp/ce	chief engineer's rubber stamp
+/obj/item/stamp/cmo	chief medical officer's rubber stamp
+/obj/item/stamp/denied	DENIED rubber stamp
+/obj/item/stamp/hop	head of personnel's rubber stamp
+/obj/item/stamp/hos	head of security's rubber stamp
+/obj/item/stamp/law	law office's rubber stamp
+/obj/item/stamp/qm	quartermaster's rubber stamp
+/obj/item/stamp/rd	research director's rubber stamp
+/obj/item/target	shooting target
+/obj/item/target/alien	shooting target
+/obj/item/target/alien/anchored	shooting target
+/obj/item/target/clown	shooting target
+/obj/item/target/syndicate	shooting target
+/obj/item/toy/beach_ball/holoball	basketball
+/obj/item/toy/cards/deck	deck of cards
+/obj/item/toy/cards/deck/cas	CAS deck (white)
+/obj/item/toy/cards/deck/cas/black	CAS deck (black)
+/obj/item/toy/dummy	ventriloquist dummy
+/obj/item/toy/plush/moth	moth plushie
+/obj/item/toy/plush/slimeplushie	slime plushie
+/obj/item/paper/guides/jobs/engi/solars	paper- 'Going green! Setup your own solar array instructions.'
+/obj/item/holosign_creator/atmos	ATMOS holofan projector
+/obj/item/extinguisher/advanced	advanced fire extinguisher
+/obj/item/paper/fluff/jobs/security/court_judgement	paper- 'Judgement'
+/obj/item/holosign_creator/security	security holobarrier projector
+/obj/item/holosign_creator/engineering	engineering holobarrier projector

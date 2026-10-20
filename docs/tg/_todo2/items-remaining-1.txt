@@ -1,0 +1,40 @@
+# item types to document (DM path, in-game name)
+/obj/item/ai_module/core/freeformcore	'Freeform' Core AI Module
+/obj/item/ai_module/core/full/asimov	'Asimov' Core AI Module
+/obj/item/ai_module/core/full/custom	Default Core AI Module
+/obj/item/ai_module/reset	'Reset' AI module
+/obj/item/ai_module/reset/purge	'Purge' AI Module
+/obj/item/ai_module/supplied/freeform	'Freeform' AI Module
+/obj/item/ai_module/supplied/oxygen	'OxygenIsToxicToHumans' AI Module
+/obj/item/ai_module/supplied/protect_station	'ProtectStation' AI Module
+/obj/item/ai_module/supplied/quarantine	'Quarantine' AI Module
+/obj/item/ai_module/zeroth/onehuman	'OneHuman' AI Module
+/obj/item/airlock_painter	airlock painter
+/obj/item/ammo_box/a357	speed loader (.357)
+/obj/item/areaeditor/blueprints	station blueprints
+/obj/item/assault_pod/mining	Landing Field Designator
+/obj/item/assembly/prox_sensor	proximity sensor
+/obj/item/assembly/timer	timer
+/obj/item/autosurgeon/cmo	autosurgeon
+/obj/item/barcodescanner	barcode scanner
+/obj/item/bikehorn/rubberducky	rubber ducky
+/obj/item/bodypart/l_arm/robot/surplus	surplus prosthetic left arm
+/obj/item/bodypart/l_leg/robot/surplus	surplus prosthetic left leg
+/obj/item/bodypart/r_arm/robot/surplus	surplus prosthetic right arm
+/obj/item/bodypart/r_leg/robot/surplus	surplus prosthetic right leg
+/obj/item/book/mimery	Guide to Dank Mimery
+/obj/item/camera	camera
+/obj/item/camera/detective	Detective's camera
+/obj/item/camera/spooky	camera obscura
+/obj/item/camera_film	film cartridge
+/obj/item/card/id/departmental_budget/car	departmental card (FUCK)
+/obj/item/cautery	cautery
+/obj/item/chair/wood	wooden chair
+/obj/item/choice_beacon/hero	heroic beacon
+/obj/item/circuitboard/computer/operating	Operating Computer (Computer Board)
+/obj/item/circular_saw	circular saw
+/obj/item/clothing/gloves/boxing/blue	boxing gloves
+/obj/item/clothing/gloves/boxing/green	boxing gloves
+/obj/item/clothing/gloves/boxing/yellow	boxing gloves
+/obj/item/clothing/gloves/color/rainbow	rainbow gloves
+/obj/item/clothing/gloves/color/white	white gloves

@@ -29,7 +29,7 @@ export class DragDrop {
     return g.mode === 'hands' && g.phase === 'playing' && g.self && !g.self.dead && !g.self.crit;
   }
 
-  uiCell(el) { return el && el.closest ? el.closest('#hands [data-hand], #bags .cell, #body .slot') : null; }
+  uiCell(el) { return el && el.closest ? el.closest('#hands [data-hand], #bags .cell, #slots .slot') : null; }
 
   down(e) {
     if (!this.enabled() || e.button !== 0) return;

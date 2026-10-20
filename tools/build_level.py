@@ -347,6 +347,8 @@ GAME_ITEMS = [
     '/obj/item/stack/sheet/plasteel', '/obj/item/clothing/head/welding', '/obj/item/geiger_counter',
     '/obj/item/assembly/igniter', '/obj/item/stock_parts/cell/high', '/obj/item/clothing/suit/hazardvest',
     '/obj/item/clothing/under/color/grey', '/obj/item/clothing/shoes/sneakers/black', '/obj/item/storage/backpack',
+    # what windows and grilles drop and are rebuilt from (window.dm spawnDebris, grille.dm deconstruct)
+    '/obj/item/stack/rods', '/obj/item/stack/sheet/rglass', '/obj/item/stack/sheet/plasmaglass', '/obj/item/stack/sheet/plasmarglass', '/obj/item/shard',
 ]
 
 
@@ -575,15 +577,21 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                 return d
         return N
 
-    def mount_side(r, x, y):
+    def mount_side(r, v, p, x, y, d):
+        """The wall a mount is on, and how we know: the map's pixel offset (24 px = a whole wall away), else its `dir` if the map sets one
+        (an APC's dir is the wall it hangs on; for everything else dir is the way it faces, so the wall is behind it), else whichever wall is there."""
         px, py = r.get('pixel_x', 0), r.get('pixel_y', 0)
         px = px if isinstance(px, (int, float)) else 0
         py = py if isinstance(py, (int, float)) else 0
         if abs(px) >= 12 or abs(py) >= 12:
             if abs(px) >= abs(py):
-                return E if px > 0 else W
-            return N if py > 0 else S
-        return snap_wall_side(x, y)
+                return (E if px > 0 else W), 'pixel', px, py
+            return (N if py > 0 else S), 'pixel', px, py
+        if 'dir' in v and d in (N, S, E, W):
+            cand = d if p.startswith('/obj/machinery/power/apc') else OPP[d]
+            if wall_at(x + DVEC[cand][0], y + DVEC[cand][1]):
+                return cand, 'dir', px, py
+        return snap_wall_side(x, y), 'snap', px, py
 
     stats = collections.Counter()
     missing = collections.Counter()
@@ -683,8 +691,18 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
             if p.startswith(WALLMOUNT_PREFIXES):
                 icon, st = r.get('icon'), r.get('icon_state')
                 if isinstance(st, str) and icon_ok(icon, st):
-                    side = mount_side(r, x, y)
+                    side, how, mpx, mpy = mount_side(r, v, p, x, y, d)
                     face = OPP[side]
+                    onwall = is_kind(x, y, 2)
+                    if onwall:
+                        # signs and the like are mapped ON the wall tile itself: they hang on the face that looks onto open floor, facing out
+                        opts = [dd for dd in (S, N, E, W) if is_kind(x + DVEC[dd][0], y + DVEC[dd][1], 1)] or [dd for dd in (S, N, E, W) if not wall_at(x + DVEC[dd][0], y + DVEC[dd][1])]
+                        if opts:
+                            side = d if ('dir' in v and d in opts) else opts[0]
+                            face, how = side, 'onwall'
+                    stats['wm_' + how] += 1
+                    if how == 'snap' and sum(1 for dd in (N, E, W, S) if wall_at(x + DVEC[dd][0], y + DVEC[dd][1])) > 1:
+                        stats['wm_snap_corner'] += 1                 # more than one wall to choose from: a guess
                     sp = spr.add([(icon, st, face if sl.get_dmi(icon).states[st].dirs > 1 else S, None, None)])
                     if sp >= 0:
                         sub = p.split('/')[3] if p.count('/') >= 3 else 'misc'
@@ -692,7 +710,14 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True):
                             sub = 'sign'
                         elif p.startswith('/obj/item/radio'):
                             sub = 'intercom'
-                        props.append(dict(base, k='wm', d=face, sd=side, s=sp, sub=sub, p=p))
+                        # slid along the wall by the map's other pixel offset (side by side buttons, an alarm off to one side): +x on a north or south wall, +z on an east or west one
+                        lat = int(max(-14, min(14, mpx if side in (N, S) else -mpy)))
+                        rec = dict(base, k='wm', d=face, sd=side, s=sp, sub=sub, p=p)
+                        if how == 'onwall':
+                            rec['ow'] = 1
+                        if lat:
+                            rec['lat'] = lat
+                        props.append(rec)
                         stats['wm'] += 1
                 else:
                     missing[p] += 1

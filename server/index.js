@@ -1,5 +1,6 @@
 // YAD3D game server: serves the client and hosts rounds over WebSocket.
-//   node server/index.js [--port 8080] [--bots 14] [--autostart 45] [--name "YAD3D BoxStation"]
+//   node server/index.js [--port 8080] [--bots 14] [--autostart 45] [--name "YAD3D BoxStation"] [--debug]
+//   --debug turns on the in-game debug menu for everyone connected (spawn items, teleport, god mode...): for development only.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,13 +20,13 @@ const AUTOSTART = +arg('autostart', 45);
 const NAME = arg('name', 'YAD3D BoxStation');
 const END_DELAY = +arg('endDelay', 40);           // seconds the round-end report stays up before the next round
 const MAX_PLAYERS = +arg('max', 40);
-const DEBUG = argv.includes('--debug');           // enables {t:'dbg'} test commands (never on a public server)
+const DEBUG = argv.includes('--debug');           // the debug menu and its {t:'dbg'} commands: spawn anything, heal, teleport, cause trouble (never on a public server)
 
 const DATA = loadSimData(root);
 let sim = newSim();
 let roundNo = 1;
 
-function newSim() { return new Sim(DATA, { bots: BOTS, autostart: AUTOSTART }); }
+function newSim() { return new Sim(DATA, { bots: BOTS, autostart: AUTOSTART, debug: DEBUG }); }
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 // ---------------------------------------------------------------- static files
@@ -100,7 +101,7 @@ wss.on('connection', (ws, req) => {
       log(`${name} joined from ${ip} (${sim.clients.size} online)`);
       return;
     }
-    try { if (DEBUG && msg.t === 'dbg') debugOp(client, msg); else sim.handle(client, msg); } catch (e) { console.error('handler error', msg.t, e); }
+    try { sim.handle(client, msg); } catch (e) { console.error('handler error', msg.t, e); }
   });
 
   ws.on('close', () => {
@@ -110,17 +111,6 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('error', () => {});
 });
-
-function debugOp(c, m) {
-  const mob = c.mob;
-  switch (m.op) {
-    case 'tp': if (mob) { mob.x = m.c * 2 + 1; mob.z = m.r * 2 + 1; } else { c.ghost.x = m.c * 2 + 1; c.ghost.z = m.r * 2 + 1; } break;
-    case 'kill': if (mob) mob.body.damage('brute', 999, 'debug'); break;
-    case 'finish': sim.director.finish(m.kind || 'shuttle'); break;
-    case 'tile': { const sp = sim.level.spawns.find((s) => s.job === m.job); if (mob && sp) { mob.x = sp.x * 2 + 1; mob.z = sp.y * 2 + 1; } break; }
-    default: break;
-  }
-}
 
 // ---------------------------------------------------------------- the clock
 let last = process.hrtime.bigint();
@@ -153,4 +143,7 @@ function resetRound(why) {
   setTimeout(() => { for (const ws of old) { try { ws.close(); } catch { /* gone */ } } }, 300);
 }
 
-server.listen(PORT, () => log(`${NAME} listening on http://localhost:${PORT}  (bots ${BOTS}, autostart ${AUTOSTART}s)`));
+server.listen(PORT, () => {
+  log(`${NAME} listening on http://localhost:${PORT}  (bots ${BOTS}, autostart ${AUTOSTART}s)`);
+  if (DEBUG) log('DEBUG MENU ENABLED: every player can spawn items, teleport and cheat. Do not run a public server like this.');
+});

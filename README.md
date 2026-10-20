@@ -37,7 +37,7 @@ It plays like a round of SS13: lobby, job slots, a crew of other people, things 
 
 ```sh
 npm install
-npm start                      # http://localhost:8080 - multiplayer server (add --bots 20, --autostart 30, --port 9000)
+npm start                      # http://localhost:8080 - multiplayer server (add --bots 20, --autostart 30, --port 9000, --debug)
 ```
 
 Or, for a round hosted entirely in your own browser (no Node needed to play, just a static file server):
@@ -50,6 +50,24 @@ Pick a job, press **Ready** (a short countdown starts the round), or **Start now
 mode, below); press `Space` to capture it and look around. `?name=Alex` sets your name, `?bots=N` sets how many NPCs fill
 the crew (single player), `?local` forces a local round even when served by the game server, `?auto&job=station_engineer`
 skips the lobby.
+
+### Debug menu
+
+Start the server with `--debug` (`node server/index.js --debug`, or `npm start -- --debug`), or open a local round with `?debug`, and `F3`
+opens the debug menu for everyone who is playing or observing. **Never run a public server with it**: anyone can spawn anything. Without the
+flag the server ignores every debug message and the menu does not exist. Tabs:
+
+* **Items**: search all 913 item definitions by name or path, click one, pick an amount and where it goes (your hand, in front of you, or the
+  floor where you are looking), `Spawn` (or double-click). Stacks come as one stack of that many.
+* **Creatures**: space carp, Ian, Runtime, Pun Pun, or an NPC crew member in any job; and a list of everyone on the station with Go, Bring, Heal,
+  Kill, Revive and Delete (players cannot be deleted).
+* **Me**: god mode, noclip, speed, heal, revive, a master ID, put on a job's outfit, and delete the thing under the crosshair (a loose item,
+  an NPC, a locker or crate).
+* **Go**: teleport to any room. Observers can use it too.
+* **Station**: alert level, power (normal, battery, out), a meteor strike, carp, call or dock or send the shuttle, open or close every door,
+  seal the hull and restore power, start or end the round, skip the clock ahead a minute.
+
+Every operation answers with a `[Debug]` line in the chat.
 
 ### Two ways to use the mouse
 
@@ -65,7 +83,7 @@ skips the lobby.
   back to look if that is where you were.
 
 In hands mode, press on anything you can carry (lying on the floor or a table, in either hand, in an open bag, in a slot on
-the body panel) and drag it:
+the equipment slots) and drag it:
 
 | Drop it on | and |
 | --- | --- |
@@ -89,8 +107,13 @@ the body panel) and drag it:
 * **Bags.** An open container (click a worn or held one, or press `Z` with it in your hand) is a small window of SS13
   storage slots, stacked on the left of the screen. Containers that take a total weight rather than a number of items
   show how full they are. Drag a window by its strap to move it; the button on the strap closes it.
-* **Body panel** (`I`). SS13's paper doll: every worn slot with its SS13 slot icon, SS13's health doll, a one-line
-  description of how you feel ("You have some bruising."), and SS13's intent, internals, throw, drop and resist buttons.
+* **Inventory HUD** (`invhud.js`), laid out like SS13's. Bottom left, always on screen: the slots you reach for all the time (back, belt,
+  ID and both pockets), each showing what is in it (or SS13's silhouette of what goes there). The blank button above them (or `I`) opens the
+  rest of what you wear: head, ears, glasses, mask, neck, uniform, suit, gloves, shoes and suit storage. Click a slot to take what is in it or
+  (with something in your hand) put it there, open a bag by clicking it, or drag things between slots, hands and bags. At the right edge are
+  SS13's health doll with a one-line description of how you feel ("You have some bruising.") and the internals button (and the pull button
+  while you drag something); at the bottom right, the four intents with throw, drop and resist above them. The mouse has to be free to use
+  any of it (hands mode: `Space`).
 * **PDA** (`Tab`). Only if you carry one (every job except Prisoner starts with one): station time, where you are, the
   pressure and oxygen of the air around you, and a map of the station that fills in as you see it. Ghosts see the whole map.
 * **Your condition.** SS13's own full-screen overlays (red at the edges as you get hurt, darkness closing in as you run out
@@ -118,7 +141,7 @@ The same list is in the game under `F1`.
 | `Z` | Use the item in your hand (light, welder, tank, medkit, ...; opens a bag) |
 | `Q` | Drop |
 | `R` | Throw mode: your next click throws what you hold |
-| `I` | Look yourself over: clothes, pockets, injuries (observing: back to the lobby) |
+| `I` | Show or hide the equipment grid (the rest of what you wear), same as the blank button above your bag (observing: back to the lobby) |
 | `Tab` | Your PDA: time, location, air, map |
 | `V` | Internals (mask and air tank) |
 | `F` | Flashlight |
@@ -127,7 +150,7 @@ The same list is in the game under `F1`.
 | `Alt`+click | Lock or unlock a closed locker you have the access for, without opening it. On a person: their strip window; click what they wear to take it off them (their items take SS13's delays, pockets four seconds and they are not told), click an empty slot to put what you hold on them |
 | `Ctrl`+click | Drag it: SS13's pull. A person (a passive hold, never tighter), a loose item, or a structure that is not anchored in the DM (lockers, tanks, canisters, office chairs; not racks, vending machines or most chairs). It trails a little way behind you and slides along walls, lockers slow you down like a body does, `Ctrl`+click again or `P` lets go |
 | `T` `Y` `M` `O` | Say (`;` common radio, `:h` department, `:e :m :s :n :u :v :c` other channels) / whisper / emote / OOC |
-| `F1`, `F2`, `F4` | This list, mute, fullscreen (with the keyboard locked on Chromium, so `Ctrl`+`W`, `Ctrl`+`T` and `Ctrl`+`N` cannot close the page) |
+| `F1`, `F2`, `F3`, `F4` | This list, mute, debug menu (only with `--debug` or `?debug`), fullscreen (with the keyboard locked on Chromium, so `Ctrl`+`W`, `Ctrl`+`T` and `Ctrl`+`N` cannot close the page) |
 | `Esc` | Close the top window (in look mode: free the mouse) |
 
 While a round is on, every browser shortcut the page is allowed to swallow is swallowed (`Ctrl`+`S`, `D`, `P`, `R`, `F`, `U`, `Alt`+`Left`, `Ctrl`+wheel zoom and so on; developer tools and `Ctrl`+`Shift`+`R` still work, and so does editing text in the chat line). The browser reserves `Ctrl`+`W`, `Ctrl`+`T` and `Ctrl`+`N`, so leaving the page asks first (not in `?nolock` runs), and fullscreen (`F4`) locks the keyboard so they reach the game.
@@ -151,7 +174,7 @@ server/        static files + WebSocket host
 ```
 
 The interface, in `src/client/`: `game.js` (look and hands modes, picking what is under the crosshair or cursor, prediction,
-the frame loop), `dnd.js` (clicks and drag and drop in hands mode), `hands.js`, `bags.js`, `bodypanel.js`, `pda.js`,
+the frame loop), `dnd.js` (clicks and drag and drop in hands mode), `hands.js`, `bags.js`, `invhud.js`, `pda.js`,
 `effects.js` (screen overlays), `hud.js` (crosshair, hover name, progress bar, runechat, ghost line), `chatui.js`,
 `terminalui.js`, `lobby.js`, `screens.js` (help, round report, disconnect) and `art.js` (SS13 icons from `assets/ui.png`,
 the steel frame and the hand cursors, painted at 1x and scaled up with nearest neighbour). Text uses three pixel fonts:
@@ -188,12 +211,14 @@ writes `assets/ui.png`, `assets/ui.json` and `assets/overlays/` from the HUD ico
 ### Tests
 
 ```sh
-npm run test:sim      # 127 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, closets,
-                      #   characters, handcuffs/grabs/stripping, chat, consoles, drag and drop, death and ghosts)
+npm run test:sim      # 331 assertions on the headless simulation (spawn and outfit, inventory, combat, doors, breaches, closets, zero gravity, windows and grilles,
+                      #   characters, handcuffs/grabs/stripping, structures and dragging, observers, the debug menu, zero gravity, windows and
+                      #   grilles, door angles and wall mounts, chat, consoles,
+                      #   drag and drop, death and ghosts)
 npm run test:level    # level mesh geometry and the character art data (no browser)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
-npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, body panel, bags,
+npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, the inventory HUD, bags,
                       #   throwing, PDA, consoles, chat and runechat, screen effects, death (needs Playwright)
 npm run test:net      # starts the server and drives 3 browsers: lobby, round start, chat/radio, prediction, late join, ghosts, reset
 ```

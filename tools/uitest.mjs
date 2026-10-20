@@ -1,4 +1,4 @@
-// Single-player browser test of the UI (look / hands modes, drag & drop, hands, bags, body panel, PDA, effects).
+// Single-player browser test of the UI (look / hands modes, drag & drop, hands, bags, the inventory HUD, PDA, effects).
 //   node tools/uitest.mjs            (needs tools/serve.py serving the project, by default on :8123)
 //   BASE=http://host:port  SHOTS=/path/prefix  node tools/uitest.mjs
 // The round runs in the page (LocalConnection), so the test can set the scene up through yad.conn.sim (teleport,
@@ -229,7 +229,7 @@ await section('HUD: nothing but a crosshair', async () => {
   await frames(3);
   const txt = await ev(() => T.textOutside(['#chat', '#toast:not(.on)', '#lobby', '.screen:not(.on)']));
   ok(txt.length === 0, 'no visible text outside the chat log (no readouts)', JSON.stringify(txt.slice(0, 6)));
-  ok(await ev(() => !yad.pda.open && !yad.body.open && !yad.bags.openIds.length), 'no panels are open');
+  ok(await ev(() => !yad.pda.open && !yad.inv.open && !yad.bags.openIds.length), 'no panels are open');
   ok(await ev(() => ['Pixellari', 'Grand9K', 'VCR'].every((f) => document.fonts.check(`16px ${f}`))), 'the pixel fonts (Pixellari, Grand9K, VCR) are loaded');
   ok(await ev(() => /Grand9K/.test(getComputedStyle(document.getElementById('hover')).fontFamily)), 'the hover label uses Grand9K');
   await shot('hud');
@@ -411,41 +411,39 @@ await section('hands mode: hover, click, drag between the world and your hands',
 });
 
 // ------------------------------------------------------------------ body panel and bags
-await section('body panel (I), bags', async () => {
+await section('equipment (I), bags', async () => {
   await setMode('look');
   await ev(() => T.clearHands());
   await wait(() => yad.self.inv.hands.every((h) => !h));
   await key('KeyI');
-  await until('I opens the body panel', () => yad.body.open && document.getElementById('body').classList.contains('on'));
+  await until('I opens the equipment grid', () => yad.inv.open && document.getElementById('slots').classList.contains('open'));
   ok(await ev(() => yad.mode === 'hands' && yad.autoHands), 'opening it frees the hand (hands mode)');
-  const slots = await ev(() => [...document.querySelectorAll('#body .slot')].map((e) => [e.dataset.slot, /^url\(/.test(e.style.backgroundImage)]));
+  const slots = await ev(() => [...document.querySelectorAll('#slots .slot')].map((e) => [e.dataset.slot, /^url\(/.test(e.style.backgroundImage)]));
   ok(slots.length === 15 && slots.every((s) => s[1]), 'all 15 SS13 slots, each with its slot icon', JSON.stringify(slots));
-  ok(await ev(() => { const u = document.querySelector('#body [data-slot=uniform]'); return u.classList.contains('full') && +u.dataset.item === yad.self.inv.worn.uniform.id && T.paint(u.querySelector('canvas')).n > 20; }), 'the uniform is drawn in its slot');
-  ok(await ev(() => T.paint(document.querySelector('#body .bp-doll')).n > 50), 'the SS13 health doll is drawn');
-  ok(await ev(() => /You feel fine/.test(document.querySelector('#body .bp-cond').textContent)), 'the condition line says you feel fine');
-  ok(await ev(() => document.querySelector('#body .bp-name').textContent === yad.self.name), 'it is your name on it');
-  ok(await ev(() => document.getElementById('body').classList.contains('panel-frame') && /^url\(/.test(getComputedStyle(document.getElementById('body')).borderImageSource)), 'in a steel frame (border-image)');
+  ok(await ev(() => { const u = document.querySelector('#slots [data-slot=uniform]'); return u.classList.contains('full') && +u.dataset.item === yad.self.inv.worn.uniform.id && T.paint(u.querySelector('canvas')).n > 20; }), 'the uniform is drawn in its slot');
+  ok(await ev(() => T.paint(document.querySelector('#gauges .doll')).n > 50), 'the SS13 health doll is drawn');
+  ok(await ev(() => /You feel fine/.test(document.querySelector('#gauges .cond').textContent)), 'the condition line says you feel fine');
   // buttons
-  const harm = await centerOf('#body .act[data-act=intent][data-v="3"]');
+  const harm = await centerOf('#acts .act[data-act=intent][data-v="3"]');
   await page.mouse.click(harm[0], harm[1]);
-  await until('the harm button sets harm intent', () => yad.self.inv.intent === 'harm' && document.querySelector('#body .act[data-v="3"]').classList.contains('on'));
-  const help = await centerOf('#body .act[data-act=intent][data-v="0"]');
+  await until('the harm button sets harm intent', () => yad.self.inv.intent === 'harm' && document.querySelector('#acts .act[data-v="3"]').classList.contains('on'));
+  const help = await centerOf('#acts .act[data-act=intent][data-v="0"]');
   await page.mouse.click(help[0], help[1]);
   await until('the help button sets help intent', () => yad.self.inv.intent === 'help');
-  const thr = await centerOf('#body .act[data-act=throw]');
+  const thr = await centerOf('#acts .act[data-act=throw]');
   await page.mouse.click(thr[0], thr[1]);
   await until('the throw button toggles throw mode', () => yad.self.inv.throwMode);
   await page.mouse.click(thr[0], thr[1]);
   await until('and back off', () => !yad.self.inv.throwMode);
   // worn things come off by dragging them to a hand, and go back on by dragging them to the slot
   const hat = await ev(() => yad.self.inv.worn.head);
-  await drag(await centerOf('#body [data-slot=head]'), await handXY(1));
+  await drag(await centerOf('#slots [data-slot=head]'), await handXY(1));
   await until('drag head slot -> right hand takes the hard hat off', (id) => yad.self.inv.hands[1]?.id === id && !yad.self.inv.worn.head, hat.id, 15000, diagInv);
-  await drag(await handXY(1), await centerOf('#body [data-slot=head]'));
+  await drag(await handXY(1), await centerOf('#slots [data-slot=head]'));
   await until('drag it back onto the head slot puts it on', (id) => yad.self.inv.worn.head?.id === id && !yad.self.inv.hands[1], hat.id, 15000, diagInv);
   // open the backpack by clicking its slot
   const back = await ev(() => yad.self.inv.worn.back);
-  const bxy = await centerOf('#body [data-slot=back]');
+  const bxy = await centerOf('#slots [data-slot=back]');
   await page.mouse.click(bxy[0], bxy[1]);
   await until('clicking the back slot opens the backpack window', (id) => yad.bags.openIds.includes(id) && !!document.querySelector(`#bags .bag[data-box="${id}"]`), back.id, 15000, diagInv);
   ok(await ev((b) => document.querySelectorAll(`#bags .bag[data-box="${b.id}"] .cell.full`).length === b.c.length, back), 'its window shows what is inside, one SS13 slot each');
@@ -471,7 +469,7 @@ await section('body panel (I), bags', async () => {
   await drag(await centerOf(`#bags [data-item="${b.id}"]`), await handXY(0));
   await until('drag bag item -> left hand', (id) => yad.self.inv.hands[0]?.id === id && !yad.self.inv.worn.back.c.some((c) => c.id === id), b.id, 15000, diagInv);
   // hand -> the backpack's slot on the body panel stows it again
-  await drag(await handXY(0), await centerOf('#body [data-slot=back]'));
+  await drag(await handXY(0), await centerOf('#slots [data-slot=back]'));
   await until('drag hand -> backpack slot puts it in the backpack', (id) => yad.self.inv.worn.back.c.some((c) => c.id === id) && !yad.self.inv.hands[0], b.id, 15000, diagInv);
   // click a stored item: it comes to the active hand
   await until('it is back in the bag window', (id) => !!document.querySelector(`#bags [data-item="${id}"]`), b.id);
@@ -482,7 +480,7 @@ await section('body panel (I), bags', async () => {
   const belt = await ev(() => yad.self.inv.worn.belt.id);
   await key('KeyX');
   await wait(() => yad.self.inv.active === 1);
-  const beltXY = await centerOf('#body [data-slot=belt]');
+  const beltXY = await centerOf('#slots [data-slot=belt]');
   await page.mouse.click(beltXY[0], beltXY[1]);
   await until('clicking the belt opens a second window', (id) => yad.bags.openIds.length === 2 && yad.bags.openIds.includes(id), belt, 15000, diagInv);
   ok(await ev(() => [...document.querySelectorAll('#bags .bag')].every((b) => b.classList.contains('panel-frame') && /^url\(/.test(getComputedStyle(b).borderImageSource))), 'bag windows have steel frames too');
@@ -499,7 +497,7 @@ await section('body panel (I), bags', async () => {
   await until('the close button shuts that bag', (id) => !yad.bags.openIds.includes(id) && yad.bags.openIds.length === 1, belt, 15000, diagInv);
   // Esc closes the top-most thing first; the cursor goes back to look mode when everything is closed
   await key('Escape');
-  await until('Esc closes the body panel first', () => !yad.body.open && yad.bags.openIds.length === 1);
+  await until('Esc closes the equipment grid first', () => !yad.inv.open && yad.bags.openIds.length === 1);
   ok(await ev(() => yad.mode === 'hands'), 'still in hands mode while bags are open');
   await key('Escape');
   await until('Esc again closes the bags', () => yad.bags.openIds.length === 0 && !document.querySelector('#bags .bag'));
@@ -507,9 +505,9 @@ await section('body panel (I), bags', async () => {
   // when you chose hands mode yourself, closing panels leaves you there
   await setMode('hands');
   await key('KeyI');
-  await until('I opens the panel from hands mode', () => yad.body.open);
+  await until('I opens the grid from hands mode', () => yad.inv.open);
   await key('KeyI');
-  await until('I closes it', () => !yad.body.open);
+  await until('I closes it', () => !yad.inv.open);
   ok(await ev(() => yad.mode === 'hands'), 'and you stay in hands mode, since you chose it');
 });
 
@@ -558,8 +556,8 @@ await section('drop a held item on a person or a door: use it on them', async ()
   // they speak: runechat over their head
   await ev((id) => T.sim.chat.npcSay(T.sim.mobs.get(id), 'Hello there, engineer'), npc.id);
   await until('speech floats over the speaker (runechat)', (id) => { const sp = yad.hud.speakers.get(id); return sp && sp.box.style.display === 'block' && sp.box.textContent.includes('Hello there'); }, npc.id, 15000);
-  const off = await ev((id) => { const sp = yad.hud.speakers.get(id), m = yad.rep.mobs.get(id); const r = sp.box.getBoundingClientRect(); const [x, y] = T.proj(m.x, 2.0, m.z); return [r.left + r.width / 2 - x, r.bottom - y]; }, npc.id);
-  ok(Math.abs(off[0]) < 30 && Math.abs(off[1]) < 30, 'right above their head', JSON.stringify(off.map((v) => Math.round(v))));
+  const off = await ev((id) => { const sp = yad.hud.speakers.get(id), m = yad.rep.mobs.get(id); const r = sp.box.getBoundingClientRect(); const [x, y] = T.proj(m.x, yad.view.mobViews.get(id).top + 0.12, m.z); return [r.left + r.width / 2 - x, r.bottom - y]; }, npc.id);
+  ok(Math.abs(off[0]) < 8 && Math.abs(off[1]) < 8, 'right above the top of their picture (they are lying down: not 2 m up)', JSON.stringify(off.map((v) => Math.round(v))));
   ok(await ev((id) => /Grand9K/.test(getComputedStyle(yad.hud.speakers.get(id).box).fontFamily), npc.id), 'runechat is set in Grand9K');
   await shot('runechat');
   await setMode('hands');
@@ -690,7 +688,8 @@ await section('chat', async () => {
   await page.keyboard.press('Enter');
   await until('typed text is spoken', () => document.getElementById('chatlog').textContent.includes('testing one two'));
   ok(!(await ev(() => yad.chat.isOpen)), 'the line closes after sending');
-  await until('your words float over your head too (runechat)', () => [...document.querySelectorAll('#runechat .rune')].some((r) => r.textContent.includes('testing one two')));
+  await page.waitForTimeout(500);       // the bubble event comes in the same batch as the chat line; give a wrong one time to show
+  ok(!(await ev(() => [...document.querySelectorAll('#runechat .rune')].some((r) => r.textContent.includes('testing one two')))), 'your own words do not float (your head is the camera)');
   await key('KeyM');
   await until('M opens the emote line', () => yad.chat.isOpen && yad.chat.mode === 'me');
   await page.keyboard.type('waves.');
@@ -729,11 +728,11 @@ await section('damage, effects, death', async () => {
   await until('the world loses some colour', () => /saturate\(/.test(yad.canvas.style.filter));
   await shot('hurt');
   await key('KeyI');
-  await until('the body panel describes the bruises', () => /bruis/.test(document.querySelector('#body .bp-cond').textContent));
-  ok(await ev(() => yad.body.dollKey !== '0'), 'the health doll shows the damage');
+  await until('the HUD describes the bruises', () => /bruis/.test(document.querySelector('#gauges .cond').textContent));
+  ok(await ev(() => yad.inv.dollKey !== '0'), 'the health doll shows the damage');
   await shot('hurt_body');
   await key('Escape');
-  await until('Esc closes it', () => !yad.body.open && yad.mode === 'look');
+  await until('Esc closes it', () => !yad.inv.open && yad.mode === 'look');
   await ev(() => { T.healAll(); T.mob.body.damage('oxy', 45); });
   await until('suffocating closes the black in (#fx-oxy)', () => getComputedStyle(document.getElementById('fx-oxy')).display === 'block');
   await ev(() => T.healAll());
@@ -741,22 +740,22 @@ await section('damage, effects, death', async () => {
   // a space helmet: dragged off the floor onto your head, it puts a visor round the view
   await home(-0.55);
   await key('KeyI');
-  await until('body panel open', () => yad.body.open);
+  await until('equipment grid open', () => yad.inv.open);
   const hat = await ev(() => yad.self.inv.worn.head.id);
-  await drag(await centerOf('#body [data-slot=head]'), await handXY(1));
+  await drag(await centerOf('#slots [data-slot=head]'), await handXY(1));
   await until('hard hat off', (id) => yad.self.inv.hands[1]?.id === id, hat, 15000, diagInv);
   const helm = await ev(() => T.spawnAhead('/obj/item/clothing/head/helmet/space/emergency', 1.3, 0));
   await wait((id) => yad.rep.items.has(id), helm.id);
   const from = await hoverItem(helm.id);
-  await drag(from, await centerOf('#body [data-slot=head]'), { ready: () => wait((id) => yad.cursorTarget?.id === id, helm.id, 8000) });
+  await drag(from, await centerOf('#slots [data-slot=head]'), { ready: () => wait((id) => yad.cursorTarget?.id === id, helm.id, 8000) });
   await until('drag a helmet from the floor onto the head slot', (id) => yad.self.inv.worn.head?.id === id, helm.id, 15000, diagInv);
   await until('a helmet visor frames the view', () => getComputedStyle(document.getElementById('fx-visor')).display === 'block');
   await shot('visor');
-  await drag(await centerOf('#body [data-slot=head]'), await handXY(0));
+  await drag(await centerOf('#slots [data-slot=head]'), await handXY(0));
   await until('helmet off', (id) => yad.self.inv.hands[0]?.id === id, helm.id, 15000, diagInv);
   await until('the visor goes away', () => getComputedStyle(document.getElementById('fx-visor')).display === 'none');
   await key('Escape');
-  await wait(() => !yad.body.open);
+  await wait(() => !yad.inv.open);
   // vacuum
   const vac = await ev(() => {
     const sim = T.sim, w = sim.world;

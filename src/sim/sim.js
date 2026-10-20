@@ -8,7 +8,7 @@ import { DoorCore } from '../shared/door.js';
 import { ItemDB, makeItemData } from '../shared/items.js';
 import { Jobs } from '../shared/jobs.js';
 import { buildPropData } from '../shared/propdata.js';
-import { stepMovement } from '../shared/movement.js';
+import { stepMovement, floatState } from '../shared/movement.js';
 import { clamp, rng } from '../shared/util.js';
 import { Mob } from './mob.js';
 import { FireDoors } from './firedoors.js';
@@ -19,9 +19,13 @@ import { Terminals } from './terminals.js';
 import { Actions } from './actions.js';
 import { Closets } from './closets.js';
 import { People } from './people.js';
+import { Windows } from './windows.js';
+import { Debug } from './debug.js';
 import { Looks, WORN_SLOTS } from '../shared/looks.js';
 import { AI } from './ai.js';
 import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, rootMob } from './inventory.js';
+
+const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
 let clientSeq = 1;
 
@@ -98,6 +102,8 @@ export class Sim {
       place(this, item, it.x, it.z, it.y);
     }
     this.people = new People(this);
+    this.windows = new Windows(this);
+    this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // after the floor items: closed closets swallow what lies on them
   }
 
@@ -131,6 +137,20 @@ export class Sim {
   soundTo(client, name, v = 1) { client.outbox.push({ e: 'snd', n: name, v }); }
   shake(x, z, amt, r = 36) { this.emit({ e: 'shake', a: amt }, { near: [x, z, r] }); }
 
+  /**
+   * The station's gravity goes on or off (the generator, or the debug menu). Like gravitygenerator.dm's shake_everyone():
+   * everybody's camera shakes and they hear the alert. Nobody is told in words; you find out when your feet leave the floor.
+   */
+  setGravity(on) {
+    on = !!on;
+    if (this.world.gravityOn === on) return false;
+    this.world.gravityOn = on;
+    this.emit({ e: 'grav', on });
+    this.emit({ e: 'shake', a: 0.5 });
+    this.emit({ e: 'snd', n: 'terminal_alert', v: 1 });
+    return true;
+  }
+
   // ------------------------------------------------------------------ clients
   addClient(name, send) {
     const c = new SimClient(this, name, send);
@@ -158,7 +178,7 @@ export class Sim {
       areaOn: [...this.power.areaOn], areaLights: [...this.power.areaLights],
       doors: this.doors.map((d) => d.state), fdoors: this.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       items: [...this.floor.values()].map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z]),
-      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(), moved: this.people.moved(),
+      tiles: this.tileLog, panes: this.deadPanes, evac: this.evacApplied, closets: this.closets.changed(), moved: this.people.moved(), debug: !!this.opts.debug, gravity: this.world.gravityOn,
       jobs: this.jobs.list.map((j) => ({ id: j.id, title: j.title, color: j.color, supervisors: j.supervisors, slots: this.jobs.slots(j), total: j.id === 'assistant' ? 99 : j.total, ap: this.outfitPreview(j) })),
     };
   }
@@ -172,6 +192,7 @@ export class Sim {
     this.people.update();
     this.updateDoors(dt);
     this.firedoors.update(dt);
+    this.windows.update();
     this.atmos.update(dt);
     this.power.update(dt);
     this.ai.update(dt);
@@ -195,7 +216,7 @@ export class Sim {
     for (const c of this.clients.values()) {
       c.budget = Math.min(0.5, c.budget + dt);
       const m = c.mob;
-      if (!m) { c.inputs.length = 0; continue; }
+      if (!m) { if (c.state !== 'ghost' && c.state !== 'lobby') c.inputs.length = 0; continue; }      // observers and ghosts have no body: updateGhosts moves them
       let moved = false;
       while (c.inputs.length) {
         const inp = c.inputs.shift();
@@ -207,15 +228,38 @@ export class Sim {
         m.yaw = inp.yaw; m.pitch = clamp(inp.pitch || 0, -1.5, 1.5);
         m.input = inp;
         if (m.inside) { m.vx = m.vz = 0; if (inp.f || inp.b || inp.l || inp.r) this.closets.relaymove(m); continue; }
-        if (m.downed || (m.pulledBy && m.pulledBy.grab >= 1)) { m.vx = m.vz = 0; if (inp.f || inp.b || inp.l || inp.r) this.people.resistGrab(m); continue; }
-        if (m.dead || m.stunned > 0 || m.body.crit) { m.vx = m.vz = 0; continue; }
+        if (m.downed || (m.pulledBy && m.pulledBy.grab >= 1)) { this.limp(m, d); if (inp.f || inp.b || inp.l || inp.r) this.people.resistGrab(m); continue; }
+        if (m.dead || m.stunned > 0 || m.body.crit) { this.limp(m, d); continue; }
         const run = inp.run && !(m.body.health < 30);
-        const wind = this.atmos.windAt(m.x, m.z);
-        m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw }, this.world, d, { slow: moveSlow(m) * this.people.dragSlow(m) * (m.body.crit ? 0.35 : 1), wind, ignore: m.hauling?.it });
+        const ctx = this.moveCtx(m);
+        m.speedNow = stepMovement(m, { f: inp.f, b: inp.b, l: inp.l, r: inp.r, run, yaw: inp.yaw }, this.world, d, ctx);
+        if (m.jetOn && (inp.f || inp.b || inp.l || inp.r) && floatState(this.world, m, { ...ctx, jet: false }).floating) this.burnJetpack(m, d);
         moved = true;
       }
       void moved;
     }
+  }
+
+  /** How much slower (or, in debug, faster) than normal this body moves: its suit, what it drags, the debug speed. */
+  moveFactor(m) { return moveSlow(m) * this.people.dragSlow(m) * (m.dbgSpeed ?? 1); }
+
+  /** What `stepMovement` needs to know about a body (the client predicts with the same things, see Game.predictCtx). */
+  moveCtx(m) {
+    return { slow: this.moveFactor(m) * (m.body.crit ? 0.35 : 1), wind: this.atmos.windAt(m.x, m.z), ignore: m.hauling?.it, noclip: m.noclip, jet: !!m.jetOn, mag: !!m.magOn };
+  }
+
+  /** Thrusting uses the jetpack's gas; when it is gone the engines cut out. */
+  burnJetpack(m, d) {
+    const jp = m.worn.back;
+    if (!jp?.def.jetpack) { m.jetOn = false; return; }
+    jp.gas = Math.max(0, jp.gas - d * JET_BURN);
+    if (jp.gas <= 0) { m.jetOn = false; m.dirty = true; this.tell(m, 'warning', "You feel your jetpack's engines cut out."); }
+  }
+
+  /** A body that cannot act: it stops where it is, unless there is no gravity to stop it, then it keeps drifting. */
+  limp(m, d) {
+    if (this.world.hasGravity(m.x, m.z)) { m.vx = m.vz = 0; return; }
+    m.speedNow = stepMovement(m, { yaw: m.yaw }, this.world, d, { ...this.moveCtx(m), limp: true });
   }
 
   updateGhosts(dt) {
@@ -319,18 +363,25 @@ export class Sim {
   // ------------------------------------------------------------------ hull & world changes
   tileEvent(i, extra = {}) {
     const w = this.world;
-    return { e: 'tile', i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], brk: w.breached.has(i) ? 1 : 0, ...extra };
+    return { e: 'tile', i, kind: w.kind[i], wall: w.wallVar[i], glass: w.glass[i], solid: w.solid[i], air: w.airBlock[i], floor: w.floorCell[i], roof: w.roof[i], area: w.areaIdx[i], brk: w.breached.has(i) ? 1 : 0, gr: w.grille[i], ws: w.ws[i], ...extra };
   }
 
-  /** A window shatters. Only one that touches space is a hull breach (loud, everything flickers). */
+  /** A tile's glass, grille or anchoring changed: tell the air and the clients. (A smashed window is `breachTile`: it is also loud.) */
+  tileChanged(c, r) {
+    const i = r * this.world.W + c;
+    this.atmos.tileChanged(c, r);
+    const ev = this.tileEvent(i);
+    this.tileLog.push(ev); this.emit(ev);
+  }
+
+  /** A window shatters. Only one that touches space is a hull breach (loud, everything flickers). It leaves shards (and rods) on the floor and its grille standing. */
   breachTile(c, r, cause) {
     const w = this.world;
     const i = r * w.W + c;
     w.setBreach(c, r);
-    this.atmos.tileChanged(c, r);
-    const ev = this.tileEvent(i);
-    this.tileLog.push(ev); this.emit(ev);
+    this.tileChanged(c, r);
     const x = c * TILE + 1, z = r * TILE + 1;
+    this.windows.spill(x, z, w.windowKey(i), true);
     this.sound('glass_break', x, z, 1);
     if (cause === 'meteor') { this.sound('meteor', x, z, 1); this.sound('explosion', x, z, 0.8); this.sound('wind', x, z, 0.9); }
     if (w.ventsToSpace(i)) {
@@ -373,11 +424,17 @@ export class Sim {
   }
 
   shatterPane(p) {
+    this.removePane(p);
+    this.sound('glass_break', p.c * TILE, p.r * TILE, 1);
+    this.windows.spill(p.c * TILE + 1, p.r * TILE + 1, p.tag, false);
+  }
+
+  /** A thin window is gone (smashed, or taken apart: then it leaves nothing but its glass sheet). */
+  removePane(p) {
     p.dead = true;
     this.world.removeEdge(p.c, p.r, p.d);
     this.deadPanes.push([p.c, p.r, p.d]);
     this.emit({ e: 'pane', c: p.c, r: p.r, d: p.d });
-    this.sound('glass_break', p.c * TILE, p.r * TILE, 1);
   }
 
   flicker(sec) { this.emit({ e: 'flicker', s: sec }); }
@@ -408,7 +465,7 @@ export class Sim {
         w.solid[i] = 1; w.airBlock[i] = 1;
         if (wall !== 0xffff && w.variants[wall].glass) w.glass[i] = 1;
         w.hp.set(i, 600);
-      } else if (kind === KIND.SPACE) w.solid[i] = 1;
+      }
       changed.add(i);
     }
     const before = this.doors.length;
@@ -542,7 +599,8 @@ export class Sim {
       crit: b.crit, dead: b.dead, stunned: m.stunned > 0, inside: m.inside ? m.inside.name : null,
       cuffed: !!m.cuffed, grabbed: m.pulledBy ? m.pulledBy.grab : -1, pulling: m.pulling ? m.pulling.name : m.hauling ? m.hauling.name : null, haul: m.hauling?.it ? m.hauling.it.idx : -1,
       job: m.job, name: m.name, access: [...m.access],
-      suit: spaceSafe(m), slow: moveSlow(m) * this.people.dragSlow(m),
+      suit: spaceSafe(m), slow: this.moveFactor(m), jet: !!m.jetOn, mag: !!m.magOn,
+      ...(this.opts.debug ? { dbg: { god: !!b.god, noclip: !!m.noclip, speed: m.dbgSpeed ?? 1 } } : {}),
     };
   }
 
@@ -567,6 +625,7 @@ export class Sim {
       case 'examine': this.actions.examine(c, msg); break;
       case 'lobby': this.round.handle(c, msg); break;
       case 'ghost': this.round.handle(c, msg); break;
+      case 'dbg': this.debug.handle(c, msg); break;
       default: break;
     }
   }

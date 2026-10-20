@@ -1,0 +1,57 @@
+# item types to document (DM path, in-game name)
+/obj/item/storage/firstaid/regular	first-aid kit
+/obj/item/storage/firstaid/fire	burn treatment kit
+/obj/item/storage/firstaid/toxin	toxin treatment kit
+/obj/item/storage/firstaid/o2	oxygen deprivation treatment kit
+/obj/item/storage/firstaid/brute	brute trauma treatment kit
+/obj/item/stack/medical/bruise_pack	bruise pack
+/obj/item/stack/medical/ointment	ointment
+/obj/item/reagent_containers/hypospray/medipen	epinephrine medipen
+/obj/item/reagent_containers/spray/waterflower	water flower
+/obj/item/storage/pill_bottle/mannitol	bottle of mannitol pills
+/obj/item/storage/pill_bottle/psicodine	bottle of psicodine pills
+/obj/item/storage/pill_bottle/paxpsych	pax pills
+/obj/item/storage/pill_bottle/happinesspsych	happiness pills
+/obj/item/storage/pill_bottle/lsdpsych	mindbreaker toxin pills
+/obj/item/reagent_containers/hypospray/medipen/survival	survival emergency medipen
+/obj/item/cautery	cautery
+/obj/item/circular_saw	circular saw
+/obj/item/hemostat	hemostat
+/obj/item/reagent_containers/blood	blood pack
+/obj/item/reagent_containers/blood/random	blood pack
+/obj/item/reagent_containers/chem_pack	intravenous medicine bag
+/obj/item/reagent_containers/dropper	dropper
+/obj/item/reagent_containers/glass/beaker	beaker
+/obj/item/reagent_containers/glass/beaker/cryoxadone	beaker
+/obj/item/reagent_containers/glass/beaker/large	large beaker
+/obj/item/reagent_containers/glass/bottle/ammonia	ammonia bottle
+/obj/item/reagent_containers/glass/bottle/epinephrine	epinephrine bottle
+/obj/item/reagent_containers/glass/bottle/morphine	morphine bottle
+/obj/item/reagent_containers/glass/bottle/multiver	multiver bottle
+/obj/item/reagent_containers/glass/bottle/nutrient/ez	bottle of E-Z-Nutrient
+/obj/item/reagent_containers/glass/bottle/nutrient/rh	bottle of Robust Harvest
+/obj/item/reagent_containers/glass/bowl	bowl
+/obj/item/reagent_containers/pill/patch/aiuri	aiuri patch (burn)
+/obj/item/reagent_containers/spray/cleaner	space cleaner
+/obj/item/reagent_containers/spray/pepper	pepperspray
+/obj/item/reagent_containers/spray/pestspray	pest spray
+/obj/item/reagent_containers/spray/plantbgone	Plant-B-Gone
+/obj/item/reagent_containers/syringe	syringe
+/obj/item/reagent_containers/syringe/antiviral	syringe (spaceacillin)
+/obj/item/retractor	retractor
+/obj/item/scalpel	scalpel
+/obj/item/storage/pill_bottle/dice	bag of dice
+/obj/item/storage/pill_bottle/mutadone	bottle of mutadone pills
+/obj/item/surgical_drapes	surgical drapes
+/obj/item/bodypart/l_arm/robot/surplus	surplus prosthetic left arm
+/obj/item/bodypart/r_arm/robot/surplus	surplus prosthetic right arm
+/obj/item/bodypart/l_leg/robot/surplus	surplus prosthetic left leg
+/obj/item/bodypart/r_leg/robot/surplus	surplus prosthetic right leg
+/obj/item/storage/firstaid/emergency	emergency first-aid kit
+/obj/item/defibrillator/compact/loaded	compact defibrillator
+/obj/item/reagent_containers/hypospray/cmo	hypospray
+/obj/item/implanter/exile	implanter (exile)
+/obj/item/implantcase/exile	implant case - 'Exile'
+/obj/item/reagent_containers/syringe/lethal/execution	lethal injection syringe
+/obj/item/reagent_containers/glass/bottle/toxin	toxin bottle
+/obj/item/defibrillator/loaded	defibrillator

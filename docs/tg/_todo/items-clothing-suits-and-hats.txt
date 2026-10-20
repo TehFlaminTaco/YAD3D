@@ -1,0 +1,96 @@
+# item types to document (DM path, in-game name)
+/obj/item/clothing/suit/space/emergency	space suit
+/obj/item/clothing/head/helmet/space/emergency	space helmet
+/obj/item/clothing/suit/space/hardsuit/engine	engineering hardsuit
+/obj/item/clothing/head/hardhat	hard hat
+/obj/item/clothing/head/welding	welding helmet
+/obj/item/clothing/suit/hazardvest	hazard vest
+/obj/item/clothing/suit/armor/vest	armor vest
+/obj/item/clothing/suit/apron	apron
+/obj/item/clothing/suit/armor/vest/capcarapace	captain's carapace
+/obj/item/clothing/head/caphat	captain's hat
+/obj/item/clothing/suit/toggle/labcoat/chemist	chemist labcoat
+/obj/item/clothing/head/hardhat/white	hard hat
+/obj/item/clothing/suit/toggle/labcoat/cmo	chief medical officer's labcoat
+/obj/item/clothing/suit/toggle/chef	chef's apron
+/obj/item/clothing/head/chefhat	chef's hat
+/obj/item/clothing/suit/det_suit	trenchcoat
+/obj/item/clothing/head/fedora/det_hat	detective's fedora
+/obj/item/clothing/suit/toggle/labcoat/genetics	geneticist labcoat
+/obj/item/clothing/head/hopcap	head of personnel's cap
+/obj/item/clothing/suit/armor/hos/trenchcoat	armored trenchcoat
+/obj/item/clothing/head/hos/beret	head of security beret
+/obj/item/clothing/suit/toggle/lawyer	blue suit jacket
+/obj/item/clothing/suit/toggle/labcoat	labcoat
+/obj/item/clothing/suit/toggle/suspenders	suspenders
+/obj/item/clothing/head/frenchberet	french beret
+/obj/item/clothing/suit/toggle/labcoat/paramedic	paramedic's jacket
+/obj/item/clothing/head/soft/paramedic	paramedic cap
+/obj/item/clothing/suit/toggle/labcoat/science	scientist labcoat
+/obj/item/clothing/suit/armor/vest/alt	armor vest
+/obj/item/clothing/head/helmet/sec	helmet
+/obj/item/clothing/suit/toggle/labcoat/virologist	virologist labcoat
+/obj/item/clothing/suit/armor/vest/warden/alt	warden's armored jacket
+/obj/item/clothing/head/warden	warden's police hat
+/obj/item/clothing/head/bearpelt	bear pelt hat
+/obj/item/clothing/head/hardhat/orange	hard hat
+/obj/item/clothing/head/hardhat/red	firefighter helmet
+/obj/item/clothing/head/helmet/alt	bulletproof helmet
+/obj/item/clothing/head/helmet/riot	riot helmet
+/obj/item/clothing/head/mailman	mailman's hat
+/obj/item/clothing/head/radiation	radiation hood
+/obj/item/clothing/head/soft/grey	grey cap
+/obj/item/clothing/head/soft/rainbow	rainbow cap
+/obj/item/clothing/head/that	top-hat
+/obj/item/clothing/suit/armor/bulletproof	bulletproof armor
+/obj/item/clothing/suit/armor/riot	riot suit
+/obj/item/clothing/suit/fire/firefighter	emergency firesuit
+/obj/item/clothing/suit/hooded/ablative	ablative trenchcoat
+/obj/item/clothing/suit/hooded/wintercoat/science	science winter coat
+/obj/item/clothing/suit/ianshirt	worn shirt
+/obj/item/clothing/suit/radiation	radiation suit
+/obj/item/clothing/suit/straight_jacket	straight jacket
+/obj/item/clothing/suit/bomb_suit	bomb suit
+/obj/item/clothing/head/bomb_hood	bomb hood
+/obj/item/clothing/suit/bomb_suit/security	bomb suit
+/obj/item/clothing/head/bomb_hood/security	bomb hood
+/obj/item/clothing/suit/bio_suit/general	bio suit
+/obj/item/clothing/head/bio_hood/general	bio hood
+/obj/item/clothing/suit/bio_suit/janitor	bio suit
+/obj/item/clothing/head/bio_hood/janitor	bio hood
+/obj/item/clothing/suit/bio_suit/scientist	bio suit
+/obj/item/clothing/head/bio_hood/scientist	bio hood
+/obj/item/clothing/suit/bio_suit/security	bio suit
+/obj/item/clothing/head/bio_hood/security	bio hood
+/obj/item/clothing/suit/bio_suit/virology	bio suit
+/obj/item/clothing/head/bio_hood/virology	bio hood
+/obj/item/clothing/suit/bluetag	blue laser tag armor
+/obj/item/clothing/head/helmet/bluetaghelm	blue laser tag helmet
+/obj/item/clothing/suit/redtag	red laser tag armor
+/obj/item/clothing/head/helmet/redtaghelm	red laser tag helmet
+/obj/item/clothing/suit/fire/atmos	firesuit
+/obj/item/clothing/head/hardhat/atmos	atmospheric technician's firefighting helmet
+/obj/item/clothing/suit/hooded/wintercoat/captain	captain's winter coat
+/obj/item/clothing/suit/armor/vest/capcarapace/alt	captain's parade jacket
+/obj/item/clothing/head/caphat/parade	captain's parade cap
+/obj/item/clothing/suit/captunic	captain's parade tunic
+/obj/item/clothing/head/crown/fancy	magnificent crown
+/obj/item/clothing/suit/bio_suit/cmo	bio suit
+/obj/item/clothing/head/bio_hood/cmo	bio hood
+/obj/item/clothing/suit/judgerobe	judge's robe
+/obj/item/clothing/head/powdered_wig	powdered wig
+/obj/item/clothing/suit/armor/vest/det_suit	detective's armor vest
+/obj/item/clothing/head/hardhat/weldhat/white	welding hard hat
+/obj/item/clothing/suit/armor/vest/leather	security overcoat
+/obj/item/clothing/suit/armor/hos	armored greatcoat
+/obj/item/clothing/head/hos	head of security cap
+/obj/item/clothing/suit/armor/reactive/teleport	reactive teleport armor
+/obj/item/clothing/suit/armor/vest/warden	warden's jacket
+/obj/item/clothing/head/warden/drill	warden's campaign hat
+/obj/item/clothing/head/beret/sec/navywarden	warden's beret
+/obj/item/clothing/suit/jacket/leather	leather jacket
+/obj/item/clothing/suit/jacket/leather/overcoat	leather overcoat
+/obj/item/clothing/head/soft/black	black cap
+/obj/item/clothing/suit/hooded/wintercoat/engineering	engineering winter coat
+/obj/item/clothing/suit/hooded/wintercoat	winter coat
+/obj/item/clothing/suit/jacket	bomber jacket

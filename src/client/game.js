@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TILE, EYE, REACH, RENDER_HEIGHT, KIND } from '../shared/config.js';
-import { stepMovement } from '../shared/movement.js';
+import { stepMovement, floatState } from '../shared/movement.js';
+import { WINDOWS } from '../shared/windows.js';
 import { clamp } from '../shared/util.js';
 import { Input } from './input.js';
 import { Replica } from './state.js';
@@ -12,7 +13,7 @@ import { Hud } from './hud.js';
 import { ChatUI } from './chatui.js';
 import { Hands } from './hands.js';
 import { Bags } from './bags.js';
-import { BodyPanel } from './bodypanel.js';
+import { InvHud } from './invhud.js';
 import { PDA } from './pda.js';
 import { ScreenFX } from './effects.js';
 import { DragDrop } from './dnd.js';
@@ -22,6 +23,7 @@ import { Screens } from './screens.js';
 import { CharEditor } from './charedit.js';
 import { BodyView } from './bodyview.js';
 import { StripWindow } from './strip.js';
+import { DebugMenu } from './debugmenu.js';
 
 const SEND_EVERY = 0.045;             // seconds between input batches
 const INTERP_DELAY = 0.13;            // remote mobs are drawn this far in the past
@@ -75,6 +77,7 @@ export class Game {
     this.bob = 0;
     this.stepAcc = 0;
     this.moving = 0;
+    this.floating = false;                // no gravity under you (set each frame in playerUpdate)
     this.shakeAmt = 0;
     this.target = null;                 // what the crosshair is on (look mode)
     this.cursorTarget = null;           // what the pointer is on (hands mode)
@@ -92,7 +95,7 @@ export class Game {
     this.hands = new Hands(this);
     this.bodyview = new BodyView(this);       // your own body, in the 3D scene
     this.bags = new Bags(this);
-    this.body = new BodyPanel(this);
+    this.inv = new InvHud(this);
     this.pda = new PDA(this);
     this.chat = new ChatUI(this);
     this.term = new TermUI(this);
@@ -100,6 +103,7 @@ export class Game {
     this.screens = new Screens(this);
     this.charedit = new CharEditor(this);
     this.strip = new StripWindow(this);
+    this.debugMenu = new DebugMenu(this);
     this.dnd = new DragDrop(this);
     this.hands.show(false);
 
@@ -169,6 +173,7 @@ export class Game {
     rep.on('mob-', (ev) => this.view.removeMob(ev.id));
     rep.on('look', (ev) => { this.view.refreshMob(ev.id); if (ev.id === rep.you?.id) this.ownLookChanged(); });
     rep.on('strip', (ev) => this.strip.show(ev));
+    rep.on('dbg', (ev) => this.debugMenu.reply(ev));
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('power', () => this.view.rebuildLights());
     rep.on('area', () => this.view.rebuildLights());
@@ -194,6 +199,7 @@ export class Game {
   /** Our own inventory and vitals changed. */
   onSelf(s) {
     this.access = new Set(s.access);
+    this.debugMenu.sync();
     this.invIndex.clear();
     if (s.inv) {
       const walk = (it, where) => {
@@ -210,7 +216,7 @@ export class Game {
     this.hands.root.classList.toggle('cuffed', !!s.cuffed);
     this.hands.render();
     this.bags.render();
-    this.body.render();
+    this.inv.render();
     // a bag opened from the keyboard (Z on a held backpack) needs a free hand to use it
     if (this.bags.openIds.length > before && this.mode === 'look') this.enterHands(true);
     if (!this.bags.openIds.length && before) this.panelsChanged();
@@ -247,7 +253,9 @@ export class Game {
       if (was === 'lobby') this.chat.clearOlderThan(this.time - 1.5);
       this.audio.ensure();
     }
-    if (phase !== 'playing') { this.body.close(); this.bags.closeAll(); this.term.hide(); if (phase !== 'ghost') this.pda.close(); }
+    if (phase === 'lobby') this.debugMenu.close();
+    this.inv.setVisible(phase === 'playing');
+    if (phase !== 'playing') { this.bags.closeAll(); this.term.hide(); if (phase !== 'ghost') this.pda.close(); }
     this.hud.show(this.inWorld());
     this.hands.show(phase === 'playing');
     this.lobby.update();
@@ -288,7 +296,7 @@ export class Game {
     else this.input.lock();
   }
 
-  get panelOpen() { return this.body.open || this.pda.open || this.term.open || this.screens.reportOpen || this.screens.helpOpen || this.charedit.open || this.strip.open; }
+  get panelOpen() { return this.pda.open || this.term.open || this.screens.reportOpen || this.screens.helpOpen || this.charedit.open || this.strip.open || this.debugMenu.open; }
 
   /** A panel closed: if it was the reason we freed the pointer, capture it again. */
   panelsChanged() {
@@ -298,11 +306,12 @@ export class Game {
   /** Escape: close the top-most thing that is open. */
   closeTop() {
     if (this.charedit.open) return this.charedit.close();
+    if (this.debugMenu.open) return this.debugMenu.close();
     if (this.strip.open) return this.strip.close();
     if (this.term.open) return this.term.close();
     if (this.screens.helpOpen) return this.screens.toggleHelp();
     if (this.pda.open) return this.pda.close();
-    if (this.body.open) return this.body.close();
+    if (this.inv.open) return this.inv.close();
     if (this.bags.openIds.length) return this.bags.closeAll();
     return null;
   }
@@ -311,7 +320,7 @@ export class Game {
   predictCtx() {
     const s = this.self;
     if (this.phase === 'ghost') return { noclip: true };
-    return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind, ignore: s?.haul >= 0 ? this.rep.props.interact[s.haul] : null };   // you pass through what you drag
+    return { slow: (s?.slow ?? 1) * (s?.crit ? 0.35 : 1), wind: this.wind, noclip: !!s?.dbg?.noclip, ignore: s?.haul >= 0 ? this.rep.props.interact[s.haul] : null, jet: !!s?.jet, mag: !!s?.mag };   // you pass through what you drag
   }
 
   frozen() {
@@ -320,7 +329,12 @@ export class Game {
   }
 
   stepPred(inp, dt) {
-    if (this.frozen()) { this.pred.vx = this.pred.vz = 0; return; }
+    if (this.frozen()) {
+      // out cold: stop where you are, unless there is no gravity to stop you (then you drift, like the server says)
+      if (this.rep.world.hasGravity(this.pred.x, this.pred.z) || this.self.inside) this.pred.vx = this.pred.vz = 0;
+      else stepMovement(this.pred, { yaw: inp.yaw }, this.rep.world, dt, { ...this.predictCtx(), limp: true });
+      return;
+    }
     stepMovement(this.pred, inp, this.rep.world, dt, this.predictCtx());
   }
 
@@ -365,7 +379,9 @@ export class Game {
     this.sendBuf.push(inp);
     this.sendAcc += dt;
     if (this.sendAcc >= SEND_EVERY) this.flushInputs();
-    const sp = Math.hypot(this.pred.vx, this.pred.vz);
+    // feet off the floor (no gravity here): no footsteps, no walking bob; the camera sways instead (placeCamera)
+    this.floating = this.phase === 'playing' && floatState(this.rep.world, this.pred, this.predictCtx()).floating;
+    const sp = this.floating ? 0 : Math.hypot(this.pred.vx, this.pred.vz);
     this.moving = sp;
     if (this.phase === 'playing') {
       this.bob += sp * dt * (mv.run ? 1.5 : 1.7);
@@ -458,10 +474,30 @@ export class Game {
       consider({ k: 'mob', id: m.id }, m.x, 0.1, m.z, m.dead ? 0.8 : 0.7, { y1: m.dead ? 0.4 : 1.6, name: m.n, mob: m });
     }
     if (!best) {
+      // what is left of a window (its grille, or just the floor) and windows themselves: TG has no "broken window" object
       const br = this.breachAlong(o, f);
-      if (br) best = { k: 'breach', c: br.c, r: br.r, name: rep.world.ventsToSpace(br.r * rep.world.W + br.c) ? 'hull breach' : 'broken window', d: 2 };
+      if (br) best = { k: 'breach', c: br.c, r: br.r, name: rep.world.grille[br.r * rep.world.W + br.c] ? 'grille' : 'floor', d: 2 };
+      else best = this.windowAlong(o, f);
     }
     return best;
+  }
+
+  /** The window (a whole glass tile, or a thin pane on a tile's edge) the ray reaches first, if nothing else is in the way. */
+  windowAlong(o, f) {
+    const w = this.rep.world, reach = REACH + 0.6;
+    const t = w.raycast(o.x, o.z, f.x, f.z, reach, 'shot');
+    const h = w.hit;
+    if (t >= reach || !h) return null;
+    if (h.kind === 'tile') {
+      if (!w.glass[h.i] || w.breached.has(h.i)) return null;
+      return { k: 'window', c: h.c, r: h.r, name: WINDOWS[w.windowKey(h.i)]?.name || 'window', d: t };
+    }
+    if (h.kind === 'edge') {
+      const p = this.rep.props.paneIdx.get(h.i * 16 + h.bit);
+      if (!p || p.dead) return null;
+      return { k: 'pane', c: p.c, r: p.r, pd: p.d, name: WINDOWS[p.tag]?.name || 'window', d: t };
+    }
+    return null;
   }
 
   breachAlong(o, f) {
@@ -510,7 +546,8 @@ export class Game {
     if (!t) return { k: 'none' };
     switch (t.k) {
       case 'item': case 'mob': return { k: t.k, id: t.id };
-      case 'breach': return { k: 'breach', c: t.c, r: t.r };
+      case 'breach': case 'window': return { k: t.k, c: t.c, r: t.r };
+      case 'pane': return { k: 'pane', c: t.c, r: t.r, d: t.pd };
       default: return { k: t.k, idx: t.idx };
     }
   }
@@ -548,6 +585,7 @@ export class Game {
     if (input.pressed('F2')) this.hud.say(this.audio.toggleMute() ? 'Sound muted.' : 'Sound on.', 'notice');
     if (input.pressed('F1')) this.screens.toggleHelp();
     if (input.pressed('F4')) this.toggleFullscreen();
+    if (input.pressed('F3') && this.inWorld() && this.rep?.debug) this.debugMenu.toggle();
     if (!this.inWorld()) { input.takeClicks(); return; }
     if (this.chat.isOpen) { input.takeClicks(); return; }
     if (input.pressed('Escape')) this.closeTop();
@@ -564,7 +602,7 @@ export class Game {
       input.takeClicks();
       return;
     }
-    if (input.pressed('KeyI')) this.body.toggle();
+    if (input.pressed('KeyI')) this.inv.toggle();
     if (this.term.open) {
       for (let k = 1; k <= 9; k++) if (input.pressed('Digit' + k)) this.term.press(k - 1);
     } else {
@@ -577,6 +615,8 @@ export class Game {
     if (input.pressed('KeyR')) this.key('throw');
     if (input.pressed('KeyV')) this.key('internals');
     if (input.pressed('KeyF')) this.key('light');
+    if (input.pressed('KeyJ')) this.key('jet');
+    if (input.pressed('KeyK')) this.key('mag');
     if (input.pressed('KeyB')) this.key('resist');
     if (input.pressed('KeyP')) this.key('pull');
     // look mode: the crosshair is the hand
@@ -684,8 +724,12 @@ export class Game {
     } else if (this.phase === 'ghost') eye = 1.7 + Math.sin(this.time * 1.2) * 0.06;
     else if (this.phase === 'lobby') eye = 1.5;
     const moving = this.phase === 'playing' ? Math.min(1, this.moving / 5) : 0;
-    const bobY = Math.sin(this.bob * 2.0) * moving * 0.035;
+    let bobY = Math.sin(this.bob * 2.0) * moving * 0.035;
     const bobX = Math.cos(this.bob) * moving * 0.02;
+    if (this.floating && this.phase === 'playing') {            // adrift: slow breathing sway instead of a walking bob
+      bobY += Math.sin(this.time * 0.9) * 0.03;
+      roll += Math.sin(this.time * 0.6) * 0.012;
+    }
     const px = this.pred.x + this.corr.x, pz = this.pred.z + this.corr.z;
     cam.position.set(px + Math.cos(this.yaw) * bobX, eye + bobY, pz - Math.sin(this.yaw) * bobX);
     cam.rotation.order = 'YXZ';
