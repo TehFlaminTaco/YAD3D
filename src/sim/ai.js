@@ -184,7 +184,7 @@ export class AI {
     const door = m.grid.world.doorAt.get(m.grid.world.idx(tc, tr, tl));
     if (door && !door.passable) {
       if (door.state === 'closed') {
-        const ok = m.kind !== 'carp' && door.allows(m) && m.grid.power.doorsWork(door);
+        const ok = m.kind !== 'carp' && door.allows(m) && sim.airlocks.hasPower(door);
         if (ok && Math.hypot(tx - m.x, tz - m.z) < 2.6) sim.openDoor(door, m); else if (!ok) { m.path = null; return; }
       }
       if (Math.hypot(tx - m.x, tz - m.z) < 1.2) return;

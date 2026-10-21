@@ -627,6 +627,59 @@ def fitting_for(p, r, spr, table):
     table[key] = {'n': clean_name(typ.get('name', '')) or 'pipe machine', 's': items, 'sv': pic['sv'], 'bd': pic.get('dir') or S}
 
 
+def airlock_frames(r, spr):
+    """The pictures of an airlock whose DM vars are `r`: closed, each frame of opening, open (the sprite ids, `fr` of a door record), or None if the picture is missing."""
+    icon = r.get('icon')
+    if not icon_ok(icon, 'closed'):
+        return None
+    dmi = sl.get_dmi(icon)
+    glass = r.get('glass') is True
+    ov = r.get('overlays_file')
+    ov = ov if icon_ok(ov) else None
+
+    def comp(state, frame=0):
+        ls = [(icon, state, S, None, None, frame)]
+        if glass and ov and sl.get_dmi(ov).has('glass_' + state):
+            ls.append((ov, 'glass_' + state, S, None, None, frame))
+        elif not glass and dmi.has('fill_' + state):
+            ls.append((icon, 'fill_' + state, S, None, None, frame))
+        return ls
+    frames = [spr.add(comp('closed'))]
+    if dmi.has('opening'):
+        for f in range(dmi.states['opening'].frames):
+            frames.append(spr.add(comp('opening', f)))
+    frames.append(spr.add(comp('open')))
+    return frames
+
+
+# the airlock assemblies of the metal sheet's menu (sheet_types.dm metal_recipes): id, and the DM type's name under /obj/structure/door_assembly
+ASSEMBLIES = [('standard', ''), ('public', 'door_assembly_public'), ('com', 'door_assembly_com'), ('sec', 'door_assembly_sec'), ('eng', 'door_assembly_eng'), ('min', 'door_assembly_min'),
+              ('atmo', 'door_assembly_atmo'), ('research', 'door_assembly_research'), ('fre', 'door_assembly_fre'), ('science', 'door_assembly_science'), ('med', 'door_assembly_med'),
+              ('viro', 'door_assembly_viro'), ('mai', 'door_assembly_mai'), ('ext', 'door_assembly_ext'), ('extmai', 'door_assembly_extmai'), ('hatch', 'door_assembly_hatch'),
+              ('mhatch', 'door_assembly_mhatch')]
+
+
+def assembly_types(spr, table):
+    """What an airlock assembly is and what it becomes (door_assembly.dm, door_assembly_types.dm): `table[id]` = {name, base (the finished door's name), s / gs (the assembly's picture, plain and
+    with glass), fr / gfr (the finished airlock's frames, plain and glass; None where there is no glass one), t (its kind)}."""
+    for aid, suffix in ASSEMBLIES:
+        r = resolve('/obj/structure/door_assembly' + ('/' + suffix if suffix else ''))
+        icon, ov = r.get('icon'), r.get('overlays_file')
+        if not icon_ok(icon, 'construction'):
+            continue
+        dmi = sl.get_dmi(icon)
+        plain = [(icon, 'construction', S, None, None)] + ([(icon, 'fill_construction', S, None, None)] if dmi.has('fill_construction') else [])
+        s = spr.add(plain)
+        gs = spr.add([(icon, 'construction', S, None, None), (ov, 'glass_construction', S, None, None)]) if icon_ok(ov) and sl.get_dmi(ov).has('glass_construction') and r.get('noglass') is not True else -1
+        pa, ga = r.get('airlock_type'), r.get('glass_type')
+        fr = airlock_frames(resolve(pa), spr) if pa else None
+        gfr = airlock_frames(resolve(ga), spr) if ga and r.get('noglass') is not True else None
+        if s < 0 or not fr:
+            continue
+        table[aid] = {'name': clean_name(r.get('name', '')), 'base': clean_name(r.get('base_name', 'airlock')), 's': s, 'gs': gs if gs >= 0 and gfr else None,
+                      'fr': fr, 'gfr': gfr, 't': pa.split('/')[4] if pa.count('/') >= 4 else 'public'}
+
+
 def pipe_fittings(spr, table):
     """What a pipe becomes when it is unwrenched (pipe_item.dmi: `simple` in eight ways, `manifold` in four, `manifold4w` in one) and the machines a pipe dispenser can make: `table['pipe/<kind>']` =
     {n: the pipe's name, pipe: 1, s: {dir: its picture}}; `table` gets `types` too in `device_types` (below)."""
@@ -985,27 +1038,11 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
 
             # --- airlocks
             if p.startswith('/obj/machinery/door/airlock'):
-                icon = r.get('icon')
-                if not icon_ok(icon, 'closed'):
+                frames = airlock_frames(r, spr)
+                if frames is None:
                     missing[p] += 1
                     continue
-                dmi = sl.get_dmi(icon)
                 glass = r.get('glass') is True
-                ov = r.get('overlays_file')
-                ov = ov if icon_ok(ov) else None
-
-                def comp(state, frame=0):
-                    ls = [(icon, state, S, None, None, frame)]
-                    if glass and ov and sl.get_dmi(ov).has('glass_' + state):
-                        ls.append((ov, 'glass_' + state, S, None, None, frame))
-                    elif not glass and dmi.has('fill_' + state):
-                        ls.append((icon, 'fill_' + state, S, None, None, frame))
-                    return ls
-                frames = [spr.add(comp('closed'))]
-                if dmi.has('opening'):
-                    for f in range(dmi.states['opening'].frames):
-                        frames.append(spr.add(comp('opening', f)))
-                frames.append(spr.add(comp('open')))
                 acc = access_of(r)
                 props.append(dict(base, k='door', fr=frames, a=acc['a'], o=acc['o'], glass=1 if glass else 0,
                                   t=p.split('/')[4] if p.count('/') >= 4 else 'public'))
@@ -1231,6 +1268,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                 if key not in psp:
                     psp[key] = spr.add(pipe_layers(code, ly, 0))
         pipe_fittings(spr, shared.setdefault('fittings', {}))
+        assembly_types(spr, shared.setdefault('assemblies', {}))
 
     # loot pool sprites
     pool = []
@@ -1580,7 +1618,7 @@ def build(mapname):
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'fittingTypes': device_types(shared.get('fittings', {})), 'lightItems': light_items, 'tiles': base['tiles'],
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'fittingTypes': device_types(shared.get('fittings', {})), 'assemblies': shared.get('assemblies', {}), 'lightItems': light_items, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,

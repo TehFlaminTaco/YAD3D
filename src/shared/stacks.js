@@ -43,12 +43,21 @@ export const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
  * put up in front of you; `onFloor`: only on a floor tile, `onePerTurf`: not where another stands), taking `time` ds. The DM lists a lot more (chairs,
  * frames, airlock assemblies...): they are for the structures the game cannot build yet.
  */
+/** The airlock assemblies of the metal menu (sheet_types.dm metal_recipes), by the id the level's `assemblies` has them under. */
+const AIRLOCK_ASSEMBLIES = [
+  ['standard', 'standard airlock assembly'], ['public', 'public airlock assembly'], ['com', 'command airlock assembly'], ['sec', 'security airlock assembly'], ['eng', 'engineering airlock assembly'],
+  ['min', 'mining airlock assembly'], ['atmo', 'atmospherics airlock assembly'], ['research', 'research airlock assembly'], ['fre', 'freezer airlock assembly'], ['science', 'science airlock assembly'],
+  ['med', 'medical airlock assembly'], ['viro', 'virology airlock assembly'], ['mai', 'maintenance airlock assembly'], ['ext', 'external airlock assembly'],
+  ['extmai', 'external maintenance airlock assembly'], ['hatch', 'airtight hatch assembly'], ['mhatch', 'maintenance hatch assembly'],
+];
+
 export const RECIPES = {
   '/obj/item/stack/sheet/metal': [
     { title: 'floor tile', req: 1, res: 4, maxRes: 20, item: '/obj/item/stack/tile/plasteel' },
     { title: 'metal rod', req: 1, res: 2, maxRes: 60, item: '/obj/item/stack/rods' },
     { title: 'wall girders', req: 2, time: 40, build: 'girder', onFloor: true, onePerTurf: true },
     { title: 'apc frame', req: 2, res: 1, item: '/obj/item/wallframe/apc' },
+    ...AIRLOCK_ASSEMBLIES.map(([id, title]) => ({ title, req: 4, time: 50, build: `asm:${id}`, onFloor: true, onePerTurf: true })),
   ],
 };
 

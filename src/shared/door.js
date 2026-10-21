@@ -24,6 +24,8 @@ export class DoorCore {
     this.t = 0;
     this.bolted = false;
     this.welded = false;
+    this.noId = false;                   // its ID scanner wire is cut: nobody needs access (airlocks.js)
+    this.gone = false;                   // taken apart (Grid.removeDoor): there is no door on its tile any more
     this.pried = false;
     this.holdUntil = 0;
     world.doorAt.set(this.i, this);
@@ -44,7 +46,7 @@ export class DoorCore {
   /** Is `who` ({access:Set<number>}) allowed through? */
   allows(who) {
     if (this.bolted || this.welded) return false;
-    if (!this.a.length && !this.o.length) return true;
+    if (this.noId || (!this.a.length && !this.o.length)) return true;
     if (!who || !who.access) return false;
     if (this.a.length && !this.a.every((n) => who.access.has(n))) return false;
     if (this.o.length && !this.o.some((n) => who.access.has(n))) return false;

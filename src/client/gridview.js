@@ -285,6 +285,14 @@ export class GridView {
     return v;
   }
 
+  /** A door is gone: its picture goes with it. */
+  removeDoorView(d) {
+    const k = this.doorViews.findIndex((v) => v.d === d);
+    if (k < 0) return;
+    this.dyn.setAlpha(this.doorViews[k].id, 0);
+    this.doorViews.splice(k, 1);
+  }
+
   doorFrame(d) {
     const n = d.anim;
     switch (d.state) {

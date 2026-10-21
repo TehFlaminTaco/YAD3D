@@ -36,16 +36,26 @@ export class Grid {
     this.doors = this.props.doors.map((p, i) => this.makeDoor(p, i));
   }
 
-  /**
-   * Props made while the game runs (a machine fastened down, a structure put up): `specs` are records like the level's own (`{k, x, y, l, d, s, p, ...}`, x and y the tile), built by the
-   * same code and appended to the same lists, so both sides count them alike (the server sends the specs, in order, and a late joiner gets them all). Returns what was added
-   * (`props.added`: `interact`, `statics`, `doors`, `lights`...).
-   */
   /** A pipe was laid or taken up: slot `s` of `world.pipe` is shape byte `b`, colour `col`, layer `ly` now (0: none). */
   setPipe(s, b, col, ly) {
     const w = this.world;
     w.pipe[s] = b; w.pipeCol[s] = col; w.pipeLy[s] = ly;
     this.pipeRev = (this.pipeRev || 0) + 1;
+  }
+
+  /**
+   * Props made while the game runs (a machine fastened down, a structure put up): `specs` are records like the level's own (`{k, x, y, l, d, s, p, ...}`, x and y the tile), built by the
+   * same code and appended to the same lists, so both sides count them alike (the server sends the specs, in order, and a late joiner gets them all). Returns what was added
+   * (`props.added`: `interact`, `statics`, `doors`, `lights`...).
+   */
+  /** A door was taken away (an airlock taken apart): its tile is open floor again. Returns the door, or null if it was not there. */
+  removeDoor(idx) {
+    const d = this.doors[idx];
+    if (!d || d.gone) return null;
+    const w = this.world;
+    d.gone = true;
+    w.doorAt.delete(d.i); w.solid[d.i] = 0; w.airBlock[d.i] = 0;
+    return d;
   }
 
   addProps(specs) {

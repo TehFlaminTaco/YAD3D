@@ -136,6 +136,7 @@ export class Actions {
     }
     if (it.fit) return sim.pipefit.rotate(m, it);                          // a pipe fitting: a quarter turn
     if (d.rpd) return sim.pipekit.rpdOpen(m, it);                          // a rapid pipe dispenser: what it makes
+    if (d.airlockElectronics) return sim.assemblies.electronicsOpen(m, it);   // airlock electronics: who the door opens for
     if (d.tray) { it.on = !it.on; m.dirty = true; sim.sound('beep', m, 0.3); return; }           // the T-ray scanner (t_scanner.dm attack_self: no message)
     if (d.storage) {
       if (m.openContainers.has(it.id)) m.openContainers.delete(it.id); else m.openContainers.add(it.id);
@@ -243,20 +244,15 @@ export class Actions {
   }
 
   clickDoor(m, d, held) {
-    const sim = this.sim, power = d.grid.power;
-    if (held?.def.tool === 'crowbar' && d.state === 'closed' && !power.doorsWork(d) && !d.bolted) {
-      this.startTimed(m, 'prying the door open', 2.8, () => d.state === 'closed' && sim.dist(m, d) < 3.2 && m.held === held, () => {
-        d.pried = true; sim.openDoor(d, m, true); sim.sound('door_forced', d, 0.9);
-        sim.tell(m, 'notice', 'You pry the door open.');
-      }, 'crowbar');
-      return;
-    }
-    if (!power.doorsWork(d)) {
+    const sim = this.sim, al = sim.airlocks;
+    if (al.click(m, d, held)) return;                                               // the panel, the wires, a welder, a crowbar, a live door's shock (airlocks.js)
+    if (!al.hasPower(d)) {
       sim.tell(m, 'warning', 'The airlock has no power.');
       return;
     }
     if (d.bolted) { sim.tell(m, 'warning', "The airlock's bolts prevent it from being opened."); sim.sound('door_denied', d, 0.7); return; }
-    if (d.state === 'open' || d.state === 'opening') { sim.closeDoor(d); return; }
+    if (d.welded) return;
+    if (d.state === 'open' || d.state === 'opening') { al.close(d); return; }
     if (!d.allows(m)) {
       sim.sound('door_denied', d, 0.8);
       sim.tell(m, 'warning', 'Access denied.');
@@ -297,6 +293,7 @@ export class Actions {
     if (it.kind === 'closet') return sim.closets.click(c, m, it, held, alt);
     if (it.mach && it.mach.click(c, m, held, alt)) return;                        // a machine with its own rules (the power machines: src/sim/power/)
     if (it.gone) return;
+    if (it.asm && sim.assemblies.click(m, it, held)) return;                        // an airlock assembly: wrench, cable, electronics, screwdriver, crowbar, welder (assemblies.js)
     if (held?.def.tool === 'wrench' && (sim.anchoring.wrench(m, it, held) || sim.pipefit.unfasten(m, it, held))) return;     // a wrench fastens down or frees what the DM lets it (anchoring.js), or takes a pipe machine off its pipe (pipefit.js)
     if (sim.tanks.click(m, it, held)) return;                                     // a fuel or water tank: refill from it
     if (/^\/?structure\/tank_dispenser/.test(it.path || '')) return sim.dispensers.click(c, m, it, held);
@@ -803,7 +800,8 @@ export class Actions {
         lines.push(`This is the ${d.name}.`);
         const need = [...d.a, ...d.o].map((n) => sim.jobs.accessName(n));
         lines.push(need.length ? `It requires ${[...new Set(need)].join(' or ')} access.` : 'It opens for anyone.');
-        lines.push(g.power.doorsWork(d) ? 'The status light is green.' : 'It has no power.');
+        lines.push(sim.airlocks.hasPower(d) ? 'The status light is green.' : 'It has no power.');
+        lines.push(...sim.airlocks.examine(d));
       }
     } else if (t.k === 'prop') {
       const it = g?.props.interact[t.idx];
@@ -852,6 +850,7 @@ export class Actions {
   }
 
   propText(it) {
+    if (it.asm) return this.sim.assemblies.examine(it);
     const d = this.sim.level.descs[it.path] || this.sim.level.descs[(it.path || '').replace(/^\//, '')];
     const out = [`This is ${a(it.name || 'thing')}.`, d?.[1] || ''];
     if (it.kind === 'closet') out.push(...this.sim.closets.examineLines(it));

@@ -206,6 +206,7 @@ export class Game {
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('area', (ev) => gv(ev)?.rebuildLights());
     rep.on('p+', (ev) => { const v = gv(ev); if (v) v.addProps(v.grid.props.added); });
+    rep.on('door-', (ev) => { const v = gv(ev); if (v) v.removeDoorView(v.grid.doors[ev.i]); });
     rep.on('pipe', (ev) => { const v = gv(ev); if (v) { const w = v.grid.world, i = ev.s % w.n, wh = w.W * w.H, rem = i % wh; v.refreshPipes([[rem % w.W, Math.floor(rem / w.W), Math.floor(i / wh)]]); } });
     rep.on('pv', (ev) => { const v = gv(ev); if (v) v.setPropVariant(v.grid.props.interact[ev.i]); });
     rep.on('pg', (ev) => { const v = gv(ev); if (v) v.setPropGone(v.grid.props.interact[ev.i]); });
@@ -587,7 +588,7 @@ export class Game {
     }
     for (let i = 0; i < G.doors.length; i++) {
       const d = G.doors[i];
-      if ((d.l | 0) !== pl || !near(d.x, d.z)) continue;
+      if (d.gone || (d.l | 0) !== pl || !near(d.x, d.z)) continue;
       consider({ k: 'door', idx: i }, d.x, yb + 0.2, d.z, 1.05, { y1: yb + 2.2, name: d.name, through: true, bias: 2 });
     }
     for (const fd of G.fdoors) {

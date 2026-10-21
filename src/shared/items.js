@@ -48,6 +48,7 @@ export const BEHAVIORS = [
   // A tank holds real gas (`it.mix`, see gases.js): `vol` litres, filled with `gas` atmospheres of each gas (tank_types.dm populate_gas). `cap` is how many seconds of breathing a full one gives (the game's pace:
   // the DM's tanks would last hours); it breathes that fraction of its gas a second whatever is in it.
   ['/obj/item/pipe_dispenser', { rpd: true }],
+  ['/obj/item/electronics/airlock', { airlockElectronics: true }],
   ['/obj/item/tank/internals/plasma/full', { plasmaTank: { vol: 70, gas: { tox: 10 } } }],
   ['/obj/item/tank/internals/plasma', { plasmaTank: { vol: 70, gas: { tox: 3 } } }],        // (not for breathing)
   ['/obj/item/tank/internals/anesthetic', { tank: { cap: 1500, vol: 70, gas: { o2: 3 * O2STANDARD, n2o: 3 * N2STANDARD } } }],

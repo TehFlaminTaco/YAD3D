@@ -120,6 +120,10 @@ export class Stacks {
         const [c, r] = tile;
         sim.addBuilt(m.grid, 'girder', c, r, GIRDER.NORMAL);
         this.moveOut(m, c, r);
+      } else if (R.build?.startsWith('asm:')) {
+        const [c, r] = tile;
+        sim.assemblies.build(m.grid, R.build.slice(4), c, r);
+        this.moveOut(m, c, r);
       }
       if (m.held && stackInfo(m.held.path)) this.open(m, m.held); else this.close(m);
     };

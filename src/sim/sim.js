@@ -36,6 +36,8 @@ import { Dispensers } from './dispensers.js';
 import { Anchoring } from './anchoring.js';
 import { PipeFittings } from './pipefit.js';
 import { PipeKit } from './pipekit.js';
+import { Airlocks } from './airlocks.js';
+import { Assemblies } from './assemblies.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -124,6 +126,8 @@ export class Sim {
     this.anchoring = new Anchoring(this);
     this.pipefit = new PipeFittings(this);
     this.pipekit = new PipeKit(this);
+    this.airlocks = new Airlocks(this);
+    this.assemblies = new Assemblies(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 
@@ -445,10 +449,12 @@ export class Sim {
       pw: g.powersim.state(),
       lights: g.props.lights.filter((L) => L.status).map((L) => [L.idx, L.status]),                 // the fixtures that are not whole
       gone: g.props.interact.filter((it) => it.gone && it.kind !== 'closet').map((it) => it.idx),    // things that were blown up
-      pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv(), ...g.pipenet.pv()],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
+      pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv(), ...g.pipenet.pv(), ...this.assemblies.pv(g)],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
       pd: g.atmosdev.pd(),                                                                         // canisters broken open: no longer in the way
       ps: g.propLog,                                                                               // props made while the game runs
       pi: [...g.pipeLog].map(([s, v]) => [s, ...v]),                                               // pipes laid or taken up
+      pn: [...g.nameLog],                                                                          // props that were renamed
+      dg: [...g.doorGone],                                                                         // doors taken away
       pa: [...g.anchorLog],                                                                        // props bolted down or freed
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
@@ -584,20 +590,25 @@ export class Sim {
   // ------------------------------------------------------------------ doors
   updateDoors(dt) {
     const players = [...this.clients.values()].filter((c) => c.mob && !c.mob.dead).map((c) => c.mob);
+    const al = this.airlocks;
+    al.update(dt);
     for (const g of this.grids.values()) {
       for (const d of g.doors) {
+        if (d.gone) continue;
         if (d.state === 'closed') {
           for (const m of players) {
-            if (this.dist(m, d) < 1.8 && d.allows(m) && g.power.doorsWork(d)) { this.openDoor(d, m); break; }
+            if (this.dist(m, d) < 1.8 && d.allows(m) && al.hasPower(d) && !al.isCut(d, 'open')) { if (al.bump(d, m)) this.openDoor(d, m); break; }
           }
           continue;
         }
         const res = d.tick(dt);
         if (res) g.emit({ e: 'door', i: d.idx, st: res });
-        if (d.state === 'open' && res === 'open') d.holdUntil = this.time + 3.2;
-        if (d.state === 'open' && this.time > d.holdUntil) {
-          if (!g.power.doorsWork(d)) d.holdUntil = this.time + 1;
-          else if (!this.occupied(d)) this.closeDoor(d); else d.holdUntil = this.time + 0.8;
+        if (res === 'closed' && !al.state(d).safe) al.crush(d);
+        const hold = al.holdTime(d);
+        if (d.state === 'open' && res === 'open') d.holdUntil = this.time + (hold ?? 1e9);
+        if (d.state === 'open' && hold !== null && this.time > d.holdUntil) {
+          if (!al.hasPower(d)) d.holdUntil = this.time + 1;
+          else if (!al.state(d).safe || !this.occupied(d)) this.closeDoor(d); else d.holdUntil = this.time + 0.8;
         }
       }
     }
@@ -609,7 +620,8 @@ export class Sim {
   }
 
   openDoor(d, by, force = false) {
-    if (!force && (d.bolted || d.welded || !d.grid.power.doorsWork(d))) return false;
+    if (d.gone) return false;
+    if (!force && (d.bolted || d.welded || !this.airlocks.hasPower(d) || this.airlocks.isCut(d, 'open'))) return false;
     if (!d.open()) return false;
     d.grid.emit({ e: 'door', i: d.idx, st: 'opening' });
     this.sound('door_open', d, 0.9);
@@ -617,7 +629,7 @@ export class Sim {
   }
 
   closeDoor(d) {
-    if (!d.close()) return false;
+    if (d.gone || !d.close()) return false;
     d.grid.emit({ e: 'door', i: d.idx, st: 'closing' });
     this.sound('door_close', d, 0.9);
     return true;
@@ -824,6 +836,31 @@ export class Sim {
   }
 
   /** A prop is taken away (it stays in the lists, hidden: its index is never used again). Everyone is told. */
+  /** A prop has another name now (an airlock assembly that was wired): everyone is told, and whoever joins. */
+  renameProp(g, it, name) {
+    if (it.name === name) return;
+    it.name = name;
+    g.nameLog.set(it.idx, name);
+    g.emit({ e: 'pn', i: it.idx, n: name });
+  }
+
+  /** A door is put up (an airlock finished) from a level door record: returns the door. */
+  addDoor(g, spec) {
+    this.addProps(g, [spec]);
+    const d = g.doors[g.doors.length - 1];
+    g.atmos.tileChanged(d.c, d.r, d.l | 0);
+    return d;
+  }
+
+  /** A door is taken away (an airlock taken apart): its tile is open floor again, everyone is told. */
+  removeDoor(g, d) {
+    if (!g.removeDoor(d.idx)) return;
+    g.doorGone.add(d.idx);
+    g.emit({ e: 'door-', i: d.idx });
+    g.atmos.tileChanged(d.c, d.r, d.l | 0);
+    this.physics.touch(g);
+  }
+
   removeProp(g, it) {
     if (it.gone) return;
     it.gone = true;
