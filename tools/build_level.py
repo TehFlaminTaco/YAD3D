@@ -1357,6 +1357,9 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
         fr_icon = 'icons/obj/stock_parts.dmi'                                      # a computer frame, as it is put together (state 0 to 4), from each of its four sides: S, N, E, W
         if icon_ok(fr_icon, '0') and icon_ok(fr_icon, '4'):
             shared['frames'] = {'computer': [[spr.add([(fr_icon, str(st_), dd, None, None)]) for st_ in range(5)] for dd in (S, N, E, W)]}
+        can_icon = 'icons/obj/atmos.dmi'                                           # a canister frame, tier 0 to 3 (canister_frame.dm)
+        if icon_ok(can_icon, 'frame_0') and icon_ok(can_icon, 'frame_3'):
+            shared.setdefault('frames', {})['canister'] = [spr.add([(can_icon, 'frame_%d' % t_, S, None, None)]) for t_ in range(4)]
         fire_icon = 'icons/effects/fire.dmi'                                       # a fire on a tile (LINDA_fire.dm hotspot: 1 small, 2 bigger, 3 fills it): the frames of each
         if icon_ok(fire_icon, '1'):
             fdmi = sl.get_dmi(fire_icon)

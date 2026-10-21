@@ -233,10 +233,10 @@ npm run test:atmoscontrol # the atmospherics monitoring computers, tank controls
 npm run test:radiation # radiation waves from the supermatter, what they do, clothes against them, the Geiger counter (33 assertions)
 npm run test:temperature # gas at a temperature, rooms, pipes, body temperature in heat and cold (35 assertions)
 npm run test:fire     # plasma fire: the reaction, hotspots, what starts them, igniters and their switches (38 assertions)
-npm run test:supermatter # the supermatter crystal: gas, damage, warnings, countdown, delamination (60 assertions)
+npm run test:supermatter # the supermatter crystal: gas, damage, warnings, countdown, delamination (62 assertions)
 npm run test:thermo   # freezers, heaters, the heat-exchanging pipes and space heaters (66 assertions)
 npm run test:fixtures # light fixtures made from frames and taken apart (27 assertions)
-npm run test:frames   # computer frames, circuit boards, computers built and unscrewed (39 assertions)
+npm run test:frames   # computer and canister frames, circuit boards, computers built and unscrewed (48 assertions)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, the inventory HUD, bags,

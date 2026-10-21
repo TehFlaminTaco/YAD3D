@@ -6,7 +6,8 @@ import { initPhysics } from '../src/shared/physics.js';
 import { Sim } from '../src/sim/sim.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
 import { GAS_IDS, T0C } from '../src/shared/gases.js';
-import { attach } from '../src/sim/inventory.js';
+import { attach, serializeInv } from '../src/sim/inventory.js';
+import { LightField } from '../src/render/lighting.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = loadSimData(root);
@@ -285,6 +286,11 @@ section('what it looks like', () => {
   const meson = sim.newItem('/obj/item/clothing/glasses/meson');
   attach(sim, meson, { t: 'slot', mob: a, slot: 'glasses' });
   ok(sm.examine(a).length === 0, 'but not with mesons on');
+  ok(/meson/.test(serializeInv(a).worn.glasses.tg), 'the glasses tell the client they are meson goggles');
+  const lf = new LightField(w);
+  lf.clear([0.04, 0.04, 0.05]);
+  const lifted = lf.lifted([0.10, 0.27, 0.16]);
+  ok(lifted.g[0] === Math.fround(0.27) && lf.g[0] === Math.fround(0.04) && lifted.r.length === lf.r.length, 'through them the walls and floors are no darker than a dim green, and the real light is left alone for the sprites');
 });
 
 console.log(`${pass} passed, ${fail} failed`);

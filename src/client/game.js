@@ -239,6 +239,7 @@ export class Game {
     this.debugMenu.sync();
     this.stackwin.check();
     this.invIndex.clear();
+    this.view.setMesons(!!s.inv?.worn?.glasses?.tg?.includes('meson'));
     if (s.inv) {
       const walk = (it, where) => {
         if (!it) return;

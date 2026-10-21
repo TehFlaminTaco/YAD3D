@@ -57,6 +57,7 @@ export const RECIPES = {
     { title: 'metal rod', req: 1, res: 2, maxRes: 60, item: '/obj/item/stack/rods' },
     { title: 'wall girders', req: 2, time: 40, build: 'girder', onFloor: true, onePerTurf: true },
     { title: 'computer frame', req: 5, time: 25, build: 'frame:computer', onFloor: true, onePerTurf: true },
+    { title: 'canister frame', req: 5, time: 8, build: 'frame:canister', onFloor: true, onePerTurf: true },
     { title: 'light fixture frame', req: 2, res: 1, item: '/obj/item/wallframe/light_fixture' },
     { title: 'small light fixture frame', req: 1, res: 1, item: '/obj/item/wallframe/light_fixture/small' },
     { title: 'apc frame', req: 2, res: 1, item: '/obj/item/wallframe/apc' },

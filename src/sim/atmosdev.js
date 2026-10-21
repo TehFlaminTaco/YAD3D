@@ -557,6 +557,13 @@ export class AtmosDevices {
     grid.atmos.onMode = (a) => { for (const al of this.alarms) if (al.area === a) al.mode = grid.atmos.mode[a]; grid.pipenet?.applyMode(a, grid.atmos.mode[a]); };
   }
 
+  /** A canister made while the game runs (a canister frame finished): a prop of its own, and a machine on it. */
+  addCanister(it) {
+    const m = new Canister(this, it, '');
+    this.list.push(m); it.mach = m;
+    return m;
+  }
+
   update(dt) {
     this.acc += dt;
     while (this.acc >= PROCESS) { this.acc -= PROCESS; for (const m of this.list) if (!m.it.gone) m.process(); }

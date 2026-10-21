@@ -195,6 +195,41 @@ section('taking a computer apart', () => {
   void step;
 });
 
+section('canister frames', () => {
+  const R = RECIPES['/obj/item/stack/sheet/metal'].find((q) => q.title === 'canister frame');
+  ok(R && R.req === 5 && R.time === 8 && R.onFloor && R.onePerTurf, 'five sheets of metal make a canister frame, in under a second');
+  ok(DATA.level.frames.canister.length === 4, 'there are four tiers of frame to draw');
+  const { sim, A, g, a, step, msgs, hold, stand, click, prop, spot } = round();
+  const [c, r] = spot();
+  stand(c, r);
+  a.yaw = 0; a.pitch = 0;
+  const metal = hold('/obj/item/stack/sheet/metal', { amount: 12 });
+  const i = RECIPES['/obj/item/stack/sheet/metal'].indexOf(R);
+  sim.handle(A, { t: 'stack', op: 'make', item: metal.id, i, mult: 1 });
+  step(2);
+  const it = g.props.interact.find((q) => q.frame && q.frame.kind === 'canister');
+  ok(!!it && it.name === 'Tier 0 canister frame' && metal.amount === 7, 'a canister frame stands in front of her, and cost five sheets');
+  hold('/obj/item/stack/sheet/metal', { amount: 3 });
+  click(prop(it));
+  ok(msgs().includes('You need at least five sheets for that!') && it.frame.state === 0, 'it takes five more sheets of metal to make it tier 1');
+  const m5 = hold('/obj/item/stack/sheet/metal', { amount: 6 });
+  click(prop(it), 1.7);
+  ok(it.frame.state === 1 && it.name === 'Tier 1 canister frame' && m5.amount === 1, 'five more sheets make it a tier 1 frame');
+  hold('/obj/item/stack/sheet/plasteel', { amount: 6 });
+  click(prop(it), 1.7);
+  ok(it.frame.state === 1, 'plasteel does nothing yet (tier 2 canisters are not made)');
+  const n0 = g.atmosdev.list.length;
+  hold('/obj/item/screwdriver');
+  click(prop(it), 0.8);
+  const can = g.props.interact.find((q) => !q.gone && q.mach && q.name === 'Tier 1 canister' && q.c === it.c && q.r === it.r);
+  ok(it.gone && !!can && g.atmosdev.list.length === n0 + 1 && can.mach.mix.total() === 0 && !can.anc, 'a screwdriver finishes it: an empty tier 1 canister, loose');
+  ok(can.mach.examine()[0] === 'This canister is tier 1.', 'it is the canister of the game');
+  can.mach.valve = true; can.mach.release = 500;
+  can.mach.mix.g.o2 = 100;
+  step(1.2);
+  ok(can.mach.mix.total() < 100, 'and it works: it lets its gas out');
+});
+
 section('what the clients see', () => {
   const { sim, A, g, a, w, step, hold, stand, click, prop, spot } = round();
   const [c, r] = spot();

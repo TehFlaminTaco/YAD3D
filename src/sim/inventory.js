@@ -251,6 +251,7 @@ function tagsOf(it) {
   if (d.tool) t.push(d.tool);
   if (it.path.startsWith('/obj/item/stack/cable_coil')) t.push('coil');
   if (it.path.startsWith('/obj/item/wallframe')) t.push('frame');
+  if (it.path.startsWith('/obj/item/clothing/glasses/meson')) t.push('meson');
   if (d.heal) t.push('med');
   if (d.consume) t.push('food');
   if (d.spaceHelmet) t.push('helmet');

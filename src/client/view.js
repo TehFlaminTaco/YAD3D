@@ -39,7 +39,14 @@ export class WorldView {
     if (this.views.has(g.id)) return this.views.get(g.id);
     const v = new GridView(this.scene, this.assets, g, { ...this.opts, items: this.rep.items });
     this.views.set(g.id, v);
+    if (this.mesons) v.setMesons(true);
     return v;
+  }
+
+  /** Meson goggles on or off (what the self state says is in the glasses slot): every grid is seen that way. */
+  setMesons(on) {
+    this.mesons = !!on;
+    for (const v of this.views.values()) v.setMesons(on);
   }
 
   /** A grid has gone: its picture too (its items with it). */

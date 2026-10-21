@@ -120,6 +120,10 @@ export class Stacks {
         const [c, r] = tile;
         sim.addBuilt(m.grid, 'girder', c, r, GIRDER.NORMAL);
         this.moveOut(m, c, r);
+      } else if (R.build === 'frame:canister') {
+        const [c, r] = tile;
+        sim.frames.buildCanisterFrame(m.grid, c, r);
+        this.moveOut(m, c, r);
       } else if (R.build === 'frame:computer') {
         const [c, r] = tile, mc = Math.floor(m.x / TILE), mr = Math.floor(m.z / TILE), dc = c - mc, dr = r - mr;
         const forward = Math.abs(dr) >= Math.abs(dc) ? (dr < 0 ? N : S) : (dc > 0 ? E : W);          // (it faces you: its screen towards the one who built it)

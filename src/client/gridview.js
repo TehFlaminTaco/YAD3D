@@ -13,6 +13,7 @@ import { spriteMaterial } from '../render/materials.js';
 
 const SY = WALL_H / TILE;                       // doors are drawn taller than a 32px tile is wide
 const AMBIENT = [0.045, 0.045, 0.06];
+const MESON_LIGHT = [0.10, 0.27, 0.16];                    // the least light the walls and floors have through meson goggles: a dim green
 
 const MIRROR_VERT = /* glsl */ `
 varying vec2 vUv;
@@ -615,6 +616,13 @@ export class GridView {
   setPropGone(it) { if (it?.st && it.st.id !== undefined) this.stat.setAlpha(it.st.id, 0); }
 
   // ------------------------------------------------------------------ lighting
+  /** Meson goggles go on or come off: the walls and floors can be seen in the dark, or not. */
+  setMesons(on) {
+    if (!!this.mesons === !!on) return;
+    this.mesons = !!on;
+    this.rebuildLights();
+  }
+
   /** A fixture's glass is smashed, burnt out or taken out (or put back): its picture changes, and its lamp. */
   setLightStatus(L) {
     if (!L.st || L.st.id === undefined) return;
@@ -648,7 +656,7 @@ export class GridView {
       lf.addSource(L.x / TILE, L.z / TILE, col, L.radius, L.strength * (m.scale ?? 1) * this.lightScale, L.l | 0);
     }
     lf.finalize();
-    this.levelMesh.relight(lf);
+    this.levelMesh.relight(this.mesons ? lf.lifted(MESON_LIGHT) : lf);
     this.relightSprites();
     this.relightItems();
   }

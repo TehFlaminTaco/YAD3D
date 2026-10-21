@@ -39,6 +39,51 @@ export class Frames {
     if ((it.pv | 0) !== state) { it.pv = state; it.grid.emit({ e: 'pv', i: it.idx, v: state }); }
   }
 
+  /** A canister frame (canister_frame.dm) a stack recipe puts down: tier 0. */
+  buildCanisterFrame(g, c, r, l = 0) {
+    const sv = this.level.frames?.canister;
+    if (!sv) return null;
+    const spec = { k: 'sprite', x: c, y: r, l, d: S, n: 'Tier 0 canister frame', p: 'structure/canister_frame/machine/frame_tier_0', s: sv[0], sv, den: 1, anc: 0, bb: 1 };
+    const [it] = this.sim.addProps(g, [spec]);
+    it.frame = { kind: 'canister', state: 0 };
+    return it;
+  }
+
+  /** A canister frame is clicked with something: five more sheets of metal make it tier 1, a screwdriver then makes the canister. */
+  clickCanisterFrame(m, it, held) {
+    const sim = this.sim, g = it.grid, f = it.frame, tool = held.def.tool;
+    const th = { grid: g, x: it.x, z: it.z, l: it.l | 0, reach: 3.6, alive: () => !it.gone, state: () => f.state };
+    if (f.state === 0 && held.path === '/obj/item/stack/sheet/metal') {
+      if ((held.amount ?? 1) < 5) { sim.tell(m, 'warning', 'You need at least five sheets for that!'); return true; }
+      toolJob(sim, m, th, held, 0, {
+        label: 'upgrading the canister frame', ds: 15, sfx: null, start: null,
+        done: () => {
+          if (it.gone || f.state !== 0 || (held.amount ?? 1) < 5) return;
+          sim.stacks.use(m, held, 5);
+          sim.renameProp(g, it, 'Tier 1 canister frame');
+          this.set(it, 1);
+        },
+      });
+      return true;
+    }
+    if (f.state === 1 && tool === 'screwdriver') {
+      toolJob(sim, m, th, held, 1, {
+        label: 'finishing the canister', ds: 6, sfx: 'screwdriver', start: null,
+        done: () => {
+          if (it.gone || f.state !== 1) return;
+          const tpl = g.props.interact.find((q) => q.spec && /^machinery\/portable_atmospherics\/canister$/.test(q.spec.p));
+          if (!tpl) return;
+          const c = it.c, r = it.r, l = it.l | 0;
+          sim.removeProp(g, it);
+          const [can] = sim.addProps(g, [{ ...tpl.spec, x: c, y: r, l, n: 'Tier 1 canister', anc: 0 }]);
+          if (can) g.atmosdev.addCanister(can);
+        },
+      });
+      return true;
+    }
+    return false;
+  }
+
   /** The frames that are not in their first state (a joiner is told which picture, see Sim.gridState). */
   pv(g) { return g.props.interact.filter((it) => it.frame && !it.gone && it.frame.state).map((it) => [it.idx, it.frame.state]); }
 
@@ -62,6 +107,7 @@ export class Frames {
   /** A click on a computer frame (clickProp). Returns true if it was ours. */
   click(m, it, held) {
     if (!it.frame || it.gone || !held) return false;
+    if (it.frame.kind === 'canister') return this.clickCanisterFrame(m, it, held);
     const sim = this.sim, g = it.grid, f = it.frame, tool = held.def.tool;
     const at = { grid: g, x: it.x, z: it.z, l: it.l | 0 };
     const state = () => `${f.state}${it.anc ? 'a' : ''}${f.circuit ? 'c' : ''}`;
@@ -193,6 +239,7 @@ export class Frames {
 
   examine(it) {
     const f = it.frame;
+    if (f.kind === 'canister') return [`This is a ${it.name}.`, 'A frame used to build different kinds of canisters.'];
     return [`This is a computer frame.`, f.state >= 1 && !f.circuit ? 'There is no circuit board in it.' : f.circuit ? `The ${f.circuit.name} is in it.` : ''].filter(Boolean);
   }
 }

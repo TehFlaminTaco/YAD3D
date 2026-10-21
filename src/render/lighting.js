@@ -22,6 +22,15 @@ export class LightField {
     this.b.fill(ambient[2]);
   }
 
+  /** The light as it looks through meson goggles (SEE_TURFS, the lighting plane mostly visible): the same, but nowhere is darker than `min` (a colour). A copy: the sprites keep the real light. */
+  lifted(min) {
+    const o = Object.create(this);
+    o.r = this.r.map((v) => Math.max(v, min[0]));
+    o.g = this.g.map((v) => Math.max(v, min[1]));
+    o.b = this.b.map((v) => Math.max(v, min[2]));
+    return o;
+  }
+
   /** Add a point light at tile-space position (cx, cz) (tile units, centre of tile = c + 0.5) on deck `l`. */
   addSource(cx, cz, color, radius, strength = 1, l = 0) {
     const w = this.world;
