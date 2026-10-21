@@ -137,6 +137,7 @@ export class PowerSim {
 
   // ------------------------------------------------------------------ the tick
   update(dt) {
+    for (const s of this.machines.supermatter) s.update(dt);                     // (its final countdown counts seconds)
     if (!this.machines.apc.length && !this.machines.smes.length) return;
     this.acc += dt;
     let n = 0;

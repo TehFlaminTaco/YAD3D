@@ -196,6 +196,7 @@ export class Round {
     const hull = sim.station.world, power = sim.station.powersim.status();
     lines.push(`  Hull breaches: ${hull.ventTiles().length} open, ${d.stats.patched} repaired`);
     lines.push(`  Power: ${power === 'normal' ? 'main grid online' : power === 'degraded' ? 'some rooms on emergency cells' : 'offline'}`);
+    if (d.stats.delaminated) lines.push('  Supermatter: delaminated');
     lines.push(`  Space carp killed: ${d.stats.carpKilled}`);
     lines.push('');
     lines.push(`Crew: ${crew.length} total, ${escaped.length} escaped, ${left.length} stranded on the station, ${dead.length} dead`);

@@ -43,7 +43,7 @@ export class Director {
     this.legTimer = 0;
     this.level = 'green';
     this.news = ['Station News: A meteor shower is forecast for this sector. Crew are advised to stay near airtight doors.'];
-    this.stats = { patched: 0, carpKilled: 0 };
+    this.stats = { patched: 0, carpKilled: 0, delaminated: 0 };
     this.windows = null;
     this.evacGrid = null;             // the emergency shuttle, from the moment it appears (flying in) until it is gone: a grid of its own
     this.approach = null;             // the way out from the station along which it comes and goes: a unit vector in the map
@@ -85,12 +85,12 @@ export class Director {
     if (LEVEL_TEXT[l]) this.sim.chat.announce(LEVEL_TEXT[l][0], LEVEL_TEXT[l][1]);
   }
 
-  autoRadio(channel, text, who = 'Automated Announcement System') {
+  autoRadio(channel, text, who = 'Automated Announcement System', verb = 'announces') {
     const sim = this.sim;
     for (const c of sim.clients.values()) {
       const m = c.mob;
       if (c.state !== 'ghost' && (!m || m.dead || !sim.chat.channelsOf(m).includes(channel))) continue;
-      c.outbox.push({ e: 'msg', k: 'radio', ch: channel, name: who, text, verb: 'announces', chname: channel === 'common' ? 'Common' : channel[0].toUpperCase() + channel.slice(1), color: '#2681a5' });
+      c.outbox.push({ e: 'msg', k: 'radio', ch: channel, name: who, text, verb, chname: channel === 'common' ? 'Common' : channel[0].toUpperCase() + channel.slice(1), color: '#2681a5' });
     }
   }
 

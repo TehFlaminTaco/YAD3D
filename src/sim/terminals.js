@@ -260,17 +260,18 @@ export class Terminals {
     return { ...inner, buttons: [...(inner.buttons || []), menu] };
   }
 
-  /** Supermatter monitoring (sm_monitor.dm), with what this game's crystal has: its power, the air of its chamber, the emitters and the collectors. (No integrity or temperature yet.) */
+  /** Supermatter monitoring (sm_monitor.dm): the crystal's integrity, its relative EER (the power), and the temperature, pressure and make-up of the air round it; and the emitters and the collectors. */
   smMonitor(g) {
     const sm = g.powersim.machines.supermatter[0];
     if (!sm) return { title: 'Supermatter Monitoring', html: '<span class="h">SUPERMATTER MONITORING</span>\n\n<span class="b">No supermatter crystals detected.</span>', buttons: [] };
     const gas = g.atmos.gasesAt(sm.tile % g.world.W, Math.floor(sm.tile / g.world.W), sm.rec.l | 0);
+    const st = sm.status, word = ['inactive', 'normal', 'notify', 'warning', 'danger', 'emergency', 'delaminating'][st], cls = st <= 1 ? 'c' : st <= 3 ? 'w' : 'b';
     const tot = GAS_IDS.reduce((s, id) => s + (gas[id] || 0), 0);
     const rows = GAS_IDS.filter((id) => (gas[id] || 0) > 0.0005 * tot).map((id) => `  ${esc(GAS_NAME[id]).padEnd(16)} ${((gas[id] || 0) / tot * 100).toFixed(1).padStart(6)} %`).join('\n');
     const emitters = g.powersim.machines.emitter, collectors = g.powersim.machines.collector;
     return {
       title: 'Supermatter Monitoring', live: true,
-      html: `<span class="h">SUPERMATTER MONITORING</span>\n\nCrystal            <span class="c">stable</span>\nRelative EER       ${displayPower(sm.power).padStart(10)}\nChamber pressure   ${gas.pressure.toFixed(1).padStart(8)} kPa\n${rows || '  (vacuum)'}\n\nEmitters           ${emitters.filter((e) => e.active).length}/${emitters.length} firing\nCollectors         ${collectors.filter((k) => k.active).length}/${collectors.length} on`,
+      html: `<span class="h">SUPERMATTER MONITORING</span>\n\nStatus             <span class="${cls}">${word}</span>\nCore integrity     ${sm.integrity.toFixed(2).padStart(8)} %\nRelative EER       ${sm.power.toFixed(2).padStart(8)} MeV/cm3\nTemperature        ${gas.temperature.toFixed(2).padStart(8)} K\nPressure           ${gas.pressure.toFixed(2).padStart(8)} kPa\n${rows || '  (vacuum)'}\n\nEmitters           ${emitters.filter((e) => e.active).length}/${emitters.length} firing\nCollectors         ${collectors.filter((k) => k.active).length}/${collectors.length} on`,
       buttons: [],
     };
   }

@@ -8,6 +8,7 @@ import { Replica } from '../src/client/state.js';
 import { SIM_DT, TILE, KIND } from '../src/shared/config.js';
 import { attach, detach, allItems } from '../src/sim/inventory.js';
 import { reflectorsOf } from '../src/sim/power/engine.js';
+import { GAS_IDS } from '../src/shared/gases.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = loadSimData(root);
@@ -46,6 +47,13 @@ function round() {
   return { sim, A, a, g, ps, w, M, inbox, step, events, msgs, hold, empty, clickAt, click, standBy, main };
 }
 
+/** The chamber is a perfectly cooled one: the air of the crystal's tile is put back to room air (these tests tick the power without the air or the pipes, which would carry the heat off). */
+const fresh = (ps) => {
+  const sm = ps.machines.supermatter[0], a = ps.grid.atmos, i = sm.tile;
+  for (const k of a.arrs.keys()) a.arrs[k][i] = 0;
+  a.arrs[GAS_IDS.indexOf('o2')][i] = 21.3; a.arrs[GAS_IDS.indexOf('n2')][i] = 80;
+  a.temp[i] = 293.15;
+};
 const welded = (M) => M.emitter.filter((e) => e.welded);
 const loose = (M) => M.emitter.filter((e) => !e.anchored);
 
@@ -198,11 +206,11 @@ section('the supermatter crystal', () => {
   sm.power = 1500;
   sim.rand = () => 0.99;
   const seen = [];
-  for (let k = 0; k < 30; k++) { sm.process(); seen.push(sm.power); }
+  for (let k = 0; k < 30; k++) { fresh(M.supermatter[0].ps); sm.process(); seen.push(sm.power); }
   ok(seen[0] < 1500 && seen.every((v, i) => i === 0 || v < seen[i - 1]) && sm.power > 600, `it decays, slowly (1500 to ${sm.power.toFixed(0)} in a minute)`);
   sm.power = 4000;
   const p0 = sm.power;
-  sm.process();
+  fresh(sm.ps); sm.process();
   ok(p0 - sm.power > 150, 'the more power, the faster it goes');
   // a held thing is dust
   const driver = hold('/obj/item/screwdriver');
@@ -320,7 +328,7 @@ section('starting the engine, by hand', () => {
   const sm = M.supermatter[0];
   const out = [];
   for (let t = 0; t < 900; t += 2) {
-    sim.time += 2; ps.tick(true);
+    sim.time += 2; fresh(ps); ps.tick(true);
     if (t % 150 === 148) out.push([Math.round(sm.power), Math.round(M.collector.reduce((n, c) => n + c.out, 0))]);
   }
   ok(sm.power > 1000 && sm.power < 2200, `the crystal settles at a power of a thousand or two (${out.map((o) => o[0]).join(', ')})`);
@@ -329,7 +337,7 @@ section('starting the engine, by hand', () => {
   ok(main().viewavail > main().viewload, 'the station has spare power');
   // the engine goes out when the emitters do
   for (const e of welded(M)) { e.active = false; }
-  for (let t = 0; t < 1200; t += 2) { sim.time += 2; ps.tick(true); }
+  for (let t = 0; t < 1200; t += 2) { sim.time += 2; fresh(ps); ps.tick(true); }
   ok(sm.power < 600 && M.collector.reduce((n, c) => n + c.out, 0) < total / 3, `with the emitters off, it dies away (power ${Math.round(sm.power)}, ${Math.round(M.collector.reduce((n, c) => n + c.out, 0) / 1000)} kW)`);
   void step; void msgs; void hold;
 });

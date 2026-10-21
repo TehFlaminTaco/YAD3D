@@ -117,7 +117,7 @@ section('the engineering console', () => {
   press('Main menu'); press('Alarm Monitoring');
   ok(term().title === 'Station Alerts', 'the alarms');
   press('Main menu'); press('Supermatter Monitoring');
-  ok(term().title === 'Supermatter Monitoring' && /Chamber pressure/.test(term().html) && /Emitters\s+\d\/\d firing/.test(term().html) && /Collectors\s+\d\/\d on/.test(term().html), 'and the supermatter: the chamber, the emitters, the collectors');
+  ok(term().title === 'Supermatter Monitoring' && /Core integrity\s+100\.00 %/.test(term().html) && /Pressure\s+\d+\.\d\d kPa/.test(term().html) && /Emitters\s+\d\/\d firing/.test(term().html) && /Collectors\s+\d\/\d on/.test(term().html), 'and the supermatter: its integrity, the air of its chamber, the emitters, the collectors');
   const sm = g.powersim.machines.supermatter[0];
   sm.power = 5000; step(1.1);
   ok(/Relative EER\s+\S+/.test(term().html), 'the power of the crystal');

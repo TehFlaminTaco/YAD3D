@@ -852,16 +852,16 @@ export class Actions {
   }
 
   examineProp(m, it) {
-    this.sim.tell(m, 'info', this.propText(it).filter(Boolean).join(' '));
+    this.sim.tell(m, 'info', this.propText(it, m).filter(Boolean).join(' '));
   }
 
-  propText(it) {
+  propText(it, m) {
     if (it.asm) return this.sim.assemblies.examine(it);
     const d = this.sim.level.descs[it.path] || this.sim.level.descs[(it.path || '').replace(/^\//, '')];
     const out = [`This is ${a(it.name || 'thing')}.`, d?.[1] || ''];
     if (it.kind === 'closet') out.push(...this.sim.closets.examineLines(it));
     out.push(...this.sim.tanks.examine(it));
-    if (it.mach?.examine) out.push(...it.mach.examine());
+    if (it.mach?.examine) out.push(...it.mach.examine(m));
     return out.filter(Boolean);
   }
 }

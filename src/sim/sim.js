@@ -845,12 +845,13 @@ export class Sim {
    * are cut, lamps smashed, and everyone within earshot feels it.
    */
   explosion(g, x, z, o = {}) {
-    const heavy = (o.heavy ?? 0) * TILE, light = (o.light ?? 0) * TILE, at = { grid: g, x, z, l: o.l | 0 };
+    const dev = (o.dev ?? 0) * TILE, heavy = (o.heavy ?? 0) * TILE, light = (o.light ?? 0) * TILE, at = { grid: g, x, z, l: o.l | 0 };
     this.sound('explosion', at, 1);
     this.shake(at, 0.8, 60);
     for (const m of this.mobs.values()) {
       if (m.dead || m.grid !== g) continue;
       const d = Math.hypot(m.x - x, m.z - z);
+      if (d <= dev) { this.hurt(m, 500, 'brute', 'explosion'); continue; }                  // (devastation: nothing is left of them)
       if (d <= heavy) { this.hurt(m, 60 * (1 - d / (heavy + 0.01) * 0.4), 'brute', 'explosion'); this.hurt(m, 25, 'burn', 'explosion'); m.stunned = Math.max(m.stunned, 3); }
       else if (d <= light) this.hurt(m, 30 * (1 - (d - heavy) / (light - heavy + 0.01)), 'brute', 'explosion');
     }
@@ -858,6 +859,19 @@ export class Sim {
     g.powersim.blast(c, r, Math.ceil(heavy / TILE) + 1, o.l | 0);
     g.atmosdev.blast(c, r, o.heavy ?? 0, o.light ?? 0, o.l | 0);
     this.lights.blast(g, c, r, Math.ceil(light / TILE));
+    if (o.dev) this.devastate(g, c, r, o.dev, o.heavy ?? 0);
+  }
+
+  /** What a big explosion does to the hull: walls within `dev` tiles are scraped down to plating (ScrapeAway), windows within `heavy` tiles smash. */
+  devastate(g, c0, r0, dev, heavy) {
+    const w = g.world, reach = Math.ceil(Math.max(dev, heavy));
+    for (let dr = -reach; dr <= reach; dr++) for (let dc = -reach; dc <= reach; dc++) {
+      const c = c0 + dc, r = r0 + dr, d = Math.hypot(dc, dr);
+      if (c < 0 || r < 0 || c >= w.W || r >= w.H) continue;
+      const i = w.idx(c, r);
+      if (d <= dev && w.wallKey(i)) { w.dismantleWall(c, r, w.level.terrain.plating); this.tileChanged(g, c, r); }
+      else if (d <= heavy && w.glass[i]) this.breachTile(g, c, r, 'explosion');
+    }
   }
 
   /**
