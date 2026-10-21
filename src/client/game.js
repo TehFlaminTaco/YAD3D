@@ -606,8 +606,8 @@ export class Game {
       if (!pl && near(bx, bz)) consider({ k: 'built', id: b.id }, bx, 0.1, bz, 0.95, { y1: 1.7, name: girderLook(b.st).name });
     }
     for (const L of G.props.lights) {                  // the lamps (up on the ceiling): to put a tube in or take one out
-      if ((L.l | 0) !== pl || !near(L.x, L.z)) continue;
-      consider({ k: 'light', idx: L.idx }, L.x, yb + 2.2, L.z, 0.6, { y1: yb + 2.55, name: 'light fixture', bias: 1.8 });
+      if ((L.l | 0) !== pl || !near(L.x, L.z) || L.status === 6) continue;
+      consider({ k: 'light', idx: L.idx }, L.x, yb + 2.2, L.z, 0.6, { y1: yb + 2.55, name: L.status >= 4 ? 'light fixture frame' : 'light fixture', bias: 1.8 });
     }
     for (const m of rep.mobs.values()) {
       if (m.id === rep.you?.id || m.g !== gid || (m.l | 0) !== pl || !near(m.x, m.z)) continue;

@@ -2,11 +2,18 @@ import { TILE, REACH } from '../shared/config.js';
 import { LIGHT_WATTS } from '../shared/powerdata.js';
 import { CH } from '../shared/power.js';
 import { attach, place, consume } from './inventory.js';
+import { toolJob } from './tooljob.js';
 
-/** A fixture's state (lighting.dm LIGHT_*): the glass in it, or not. */
-export const LIGHT = { OK: 0, EMPTY: 1, BROKEN: 2, BURNED: 3 };
+/**
+ * A fixture's state (lighting.dm LIGHT_*): the glass in it, or not. The last three are a light fixture frame still being made (`light_construct` stage 1, an empty frame, and stage 2,
+ * with its wire) and one that was taken down altogether.
+ */
+export const LIGHT = { OK: 0, EMPTY: 1, BROKEN: 2, BURNED: 3, FRAME1: 4, FRAME2: 5, GONE: 6 };
 
 const isLight = (it) => !!it && it.path.startsWith('/obj/item/light/');
+const isFrame = (it) => !!it && it.path.startsWith('/obj/item/wallframe/light_fixture');
+const isCoil = (it) => !!it && it.path.startsWith('/obj/item/stack/cable_coil');
+const the = (L) => `the ${L.status >= LIGHT.FRAME1 ? 'light fixture frame' : 'light fixture'}`;
 const fitOf = (it) => (it.path.startsWith('/obj/item/light/bulb') ? 'bulb' : 'tube');
 
 /**
@@ -23,7 +30,91 @@ export class Lights {
   /** The thing a click names. */
   thing(g, t) {
     const L = g.props.lights[t.idx];
-    return L ? { k: 'light', L, grid: g, l: L.l, x: L.x, z: L.z } : null;
+    return L && L.status !== LIGHT.GONE ? { k: 'light', L, grid: g, l: L.l, x: L.x, z: L.z } : null;
+  }
+
+  /** A new fixture at tile (c, r), in `status`: it looks like the nearest of its kind and is told to everyone (and to whoever joins). Returns it. */
+  add(g, kind, c, r, l, status) {
+    let tpl = null, best = 1e9;
+    for (const L of g.props.lights) {
+      if (L.kind !== kind || !L.spec) continue;
+      const d = Math.hypot(L.c - c, L.r - r);
+      if (d < best) { tpl = L; best = d; }
+    }
+    if (!tpl) return null;
+    this.sim.addProps(g, [{ ...tpl.spec, x: c, y: r, l }]);
+    const L = g.props.lights[g.props.lights.length - 1];
+    L.status = status;                                                // (nothing is drawn from the room until there is a lamp in it: no load to move)
+    g.emit({ e: 'light', i: L.idx, st: status });
+    return L;
+  }
+
+  /** A fixture frame in the hand goes on the wall that was clicked, standing in front of it (wallframe.dm try_build / attach); the fixture is the lamp up on the ceiling of the tile you stand on. */
+  placeFrame(m, held, t) {
+    if (!isFrame(held)) return false;
+    const sim = this.sim, g = t.grid, w = g.world;
+    const mc = Math.floor(m.x / TILE), mr = Math.floor(m.z / TILE), l = m.l | 0;
+    if (Math.abs(mc - t.c) + Math.abs(mr - t.r) !== 1) { sim.tell(m, 'warning', `You cannot place ${held.name.startsWith('small') ? 'the small light fixture frame' : 'the light fixture frame'} on this spot!`); return true; }
+    if (w.kind[w.idx(mc, mr, l)] !== 1 || w.solid[w.idx(mc, mr, l)]) { sim.tell(m, 'warning', `You cannot place the ${held.name} on this spot!`); return true; }
+    if (g.props.lights.some((L) => L.status !== LIGHT.GONE && L.c === mc && L.r === mr && (L.l | 0) === l)) { sim.tell(m, 'warning', "There's already an item on this wall!"); return true; }
+    const kind = held.path.endsWith('/small') ? 'bulb' : 'tube';
+    if (!this.add(g, kind, mc, mr, l, LIGHT.FRAME1)) { sim.tell(m, 'warning', `You cannot place the ${held.name} on this spot!`); return true; }
+    const L = g.props.lights[g.props.lights.length - 1];
+    consume(sim, held);
+    sim.sound('terminal_key', { grid: g, x: L.x, z: L.z, l }, 0.7);
+    sim.chat.visible(m, `${m.name} attaches the ${held.name} to the wall.`, 'notice', 10, m);
+    sim.tell(m, 'notice', `You attach the ${held.name} to the wall.`);
+    return true;
+  }
+
+  /** The frame stages of light_construct.attackby, and the casing of an empty fixture being opened. Returns false if the click is not one of those. */
+  clickFrame(m, g, L, held) {
+    const sim = this.sim, fit = this.fitting(L), name = fit === 'bulb' ? 'small light fixture frame' : 'light fixture frame';
+    const at = { grid: g, x: L.x, z: L.z, l: L.l | 0 }, tool = held?.def.tool;
+    const say = (text, kind = 'notice') => sim.tell(m, kind, text);
+    const others = (text) => sim.chat.visible(m, text, 'notice', 10, m);
+    const th = { grid: g, x: L.x, z: L.z, l: L.l | 0, reach: 4.2, alive: () => L.status >= LIGHT.FRAME1 && L.status < LIGHT.GONE, state: () => L.status };
+    if (L.status === LIGHT.FRAME1) {
+      if (tool === 'wrench') {                                                      // deconstructing it: two sheets of metal (one for a small one)
+        say(`You begin deconstructing the ${name}...`);
+        toolJob(sim, m, th, held, L.status, {
+          label: `deconstructing the ${name}`, ds: 30, sfx: 'wrench', start: null,
+          done: () => {
+            others(`${m.name} deconstructs the ${name}.`); say(`You deconstruct the ${name}.`);
+            sim.stacks.spawn(g, '/obj/item/stack/sheet/metal', fit === 'bulb' ? 1 : 2, L.x, L.z);
+            sim.sound('pickup', at, 0.75);
+            this.setStatus(g, L, LIGHT.GONE);
+          },
+        });
+        return true;
+      }
+      if (isCoil(held)) {
+        if ((held.amount ?? 1) < 1) { say(`You need one length of cable to wire the ${name}!`, 'warning'); return true; }
+        sim.floors.use(m, held, 1);
+        others(`${m.name} adds wires to the ${name}.`); say(`You add wires to the ${name}.`);
+        this.setStatus(g, L, LIGHT.FRAME2);
+        return true;
+      }
+      return false;
+    }
+    if (L.status === LIGHT.FRAME2) {
+      if (tool === 'wrench') { say('You have to remove the wires first!', 'warning'); return true; }
+      if (tool === 'wirecutters') {
+        this.setStatus(g, L, LIGHT.FRAME1);
+        sim.stacks.spawn(g, '/obj/item/stack/cable_coil', 1, L.x, L.z);
+        others(`${m.name} removes the wiring from the ${name}.`); say(`You remove the wiring from the ${name}.`);
+        sim.sound('wirecutter', at, 0.9);
+        return true;
+      }
+      if (tool === 'screwdriver') {                                                 // closing the casing: it is a fixture now, with nothing in it
+        others(`${m.name} closes the ${name}'s casing.`); say(`You close the ${name}'s casing.`);
+        sim.sound('screwdriver', at, 0.75);
+        this.setStatus(g, L, LIGHT.EMPTY);
+        return true;
+      }
+      return false;
+    }
+    return false;
   }
 
   /** A fixture gets a new state: the room's load, the pictures and the lamps change. */
@@ -77,6 +168,14 @@ export class Lights {
 
   click(m, t, held) {
     const sim = this.sim, g = t.grid, L = t.L, fit = this.fitting(L);
+    if (L.status >= LIGHT.FRAME1) return this.clickFrame(m, g, L, held);
+    if (L.status === LIGHT.EMPTY && held?.def.tool === 'screwdriver') {              // attackby on an empty fixture: it comes apart as far as its wired frame
+      sim.sound('screwdriver', { grid: g, x: L.x, z: L.z, l: L.l | 0 }, 0.75);
+      sim.chat.visible(m, `${m.name} opens the light fixture's casing.`, 'notice', 10, m);
+      sim.tell(m, 'notice', "You open the light fixture's casing.");
+      this.setStatus(g, L, LIGHT.FRAME2);
+      return true;
+    }
     if (isLight(held)) {                                              // attackby: put it in
       if (L.status === LIGHT.OK) { sim.tell(m, 'warning', `There is a ${fit} already inserted!`); return true; }
       if (fitOf(held) !== fit) { sim.tell(m, 'warning', `This type of light requires a ${fit}!`); return true; }
@@ -123,7 +222,8 @@ export class Lights {
   }
 
   examine(g, L) {
-    const fit = this.fitting(L), out = [`This is a light fixture.`];
+    const fit = this.fitting(L), out = [fit === 'bulb' ? 'This is a small light fixture.' : 'This is a light fixture.'];
+    if (L.status >= LIGHT.FRAME1) return [fit === 'bulb' ? 'This is a small light fixture frame.' : 'This is a light fixture frame.', 'A light fixture under construction.', L.status === LIGHT.FRAME1 ? "It's an empty frame." : "It's wired.", 'The casing has no power cell for backup power.'];
     switch (L.status) {
       case LIGHT.OK: out.push(`It is turned ${this.lit(g, L) ? 'on' : 'off'}.`); break;
       case LIGHT.EMPTY: out.push(`The ${fit} has been removed.`); break;

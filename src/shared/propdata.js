@@ -183,7 +183,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const L = {
           idx: out.lights.length, c, r, l, x: cx + dx, z: cz + dz, color: hexToRgb(p.c), radius: p.lt === 'bulb' ? 4.5 : p.lt === 'floor' ? 3 : 7.5,
           strength: p.lt === 'bulb' ? 0.85 : 1.0, on: true, area: world.areaIdx[i], kind: p.lt, st, grid,
-          ss: p.ss, status: 0, y: yb + WALL_H - 0.02,                      // status (lighting.dm): 0 ok, 1 empty, 2 broken, 3 burnt out; `ss` are the pictures of the last three
+          ss: p.ss, spec: p, status: 0, y: yb + WALL_H - 0.02,                      // status (lighting.dm): 0 ok, 1 empty, 2 broken, 3 burnt out; `ss` are the pictures of the last three
         };
         out.lights.push(L); out.added.lights.push(L);
         break;

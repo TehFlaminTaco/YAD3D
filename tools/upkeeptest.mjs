@@ -111,7 +111,7 @@ section('the boxes of lights', () => {
   const boxes = [...sim.floor.values()].filter((r) => r.item.path.startsWith('/obj/item/storage/box/lights'));
   const stocked = [...g.props.items].length;
   ok(boxes.length >= 3 && boxes.every((r) => r.item.contents.length > 0), `the replacement lights on the map are full (${boxes.length} boxes of ${stocked} things)`);
-  ok(g.props.lights.every((L) => L.ss && L.ss.length === 3 && L.status === 0), 'every fixture starts whole, and has its three other pictures');
+  ok(g.props.lights.every((L) => L.ss && L.ss.length === 5 && L.status === 0), 'every fixture starts whole, and has its three other pictures and the two of its frame');
 });
 
 section('blasts smash lamps', () => {

@@ -216,7 +216,7 @@ export class Actions {
       case 'breach': return this.clickBreachTile(m, t, held);
       case 'window': case 'pane': if (sim.windows.click(m, t, held)) return; return this.clickAir(m, held);
       case 'floor': if (held?.def.tool === 'wrench' && sim.pipefit.takeUp(m, t, held)) return; if (sim.floors.click(m, t, held)) return; return this.clickAir(m, held);
-      case 'wall': if (mountApcFrame(t.grid, m, t, held) || sim.walls.clickWall(m, t, held)) return; return this.clickAir(m, held);
+      case 'wall': if (mountApcFrame(t.grid, m, t, held) || sim.lights.placeFrame(m, held, t) || sim.walls.clickWall(m, t, held)) return; return this.clickAir(m, held);
       case 'built': if (sim.walls.clickGirder(m, t, held)) return; return this.clickAir(m, held);
       case 'light': if (sim.lights.click(m, t, held)) return; return this.clickAir(m, held);
       default: return;

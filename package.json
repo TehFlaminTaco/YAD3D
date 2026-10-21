@@ -30,6 +30,7 @@
     "test:fire": "node tools/firetest.mjs",
     "test:supermatter": "node tools/smtest.mjs",
     "test:thermo": "node tools/thermotest.mjs",
+    "test:fixtures": "node tools/fixturetest.mjs",
     "test:soak": "node tools/simtest.mjs 12 --player",
     "test:ui": "node tools/uitest.mjs",
     "test:net": "node tools/nettest.mjs"

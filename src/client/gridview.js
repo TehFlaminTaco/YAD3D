@@ -618,7 +618,9 @@ export class GridView {
   /** A fixture's glass is smashed, burnt out or taken out (or put back): its picture changes, and its lamp. */
   setLightStatus(L) {
     if (!L.st || L.st.id === undefined) return;
-    const sprite = L.status && L.ss ? L.ss[L.status === 1 ? 2 : L.status === 2 ? 0 : 1] : L.st.rect;        // (ss: broken, burnt, empty)
+    if (L.status === 6) { this.stat.setAlpha(L.st.id, 0); this.rebuildLights(); return; }                          // (taken down altogether)
+    this.stat.setAlpha(L.st.id, 1);
+    const sprite = L.status && L.ss ? L.ss[[0, 2, 0, 1, 3, 4][L.status]] : L.st.rect;        // (ss: broken, burnt, empty, frame 1, frame 2)
     const rc = this.rects[sprite];
     if (!rc) return;
     this.stat.setRect(L.st.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, (rc.oy + rc.h / 2 - rc.fh / 2) * PX);

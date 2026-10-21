@@ -359,6 +359,8 @@ GAME_ITEMS = [
     # light fixtures that break, and what puts them right (lighting.dm)
     '/obj/item/light/tube', '/obj/item/light/bulb', '/obj/item/light/tube/broken', '/obj/item/light/bulb/broken',
     '/obj/item/storage/box/lights/mixed', '/obj/item/storage/box/lights/tubes', '/obj/item/storage/box/lights/bulbs',
+    # a light fixture put up from its frame (lighting.dm light_construct): the frames a sheet of metal makes
+    '/obj/item/wallframe/light_fixture', '/obj/item/wallframe/light_fixture/small',
     # an APC taken apart and put together again (apc.dm): the frame it hangs on, the board in it, the cells it holds
     '/obj/item/wallframe/apc', '/obj/item/electronics/apc', '/obj/item/stock_parts/cell/upgraded', '/obj/item/stock_parts/cell/upgraded/plus',
     '/obj/item/stock_parts/cell/high/plus', '/obj/item/stock_parts/cell/crap',
@@ -1139,6 +1141,8 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                 if sp >= 0:
                     # what the fixture looks like with its glass smashed, burnt out, or taken out (lighting.dm: [fitting]-broken, -burned, -empty)
                     ss = [spr.add([(icon, '%s-%s' % (kl, s_), d, None, None)]) if icon_ok(icon, '%s-%s' % (kl, s_)) else sp for s_ in ('broken', 'burned', 'empty')]
+                    # and as a frame still being put together (tube-construct-stage1 / stage2; a floor light has none)
+                    ss += [spr.add([(icon, '%s-construct-stage%d' % ('bulb' if kl == 'bulb' else 'tube', n_), d, None, None)]) if icon_ok(icon, '%s-construct-stage%d' % ('bulb' if kl == 'bulb' else 'tube', n_)) else ss[2] for n_ in (1, 2)]
                     props.append(dict(base, k='light', s=sp, lt=kl, c=col, ss=ss))
                     stats['light'] += 1
                 continue
