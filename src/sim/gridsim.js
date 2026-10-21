@@ -18,7 +18,8 @@ export class GridSim extends Grid {
     super(decoded, sim.rects, o);
     this.sim = sim;
     const w = this.world;
-    this.propLog = [];                          // the props made since the map was built (their specs, in order): a joiner builds them too
+    this.propLog = [];
+    this.pipeLog = new Map();                   // pipe slot -> [shape byte, colour, layer] for every pipe laid or taken up since the map made them (a joiner is told)                          // the props made since the map was built (their specs, in order): a joiner builds them too
     this.anchorLog = new Map();                 // props bolted down or loose since the map made them: idx -> 1 or 0 (a joiner is told)
     this.power = new AreaPower(w, false);       // what each room is told about its power (the station's rooms are metered by their APCs: see PowerSim)
     this.powersim = new PowerSim(sim, this);    // the cables, the networks and the machines on them

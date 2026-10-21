@@ -1,6 +1,6 @@
 import { N, S, E, W, DV, OPP } from '../shared/config.js';
-import { GAS_IDS, Mix, ONE_ATMOSPHERE, O2STANDARD, N2STANDARD, molesAt } from '../shared/gases.js';
-import { SHAPES, PIPE_SLOTS, JUNCTION_DIR } from '../shared/pipedata.js';
+import { GAS_IDS, Mix, ONE_ATMOSPHERE, O2STANDARD, N2STANDARD, CELL_VOLUME, molesAt, kpaOf } from '../shared/gases.js';
+import { SHAPES, PIPE_SLOTS, PIPE_HIDDEN, JUNCTION_DIR } from '../shared/pipedata.js';
 import { makeDevice } from './pipedev.js';
 
 const PROCESS = 0.5;                                                   // seconds between one run of the air machinery and the next (SSair)
@@ -235,6 +235,49 @@ export class PipeNet {
     const keep = this.snapshot();
     this.link();
     this.assemble(keep);
+  }
+
+  /** The slot a new pipe of piping layer `ly` goes in on tile `i`: its own layer's, or the fourth (a pipe that crosses another on the same layer); -1 if both are taken. */
+  freeSlot(i, ly) {
+    for (const k of [ly - 1, PIPE_SLOTS - 1]) if (k >= 0 && !this.world.pipe[this.slot(k, i)]) return this.slot(k, i);
+    return -1;
+  }
+
+  /** A pipe in `slot` changed (laid or taken up): everyone is told, and the grid keeps it for whoever joins. */
+  changed(slot) {
+    const w = this.world, b = w.pipe[slot], c = w.pipeCol[slot], y = w.pipeLy[slot];
+    this.grid.pipeLog.set(slot, [b, c, y]);
+    this.grid.emit({ e: 'pipe', s: slot, b, c, y });
+  }
+
+  /** Lay a pipe of shape `code` (it lies under the floor tiles, as the DM's pipes do) on piping layer `ly`, colour `col`, on tile `i`. Returns its slot, or -1 if there is no room. */
+  addPipe(i, ly, code, col = 0) {
+    const s = this.freeSlot(i, ly);
+    if (s < 0) return -1;
+    const w = this.world;
+    w.pipe[s] = code | PIPE_HIDDEN; w.pipeCol[s] = col; w.pipeLy[s] = ly;
+    this.changed(s);
+    this.rebuild();
+    return s;
+  }
+
+  /** Take the pipe in `slot` away. What it held goes out into the room (`releaseAirToTurf`); the rest of its pipeline keeps its gas. */
+  removePipe(slot) {
+    const w = this.world, keep = this.snapshot(), held = keep.get(slot);
+    keep.delete(slot);
+    if (held) this.spill(this.tileOf(slot), held);
+    w.pipe[slot] = 0; w.pipeCol[slot] = 0; w.pipeLy[slot] = 0;
+    this.changed(slot);
+    this.link();
+    this.assemble(keep);
+  }
+
+  /** Let the gas of `mix` out into the room on tile `i`. */
+  spill(i, mix) {
+    const w = this.world, wh = w.W * w.H, rem = i % wh, kpa = {};
+    for (const id of GAS_IDS) kpa[id] = kpaOf(mix.g[id], CELL_VOLUME);
+    this.grid.atmos.addGases(rem % w.W, Math.floor(rem / w.W), kpa, Math.floor(i / wh));
+    mix.clear();
   }
 
   /** A prop record that came after the network was made (a machine fastened down): its device joins. Returns it, or null for a prop that is not a pipe machine. */

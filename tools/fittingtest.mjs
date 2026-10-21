@@ -53,7 +53,7 @@ section('the map knows what a machine becomes', () => {
   const fit = g.level.fittings;
   const want = ['unary/vent_pump', 'unary/vent_scrubber', 'unary/portables_connector', 'binary/pump', 'binary/valve', 'trinary/filter', 'trinary/mixer', 'machinery/meter'];
   for (const k of want) ok(Object.keys(fit).some((p) => p.includes(k)), `a fitting for ${k}`);
-  ok(Object.values(fit).every((t) => t.n && t.sv.length && t.s.length === 4 && t.s.every((s) => s >= 0)), 'each has a name, its own pictures, and four fitting pictures (one for each way it is turned)');
+  ok(Object.values(fit).filter((t) => !t.pipe).every((t) => t.n && t.sv.length && t.s.length === 4 && t.s.every((s) => s >= 0)), 'each machine has a name, its own pictures, and four fitting pictures (one for each way it is turned)');
   ok(!Object.keys(fit).some((p) => /unary\/tank|thermomachine|cryo|dp_vent/.test(p)), 'tanks, thermomachines, cryo cells and the dp vent are not among them (the DM does not let a wrench take them off)');
   const vent = find(/vent_pump/);
   ok(!!g.level.fittings[vent.path.replace(/^\//, '')], 'the fitting table is keyed by the prop path');

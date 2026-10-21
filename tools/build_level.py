@@ -627,6 +627,38 @@ def fitting_for(p, r, spr, table):
     table[key] = {'n': clean_name(typ.get('name', '')) or 'pipe machine', 's': items, 'sv': pic['sv'], 'bd': pic.get('dir') or S}
 
 
+def pipe_fittings(spr, table):
+    """What a pipe becomes when it is unwrenched (pipe_item.dmi: `simple` in eight ways, `manifold` in four, `manifold4w` in one) and the machines a pipe dispenser can make: `table['pipe/<kind>']` =
+    {n: the pipe's name, pipe: 1, s: {dir: its picture}}; `table` gets `types` too in `device_types` (below)."""
+    PI = AT + 'pipes/pipe_item.dmi'
+    for key, name, state, dirs in (('pipe/simple', 'pipe', 'simple', (N, S, E, W, 5, 6, 9, 10)), ('pipe/manifold', 'pipe manifold', 'manifold', (N, S, E, W)),
+                                   ('pipe/manifold4w', '4-way pipe manifold', 'manifold4w', (S,))):
+        pics = {dd: spr.add([(PI, state, dd, None, None)]) for dd in dirs}
+        if all(v >= 0 for v in pics.values()):
+            table[key] = {'n': name, 'pipe': 1, 's': pics}
+
+
+def device_types(table):
+    """The machine fittings by what they are and the piping layer they sit on: `{'unary/vent_pump': {1: key, 2: key, 3: key}, ...}` (a layer the map has no such machine on takes another's pictures)."""
+    out = {}
+    for key, t in sorted(table.items()):
+        if key.startswith('pipe/') or t.get('meter') or not key.startswith('machinery/atmospherics/components/'):
+            continue
+        q = key[len('machinery/atmospherics/components/'):].split('/')
+        kind = q[0] + '/' + q[1]
+        if 'digital' in q:
+            kind += '/digital'
+        m = re.search(r'layer(\d)$', key)
+        ly = int(m.group(1)) if m else 2
+        if ly not in out.setdefault(kind, {}) or len(key) < len(out[kind][ly]):                    # (the plainest variant of each: the one a dispenser would make)
+            out[kind][ly] = key
+    for kind, byl in out.items():
+        any_key = byl.get(2) or next(iter(byl.values()))
+        for ly in (1, 2, 3):
+            byl.setdefault(ly, any_key)
+    return out
+
+
 def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
     """Classify tiles + props for one grid. Registries (areas, wall variants, floor types, cells, sprites) are shared across calls.
     `full` is the first call (the station): only it makes the things that belong to the game as a whole (the loot pool, the mob sets, the
@@ -1192,6 +1224,13 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
         key = '%d-%d-%d' % (code & 31, ly, col)
         if key not in psp:
             psp[key] = spr.add(pipe_layers(code & 31, ly, col))
+    if full:                                                          # and the ones a player can lay (plain pipes, every shape, every layer)
+        for code in range(1, 12):
+            for ly in (1, 2, 3):
+                key = '%d-%d-%d' % (code, ly, 0)
+                if key not in psp:
+                    psp[key] = spr.add(pipe_layers(code, ly, 0))
+        pipe_fittings(spr, shared.setdefault('fittings', {}))
 
     # loot pool sprites
     pool = []
@@ -1541,7 +1580,7 @@ def build(mapname):
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'lightItems': light_items, 'tiles': base['tiles'],
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'fittingTypes': device_types(shared.get('fittings', {})), 'lightItems': light_items, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,

@@ -20,7 +20,7 @@ It plays like a round of SS13: lobby, job slots, a crew of other people, things 
 * **SS13 chat.** `T` to speak, `;` for the common radio, `:e` `:m` `:s` `:n` `:u` `:v` `:c` for department channels (needs a
   headset), `:h` for your own department, `Y` whisper, `M` emote, `O` OOC. Speech has a range and needs line of sight; what
   people say also floats over their heads for a few seconds. The dead talk to the dead.
-* **Systems.** Atmospherics with real partial pressures and decompression, a real power grid (the map's 2,800 cables, 119 APCs, SMES, solar fields and engine; cut a cable and a room goes dark; light tubes and bulbs break and are replaced, welders burn fuel and refill from tanks, a T-ray scanner shows the cables under the floor; APCs can be wrecked, taken apart and put up again; the supermatter engine is started by hand: plasma tanks, collectors, emitters; atmospherics: the map's real pipe network (vents, scrubbers, pumps, valves, filters, mixers; canisters wrenched onto their ports; a wrench takes a vent or pump off its pipe and fastens the fitting down again anywhere), real gas in tanks and canisters, the gas analyzer, air alarms with all their modes), fire
+* **Systems.** Atmospherics with real partial pressures and decompression, a real power grid (the map's 2,800 cables, 119 APCs, SMES, solar fields and engine; cut a cable and a room goes dark; light tubes and bulbs break and are replaced, welders burn fuel and refill from tanks, a T-ray scanner shows the cables under the floor; APCs can be wrecked, taken apart and put up again; the supermatter engine is started by hand: plasma tanks, collectors, emitters; atmospherics: the map's real pipe network (vents, scrubbers, pumps, valves, filters, mixers; canisters wrenched onto their ports; a wrench takes a vent, pump or pipe off and fastens the fitting down again anywhere; the pipe dispenser and the RPD lay new pipe), real gas in tanks and canisters, the gas analyzer, air alarms with all their modes), fire
   alarms and firelocks, access-controlled airlocks (crowbars work on dead ones), meteors that blow holes in the hull, space carp,
   characters you design (body, skin, hair, facial hair, eyes, underwear; saved in your browser) that everyone sees, with the
   clothes they really wear, a hairdresser's mirror, and your own body when you look down,
@@ -226,6 +226,7 @@ npm run test:pipes    # the pipe network: pipes as data, what joins what, the ga
 npm run test:anchor   # what is bolted down, what can be dragged, what a wrench does about it (55 assertions)
 npm run test:runtime  # props made and taken away while the game runs (15 assertions)
 npm run test:fittings # a wrench takes a pipe machine off its pipe and fastens it down again (52 assertions)
+npm run test:pipelay  # pipes taken up and laid, the pipe dispenser, the rapid pipe dispenser (57 assertions)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, the inventory HUD, bags,

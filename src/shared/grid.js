@@ -41,6 +41,13 @@ export class Grid {
    * same code and appended to the same lists, so both sides count them alike (the server sends the specs, in order, and a late joiner gets them all). Returns what was added
    * (`props.added`: `interact`, `statics`, `doors`, `lights`...).
    */
+  /** A pipe was laid or taken up: slot `s` of `world.pipe` is shape byte `b`, colour `col`, layer `ly` now (0: none). */
+  setPipe(s, b, col, ly) {
+    const w = this.world;
+    w.pipe[s] = b; w.pipeCol[s] = col; w.pipeLy[s] = ly;
+    this.pipeRev = (this.pipeRev || 0) + 1;
+  }
+
   addProps(specs) {
     buildPropData(this.world, this.rects, specs, this.level, this.props);
     const added = this.props.added;

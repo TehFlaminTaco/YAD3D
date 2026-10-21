@@ -90,7 +90,8 @@ export class Replica {
       p.metered.set(gs.pw.mt); p.operating.set(gs.pw.op); p.chan.set(gs.pw.ch); p.main.set(gs.pw.mn); p.lightSwitch.set(gs.pw.sw);
     }
     g.world.gravityOn = gs.gravity !== false;
-    if (gs.ps?.length) g.addProps(gs.ps);                                   // props made while the game runs, before anything that is about props by number
+    if (gs.ps?.length) g.addProps(gs.ps);
+    for (const [s, b, c, y] of gs.pi || []) g.setPipe(s, b, c, y);                                   // props made while the game runs, before anything that is about props by number
     for (const [id, k, c, r, st] of gs.built || []) g.built.add({ id, k, c, r, st, grid: g });
     for (const [i, st] of gs.lights || []) if (g.props.lights[i]) g.props.lights[i].status = st;
     for (const i of gs.gone || []) { const it = g.props.interact[i]; if (it) { it.gone = true; g.world.boxDrop(it); } }
@@ -185,6 +186,7 @@ export class Replica {
       case 'pd': { const it = g?.props.interact[ev.i]; if (it) { it.dense = !!ev.d; g.world.boxSet(it); } break; }
       case 'pa': { const it = g?.props.interact[ev.i]; if (it) setPropAnchored(g.world, it, ev.a); break; }
       case 'p+': if (g) g.addProps(ev.sp); break;
+      case 'pipe': if (g) g.setPipe(ev.s, ev.b, ev.c, ev.y); break;
       case 'pg': { const it = g?.props.interact[ev.i]; if (it) { it.gone = true; g.world.boxDrop(it); } break; }
       case 'area': if (g) { g.power.set(ev.a, ev.op, ev.ch[0], ev.ch[1], ev.ch[2], ev.mn); g.power.lightSwitch[ev.a] = ev.sw; } break;
       case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, g: 0, x: 0, z: 0, l: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;

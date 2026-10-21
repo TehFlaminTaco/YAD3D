@@ -74,15 +74,7 @@ export class Device {
   }
 
   /** What its gas does when it is taken away: it goes out into the room. */
-  release() {
-    const a = this.grid.atmos, c = this.it.c, r = this.it.r;
-    for (const mix of this.airs) {
-      const kpa = {};
-      for (const id of GAS_IDS) kpa[id] = kpaOf(mix.g[id], CELL_VOLUME);
-      a.addGases(c, r, kpa, this.it.l | 0);
-      mix.clear();
-    }
-  }
+  release() { for (const mix of this.airs) this.net.spill(this.i, mix); }
 }
 
 /** A row of console buttons that nudge a number: -100 -10 -1 +1 +10 +100. */

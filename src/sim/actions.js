@@ -135,6 +135,7 @@ export class Actions {
       return;
     }
     if (it.fit) return sim.pipefit.rotate(m, it);                          // a pipe fitting: a quarter turn
+    if (d.rpd) return sim.pipekit.rpdOpen(m, it);                          // a rapid pipe dispenser: what it makes
     if (d.tray) { it.on = !it.on; m.dirty = true; sim.sound('beep', m, 0.3); return; }           // the T-ray scanner (t_scanner.dm attack_self: no message)
     if (d.storage) {
       if (m.openContainers.has(it.id)) m.openContainers.delete(it.id); else m.openContainers.add(it.id);
@@ -202,6 +203,7 @@ export class Actions {
     if (!t) return this.clickAir(m, held);
     c.selfJson = '';
     if (msg.ctrl && ['mob', 'item', 'prop'].includes(t.k)) return sim.people.drag(m, t);        // Ctrl+click is SS13's pull
+    if (held?.def.rpd && sim.pipekit.rpdClick(m, t, held)) return;                  // a rapid pipe dispenser lays and takes away pipes
     switch (t.k) {
       case 'item': return this.clickItem(m, t.rec, held);
       case 'door': return this.clickDoor(m, t.d, held);
@@ -210,7 +212,7 @@ export class Actions {
       case 'mob': return this.clickMob(m, t.o, held, !!msg.alt);
       case 'breach': return this.clickBreachTile(m, t, held);
       case 'window': case 'pane': if (sim.windows.click(m, t, held)) return; return this.clickAir(m, held);
-      case 'floor': if (sim.floors.click(m, t, held)) return; return this.clickAir(m, held);
+      case 'floor': if (held?.def.tool === 'wrench' && sim.pipefit.takeUp(m, t, held)) return; if (sim.floors.click(m, t, held)) return; return this.clickAir(m, held);
       case 'wall': if (mountApcFrame(t.grid, m, t, held) || sim.walls.clickWall(m, t, held)) return; return this.clickAir(m, held);
       case 'built': if (sim.walls.clickGirder(m, t, held)) return; return this.clickAir(m, held);
       case 'light': if (sim.lights.click(m, t, held)) return; return this.clickAir(m, held);
@@ -298,6 +300,7 @@ export class Actions {
     if (held?.def.tool === 'wrench' && (sim.anchoring.wrench(m, it, held) || sim.pipefit.unfasten(m, it, held))) return;     // a wrench fastens down or frees what the DM lets it (anchoring.js), or takes a pipe machine off its pipe (pipefit.js)
     if (sim.tanks.click(m, it, held)) return;                                     // a fuel or water tank: refill from it
     if (/^\/?structure\/tank_dispenser/.test(it.path || '')) return sim.dispensers.click(c, m, it, held);
+    if (/^\/?machinery\/pipedispenser$/.test(it.path || '')) return sim.pipekit.dispenserClick(c, m, it, held);
     if (it.kind === 'container') return this.openContainer(m, it);
     if (it.kind === 'wm') {
       switch (it.sub) {

@@ -35,6 +35,7 @@ import { breathOf, GAS_IDS } from '../shared/gases.js';
 import { Dispensers } from './dispensers.js';
 import { Anchoring } from './anchoring.js';
 import { PipeFittings } from './pipefit.js';
+import { PipeKit } from './pipekit.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -122,6 +123,7 @@ export class Sim {
     this.dispensers = new Dispensers(this);
     this.anchoring = new Anchoring(this);
     this.pipefit = new PipeFittings(this);
+    this.pipekit = new PipeKit(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 
@@ -446,6 +448,7 @@ export class Sim {
       pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv(), ...g.pipenet.pv()],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
       pd: g.atmosdev.pd(),                                                                         // canisters broken open: no longer in the way
       ps: g.propLog,                                                                               // props made while the game runs
+      pi: [...g.pipeLog].map(([s, v]) => [s, ...v]),                                               // pipes laid or taken up
       pa: [...g.anchorLog],                                                                        // props bolted down or freed
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
