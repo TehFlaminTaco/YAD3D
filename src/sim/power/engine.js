@@ -1,5 +1,4 @@
 import { TILE, KIND } from '../../shared/config.js';
-import { setPropAnchored } from '../../shared/propdata.js';
 import { detach, place, consume } from '../inventory.js';
 import { toolJob } from '../tooljob.js';
 import { Machine, displayPower } from './machines.js';
@@ -133,9 +132,7 @@ export class Emitter extends Machine {
         sfx: 'wrench', start: null,
         done: () => {
           say(`You ${anchoring ? '' : 'un'}secure ${the(this)}.`);
-          setPropAnchored(g.world, it, anchoring);
-          g.anchorLog.set(it.idx, it.anc ? 1 : 0);
-          g.emit({ e: 'pa', i: it.idx, a: it.anc ? 1 : 0 });
+          sim.anchoring.set(g, it, anchoring);
           sim.sound('pickup', at, 0.6);
           this.touch();
         },

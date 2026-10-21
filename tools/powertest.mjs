@@ -163,8 +163,11 @@ section('solar panels, and the PACMAN', () => {
   ok(near(ctl.azimuth, sim.sun.azimuth), 'with a tracker on its network the control follows the sun');
   ctl.gen = 0;
   const pg = M.pacman[0];
-  ps.cables.set(pg.tile, true); ps.assign();                         // (wrenched down on a cable)
-  pg.sheets = 3; ok(pg.toggle() && pg.active, 'a PACMAN with fuel starts');
+  ps.cables.set(pg.tile, true); ps.assign();                         // (a cable under it)
+  pg.sheets = 3;
+  ok(!pg.anchored && pg.net === null && !pg.toggle(), 'a PACMAN that is not bolted down is on no network and will not start');
+  sim.anchoring.set(ps.grid, pg.rec, true);                          // (wrenched down)
+  ok(pg.anchored && pg.net !== null && pg.toggle() && pg.active, 'a PACMAN with fuel starts');
   const n2 = pg.net; n2.newavail = 0;
   pg.process();
   ok(near(n2.newavail, 10000), 'and makes 10 kW');
@@ -323,7 +326,7 @@ section('the consoles', () => {
   ok(/Generated power/.test(e.html) && /Tracking/.test(e.html), 'the solar control shows the tracking');
   press('Tracking');
   ok(M.solarControl[0].track === 1, 'and its mode changes');
-  const pg = M.pacman[0]; ps.cables.set(pg.tile, true); ps.assign();
+  const pg = M.pacman[0]; ps.cables.set(pg.tile, true); sim.anchoring.set(ps.grid, pg.rec, true); ps.assign();
   e = open('pacman', { machine: pg });
   ok(/Plasma/.test(e.html) && /Output/.test(e.html), 'a PACMAN shows its fuel');
   e = open('power', { name: 'power monitor' });

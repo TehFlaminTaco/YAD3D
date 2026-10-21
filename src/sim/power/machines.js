@@ -341,10 +341,14 @@ export class Pacman extends Machine {
   constructor(ps, tile, rec) {
     super(ps, tile, rec);
     this.name = rec.n || 'P.A.C.M.A.N.-type portable generator';
-    this.active = false; this.anchored = true;
+    this.active = false;
     this.sheets = 0; this.maxSheets = 50; this.sheetLeft = 0; this.timePerSheet = 260; this.consumption = 1;
     this.powerGen = 10000; this.powerOutput = 1;          // 5000 x 2 x the capacitor's rating (port_gen.dm:111)
   }
+
+  get anchored() { return !!this.rec.anc; }                                    // (port_gen.dm: it starts loose; a wrench bolts it down, and only then is it on the cable)
+  get net() { return this.anchored ? super.net : null; }
+  afterAnchor(on) { this.ps.cables.dirty = true; if (!on) this.active = false; this.touch(); }
 
   hasFuel() { return this.sheets >= 1 / (this.timePerSheet / this.powerOutput) - this.sheetLeft; }
 
@@ -359,7 +363,7 @@ export class Pacman extends Machine {
 
   toggle() {
     if (this.active) { this.active = false; return true; }
-    if (this.hasFuel()) { this.active = true; return true; }
+    if (this.hasFuel() && this.anchored) { this.active = true; return true; }                     // (ready_to_boot = anchored && HasFuel)
     return false;
   }
 
@@ -381,6 +385,14 @@ export class Pacman extends Machine {
 
   click(c, m, held) {
     const sim = this.ps.sim;
+    if (held?.def.tool === 'wrench') {                                                            // port_gen.dm attackby: at once, and only while it is off
+      if (this.active) return true;
+      const on = !this.anchored;
+      sim.anchoring.set(this.ps.grid, this.rec, on);
+      sim.tell(m, 'notice', `You ${on ? '' : 'un'}secure the generator ${on ? 'to' : 'from'} the floor.`);
+      sim.sound('pickup', { grid: this.ps.grid, x: this.rec.x, z: this.rec.z, l: this.rec.l | 0 }, 0.5);
+      return true;
+    }
     if (held && /stack\/sheet\/mineral\/plasma$/.test(held.path)) {      // attackby: sheets go in (port_gen.dm:178)
       const n = Math.min(this.maxSheets - this.sheets, held.amount ?? 1);
       if (n < 1) { sim.tell(m, 'notice', `The ${this.name} is full!`); return true; }

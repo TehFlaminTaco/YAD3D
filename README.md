@@ -217,12 +217,13 @@ npm run test:sim      # 484 assertions on the headless simulation (spawn and out
                       #   grilles, door angles and wall mounts, chat, consoles,
                       #   drag and drop, death and ghosts)
 npm run test:level    # level mesh geometry and the character art data (no browser)
-npm run test:power    # the power grid: cables, networks, APCs, SMES, solar, PACMAN, consoles, cutting and laying cable (78 assertions)
+npm run test:power    # the power grid: cables, networks, APCs, SMES, solar, PACMAN, consoles, cutting and laying cable (79 assertions)
 npm run test:upkeep   # engineering upkeep: light fixtures, welder fuel and tanks, the T-ray scanner (42 assertions)
 npm run test:apc      # an APC taken apart and put together: cover, board, cell, wiring, frame (70 assertions)
 npm run test:engine   # the supermatter engine: emitters, reflectors, the crystal, collectors, tank dispensers (78 assertions)
 npm run test:atmos    # gas in tanks, canisters (and on their ports), pumps, scrubbers, the analyzer, air alarms and their modes (152 assertions)
 npm run test:pipes    # the pipe network: pipes as data, what joins what, the gas in them, each machine on them (61 assertions)
+npm run test:anchor   # what is bolted down, what can be dragged, what a wrench does about it (55 assertions)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, the inventory HUD, bags,

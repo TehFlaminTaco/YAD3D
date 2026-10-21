@@ -576,9 +576,10 @@ def atmos_prop(p, v, r, d, base, spr):
     for k in PIPE_VARS:
         if k in v and not isinstance(r.get(k), (dict, list)):
             pv[k] = r.get(k)
-    rec = dict(base, k='sprite', s=pic['sv'][0], sv=pic['sv'], p=p.split('/', 2)[2], ly=piping_layer(p), den=0, cont=0)
+    # every one of them is bolted to the floor (atmosmachinery.dm anchored = TRUE: they come off with a wrench, as pipe fittings), so none can be dragged
+    rec = dict(base, k='sprite', s=pic['sv'][0], sv=pic['sv'], p=p.split('/', 2)[2], ly=piping_layer(p), den=0, cont=0, anc=1)
     if pic.get('stand'):
-        rec.update(den=1, anc=1, bb=1)
+        rec.update(den=1, bb=1)
     else:
         rec['flat'] = 1
     if pic.get('dir'):

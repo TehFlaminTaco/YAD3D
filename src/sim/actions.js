@@ -293,6 +293,7 @@ export class Actions {
     if (it.kind === 'closet') return sim.closets.click(c, m, it, held, alt);
     if (it.mach && it.mach.click(c, m, held, alt)) return;                        // a machine with its own rules (the power machines: src/sim/power/)
     if (it.gone) return;
+    if (held?.def.tool === 'wrench' && sim.anchoring.wrench(m, it, held)) return;     // a wrench fastens down or frees what the DM lets it (anchoring.js)
     if (sim.tanks.click(m, it, held)) return;                                     // a fuel or water tank: refill from it
     if (/^\/?structure\/tank_dispenser/.test(it.path || '')) return sim.dispensers.click(c, m, it, held);
     if (it.kind === 'container') return this.openContainer(m, it);

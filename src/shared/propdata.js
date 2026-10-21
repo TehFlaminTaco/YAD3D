@@ -211,8 +211,9 @@ export function buildPropData(world, rects, props, level, prev = null) {
 /** A thing that was loose is bolted down (or loose again): it fills its tile or is a box of its own, and it can or cannot be dragged. The server decides, both sides run this. */
 export function setPropAnchored(world, it, on) {
   if (!!it.anc === !!on) return;
-  const i = world.idx(it.c, it.r, it.l | 0);
   it.anc = !!on;
+  if (!it.bh) return;                                       // (a thing with no body of its own, a flat machine or a chair: only whether it can be dragged changes, nothing in the world does)
+  const i = world.idx(it.c, it.r, it.l | 0);
   if (on) { it.dense = false; world.boxDrop(it); world.solid[i] = 1; it.half = 0; }
   else { world.solid[i] = 0; it.dense = true; it.half = it.bh; world.boxAdd(it); }
 }

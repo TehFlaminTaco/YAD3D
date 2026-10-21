@@ -33,6 +33,7 @@ import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, se
 import { breathRate } from '../shared/items.js';
 import { breathOf, GAS_IDS } from '../shared/gases.js';
 import { Dispensers } from './dispensers.js';
+import { Anchoring } from './anchoring.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -118,6 +119,7 @@ export class Sim {
     this.lights = new Lights(this);
     this.tanks = new Tanks(this);
     this.dispensers = new Dispensers(this);
+    this.anchoring = new Anchoring(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 

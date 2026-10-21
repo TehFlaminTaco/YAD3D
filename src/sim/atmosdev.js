@@ -4,7 +4,6 @@ import {
 } from '../shared/gases.js';
 import { CH } from '../shared/power.js';
 import { esc } from '../shared/util.js';
-import { setPropAnchored } from '../shared/propdata.js';
 import { toolJob } from './tooljob.js';
 import { detach, place, putInHands } from './inventory.js';
 
@@ -107,9 +106,7 @@ class Portable {
     if (this.port || !port || port.device) return false;
     this.port = port; port.device = this;
     const it = this.it;
-    setPropAnchored(this.grid.world, it, true);
-    this.grid.anchorLog.set(it.idx, 1);
-    this.grid.emit({ e: 'pa', i: it.idx, a: 1 });
+    this.sim.anchoring.set(this.grid, it, true);
     if (port.parents[0]) { port.parents[0].update = true; this.grid.pipenet.reconcile(port.parents[0]); }
     this.touch();
     return true;
@@ -119,9 +116,7 @@ class Portable {
     if (!this.port) return false;
     const port = this.port, it = this.it;
     this.port = null; port.device = null;
-    setPropAnchored(this.grid.world, it, false);
-    this.grid.anchorLog.set(it.idx, 0);
-    this.grid.emit({ e: 'pa', i: it.idx, a: 0 });
+    this.sim.anchoring.set(this.grid, it, false);
     if (port.parents[0]) port.parents[0].update = true;
     this.touch();
     return true;
@@ -435,9 +430,7 @@ export class Scrubber extends Portable {
         label: `${anchoring ? '' : 'un'}securing the ${this.name}`, ds: 20, sfx: 'wrench', start: null,
         done: () => {
           sim.tell(m, 'notice', `You ${anchoring ? '' : 'un'}secure ${a_(this.name)}.`);
-          setPropAnchored(this.grid.world, it, anchoring);
-          this.grid.anchorLog.set(it.idx, it.anc ? 1 : 0);
-          this.grid.emit({ e: 'pa', i: it.idx, a: it.anc ? 1 : 0 });
+          sim.anchoring.set(this.grid, it, anchoring);
           if (!anchoring) { this.on = false; this.setLoad(false); }
           sim.sound('pickup', this.at, 0.6);
           this.touch();
