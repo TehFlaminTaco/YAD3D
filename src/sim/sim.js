@@ -38,6 +38,8 @@ import { PipeFittings } from './pipefit.js';
 import { PipeKit } from './pipekit.js';
 import { Airlocks } from './airlocks.js';
 import { Assemblies } from './assemblies.js';
+import { AtmosControl } from './atmoscontrol.js';
+import { Radiation } from './radiation.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -128,6 +130,8 @@ export class Sim {
     this.pipekit = new PipeKit(this);
     this.airlocks = new Airlocks(this);
     this.assemblies = new Assemblies(this);
+    this.atmoscontrol = new AtmosControl(this);
+    this.radiation = new Radiation(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 
@@ -491,6 +495,7 @@ export class Sim {
     this.applyPlayerInputs(dt);
     this.people.update();
     this.updateDoors(dt);
+    this.radiation.update(dt);
     for (const g of this.grids.values()) g.firedoors.update(dt);
     this.windows.update();
     this.sun.update(dt);
@@ -639,6 +644,7 @@ export class Sim {
   tickBodies(dt) {
     for (const m of this.mobs.values()) {
       if (m.dead) continue;
+      this.radiation.tick(m, dt);
       m.cool = Math.max(0, m.cool - dt);
       m.stunned = Math.max(0, m.stunned - dt);
       const [c, r] = m.tile;

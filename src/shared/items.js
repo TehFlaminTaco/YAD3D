@@ -49,6 +49,7 @@ export const BEHAVIORS = [
   // the DM's tanks would last hours); it breathes that fraction of its gas a second whatever is in it.
   ['/obj/item/pipe_dispenser', { rpd: true }],
   ['/obj/item/electronics/airlock', { airlockElectronics: true }],
+  ['/obj/item/geiger_counter', { geiger: true }],
   ['/obj/item/tank/internals/plasma/full', { plasmaTank: { vol: 70, gas: { tox: 10 } } }],
   ['/obj/item/tank/internals/plasma', { plasmaTank: { vol: 70, gas: { tox: 3 } } }],        // (not for breathing)
   ['/obj/item/tank/internals/anesthetic', { tank: { cap: 1500, vol: 70, gas: { o2: 3 * O2STANDARD, n2o: 3 * N2STANDARD } } }],
@@ -143,7 +144,7 @@ export function spriteOf(it) { return (it.lit || it.on) && it.spriteOn !== undef
 
 export function makeItemData(db, path, extra = {}) {
   const info = db.info(path), def = db.behavior(path);
-  const it = { id: 0, path, name: extra.name || info.n, sprite: info.s, spriteOn: info.sa, w: info.w, slots: info.sl, force: info.f, def, ...extra };
+  const it = { id: 0, path, name: extra.name || info.n, sprite: info.s, spriteOn: info.sa, w: info.w, slots: info.sl, force: info.f, rd: info.rd || 0, def, ...extra };
   if (def.gun) it.shots = def.gun.shots;
   if (def.tank || def.plasmaTank) it.mix = tankMix(def, path);
   if (def.jetpack) it.gas = def.jetpack.cap;
@@ -161,6 +162,7 @@ export function describeState(it) {
   if (d.jetpack) return `${Math.round(it.gas / d.jetpack.cap * 100)}% gas`;
   if (d.tool === 'welder') return `fuel ${Math.ceil(it.fuel)}${it.lit ? ', lit' : ''}`;
   if (d.tray) return it.on ? 'on' : 'off';
+  if (d.geiger) return it.geiger?.on ? 'on' : 'off';
   if (it.fit) return `facing ${DIR_NAME[it.fit.d] ?? 'south'}`;
   if (d.charges) return `${it.charges} charges`;
   if (it.amount !== undefined && d.stack > 1) return `x${it.amount}`;

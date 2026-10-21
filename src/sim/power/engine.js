@@ -295,6 +295,7 @@ export class Supermatter extends Machine {
       if (sim.rand() < 0.5 && this.power > 0) {
         const strength = this.power * RAD_AT_COLLECTOR;
         for (const c of collectors) c.radAct(strength);
+        sim.radiation.pulse(this.ps.grid, this.rec.x, this.rec.z, this.rec.l | 0, this.power, 0);          // radiation_pulse(src, power): no range modifier, so no falloff with distance; only what is in the way weakens it
       }
       this.power = Math.max(this.power - Math.min((this.power / 500) ** 3, this.power * 0.83), 0);
     }

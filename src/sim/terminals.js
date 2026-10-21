@@ -1,5 +1,6 @@
 import { KIND } from '../shared/config.js';
 import { esc } from '../shared/util.js';
+import { GAS_IDS, GAS_NAME } from '../shared/gases.js';
 import { displayPower, displayEnergy, CHANNELS } from './power/machines.js';
 
 const NOTICES = [
@@ -84,6 +85,8 @@ export class Terminals {
       case 'airalarm': case 'portable': return t.ctx.machine.console(c, t);          // an air alarm, a canister, a pump or a scrubber: atmosdev.js
       case 'crew': return this.crew();
       case 'atmos': return this.atmosMap(g);
+      case 'atmoscontrol': return this.sim.atmoscontrol.console(c, t);                // the atmospherics monitoring computers and their gas sensors (atmoscontrol.js)
+      case 'engineering': return this.engineering(c, t, g, bar);
       case 'alerts': return this.alerts(g);
       case 'comms': return this.comms(c);
       case 'power': return this.powerMon(c, t, g, bar);
@@ -235,6 +238,40 @@ export class Terminals {
       title: 'Power Monitor', live: true, pages,
       html: `<span class="h">POWER MONITORING</span>   <span class="d">[${page + 1}/${pages}]</span>\n\nSupply   ${displayPower(net.viewavail).padStart(9)}  <span class="c">${spark(0)}</span>\nDemand   ${displayPower(net.viewload).padStart(9)}  <span class="w">${spark(1)}</span>\n\n<span class="d">${apcs.length} power controllers   (cell, load, equipment lighting environment)</span>\n${rows.join('')}`,
       buttons: [{ label: 'Next', fn: () => { t.page++; } }, { label: 'Previous', fn: () => { t.page--; } }],
+    };
+  }
+
+  /** The engineering computer (a modular console with the engineering programs): a menu of the power monitor, the alarm monitor and the supermatter monitor. */
+  engineering(c, t, g, bar) {
+    t.view ??= 0;
+    const menu = { label: 'Main menu', fn: () => { t.view = 0; t.page = 0; } };
+    if (t.view === 0) {
+      return {
+        title: 'Engineering Console', live: false,
+        html: '<span class="h">NTOS ENGINEERING</span>\n\nChoose a program:\n\n  Power Monitoring\n  Alarm Monitoring\n  Supermatter Monitoring',
+        buttons: [
+          { label: 'Power Monitoring', fn: () => { t.view = 1; t.page = 0; } },
+          { label: 'Alarm Monitoring', fn: () => { t.view = 2; } },
+          { label: 'Supermatter Monitoring', fn: () => { t.view = 3; } },
+        ],
+      };
+    }
+    const inner = t.view === 1 ? this.powerMon(c, t, g, bar) : t.view === 2 ? this.alerts(g) : this.smMonitor(g);
+    return { ...inner, buttons: [...(inner.buttons || []), menu] };
+  }
+
+  /** Supermatter monitoring (sm_monitor.dm), with what this game's crystal has: its power, the air of its chamber, the emitters and the collectors. (No integrity or temperature yet.) */
+  smMonitor(g) {
+    const sm = g.powersim.machines.supermatter[0];
+    if (!sm) return { title: 'Supermatter Monitoring', html: '<span class="h">SUPERMATTER MONITORING</span>\n\n<span class="b">No supermatter crystals detected.</span>', buttons: [] };
+    const gas = g.atmos.gasesAt(sm.tile % g.world.W, Math.floor(sm.tile / g.world.W), sm.rec.l | 0);
+    const tot = GAS_IDS.reduce((s, id) => s + (gas[id] || 0), 0);
+    const rows = GAS_IDS.filter((id) => (gas[id] || 0) > 0.0005 * tot).map((id) => `  ${esc(GAS_NAME[id]).padEnd(16)} ${((gas[id] || 0) / tot * 100).toFixed(1).padStart(6)} %`).join('\n');
+    const emitters = g.powersim.machines.emitter, collectors = g.powersim.machines.collector;
+    return {
+      title: 'Supermatter Monitoring', live: true,
+      html: `<span class="h">SUPERMATTER MONITORING</span>\n\nCrystal            <span class="c">stable</span>\nRelative EER       ${displayPower(sm.power).padStart(10)}\nChamber pressure   ${gas.pressure.toFixed(1).padStart(8)} kPa\n${rows || '  (vacuum)'}\n\nEmitters           ${emitters.filter((e) => e.active).length}/${emitters.length} firing\nCollectors         ${collectors.filter((k) => k.active).length}/${collectors.length} on`,
+      buttons: [],
     };
   }
 

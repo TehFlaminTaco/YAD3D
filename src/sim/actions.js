@@ -39,7 +39,7 @@ const VEND = [
 ];
 
 const COMPUTER_TYPES = [
-  ['crew', 'crew'], ['atmos', 'atmos'], ['station_alert', 'alerts'], ['communications', 'comms'], ['monitor', 'power'],
+  ['crew', 'crew'], ['atmos_control', 'atmoscontrol'], ['modular_computer/console/preset/engineering', 'engineering'], ['atmos', 'atmos'], ['station_alert', 'alerts'], ['communications', 'comms'], ['monitor', 'power'],
   ['security', 'records'], ['secure_data', 'records'], ['med_data', 'records'], ['cargo', 'cargo'], ['arcade', 'arcade'],
   ['emergency_shuttle', 'shuttle'], ['shuttle', 'pod'],
 ];
@@ -137,6 +137,7 @@ export class Actions {
     if (it.fit) return sim.pipefit.rotate(m, it);                          // a pipe fitting: a quarter turn
     if (d.rpd) return sim.pipekit.rpdOpen(m, it);                          // a rapid pipe dispenser: what it makes
     if (d.airlockElectronics) return sim.assemblies.electronicsOpen(m, it);   // airlock electronics: who the door opens for
+    if (d.geiger) return sim.radiation.toggle(m, it);                      // a Geiger counter: on or off
     if (d.tray) { it.on = !it.on; m.dirty = true; sim.sound('beep', m, 0.3); return; }           // the T-ray scanner (t_scanner.dm attack_self: no message)
     if (d.storage) {
       if (m.openContainers.has(it.id)) m.openContainers.delete(it.id); else m.openContainers.add(it.id);
@@ -197,6 +198,7 @@ export class Actions {
     if (m.busy) { this.cancelBusy(m, 'interrupt'); return; }
     if (m.cool > 0) return;
     const held = m.held;
+    if (msg.alt && held?.def.geiger) { sim.radiation.flush(m, held); return; }               // Alt-click with a Geiger counter: clear its count
     if (m.throwMode && held) { m.throwMode = false; m.dirty = true; this.throwItem(m, held); return; }
     const t = this.resolve(m, msg.target);
     if (t === undefined) return;                      // target vanished
@@ -316,7 +318,7 @@ export class Actions {
     if (/computer/.test(p)) {
       let type = 'generic';
       for (const [k, v] of COMPUTER_TYPES) if (p.includes(k)) { type = v; break; }
-      sim.terminals.open(c, type, { name: it.name, area, grid: g });
+      sim.terminals.open(c, type, { name: it.name, area, grid: g, path: it.path });
       return;
     }
     if (/vending/.test(p)) {
@@ -370,6 +372,7 @@ export class Actions {
   // ------------------------------------------------------------------ mobs & combat
   clickMob(m, o, held, alt = false) {
     const sim = this.sim;
+    if (held?.def.geiger && m.intent === 'help' && !alt) return sim.radiation.scan(m, held, o);       // a Geiger counter in help intent scans them
     if (alt) return sim.people.openStrip(m, o);                  // Alt+click: go through their things (SS13 drags them onto you)
     if (held?.def.cuff) return sim.people.cuff(m, o, held);      // handcuffs work on any intent
     if (o.dead) {
@@ -824,6 +827,7 @@ export class Actions {
     const stack = stackInfo(it.path);
     if (stack) out.push((it.amount ?? 1) > 1 ? `There are ${plural(it.amount, stack.one)} in the stack.` : `There is ${plural(1, stack.one)} in the stack.`);
     else { const st = describeState(it); if (st) out.push(`(${st})`); }
+    if (it.def.geiger) out.push(...this.sim.radiation.examine(it));
     return out;
   }
 

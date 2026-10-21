@@ -1337,6 +1337,14 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                 sa = spr.add(on_layers)
                 if sa >= 0:
                     itemdefs[pth]['sa'] = sa
+            # how much radiation it stops (`rd`, the armor list's "rad" percentage), and the Geiger counter's five pictures (`gv`: off, then the five levels of geiger_counter.dm update_icon_state)
+            am = re.search(r'"rad"\s*=\s*(-?\d+)', str(raw.get('armor') or ''))
+            if am and int(am.group(1)) > 0 and slots:
+                itemdefs[pth]['rd'] = int(am.group(1))
+            if pth == '/obj/item/geiger_counter' and all(icon_ok(icon, 'geiger_on_%d' % k) for k in range(1, 6)):
+                gv = [spr.add([(icon, 'geiger_off', S, None, None)])] + [spr.add([(icon, 'geiger_on_%d' % k, S, None, None)]) for k in range(1, 6)]
+                if all(x >= 0 for x in gv):
+                    itemdefs[pth]['gv'] = gv
             # seconds to take it off someone / put it on someone (SS13's strip_delay and equip_delay_other; defaults 4 and 2)
             for key, var, dflt in (('sd', 'strip_delay', 4), ('ed', 'equip_delay_other', 2)):
                 secs = delay_seconds(r.get(var))

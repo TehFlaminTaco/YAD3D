@@ -229,6 +229,8 @@ npm run test:fittings # a wrench takes a pipe machine off its pipe and fastens i
 npm run test:pipelay  # pipes taken up and laid, the pipe dispenser, the rapid pipe dispenser (57 assertions)
 npm run test:airlocks # airlock panels and wires, bolts, power, shocks, welding, a crowbar (48 assertions)
 npm run test:assemblies # airlock assemblies and electronics, building and taking a door apart (54 assertions)
+npm run test:atmoscontrol # the atmospherics monitoring computers, tank controls and the engineering console (33 assertions)
+npm run test:radiation # radiation waves from the supermatter, what they do, clothes against them, the Geiger counter (33 assertions)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, the inventory HUD, bags,
