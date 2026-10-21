@@ -1,0 +1,67 @@
+# item types to document (DM path, in-game name)
+/obj/item/clothing/mask/breath	breath mask
+/obj/item/clothing/gloves/color/yellow	insulated gloves
+/obj/item/clothing/shoes/sneakers/black	black shoes
+/obj/item/clothing/shoes/laceup	laceup shoes
+/obj/item/clothing/glasses/sunglasses/reagent	beer goggles
+/obj/item/clothing/gloves/botanic_leather	botanist's leather gloves
+/obj/item/clothing/shoes/sneakers/brown	brown shoes
+/obj/item/clothing/gloves/color/captain	captain's gloves
+/obj/item/clothing/glasses/sunglasses	sunglasses
+/obj/item/clothing/glasses/science	science goggles
+/obj/item/clothing/gloves/color/black	black gloves
+/obj/item/clothing/shoes/clown_shoes	clown shoes
+/obj/item/clothing/mask/gas/clown_hat	clown wig and mask
+/obj/item/clothing/mask/fakemoustache/italian	italian moustache
+/obj/item/clothing/mask/cigarette	cigarette
+/obj/item/clothing/shoes/jackboots	jackboots
+/obj/item/clothing/glasses/hud/security/sunglasses	security HUDSunglasses
+/obj/item/clothing/accessory/lawyers_badge	attorney's badge
+/obj/item/clothing/mask/gas/mime	mime mask
+/obj/item/clothing/shoes/sneakers/blue	blue shoes
+/obj/item/clothing/gloves/color/latex/nitrile	nitrile gloves
+/obj/item/clothing/shoes/sneakers/orange	orange shoes
+/obj/item/clothing/shoes/workboots/mining	mining boots
+/obj/item/clothing/shoes/workboots	work boots
+/obj/item/clothing/mask/surgical	sterile mask
+/obj/item/clothing/ears/earmuffs	earmuffs
+/obj/item/clothing/glasses/hud/health	health scanner HUD
+/obj/item/clothing/glasses/meson	optical meson scanner
+/obj/item/clothing/glasses/meson/engine	engineering scanner goggles
+/obj/item/clothing/glasses/welding	welding goggles
+/obj/item/clothing/gloves/color/fyellow	budget insulated gloves
+/obj/item/clothing/gloves/color/latex	latex gloves
+/obj/item/clothing/gloves/color/orange	orange gloves
+/obj/item/clothing/gloves/color/rainbow	rainbow gloves
+/obj/item/clothing/mask/balaclava	balaclava
+/obj/item/clothing/mask/cigarette/cigar	premium cigar
+/obj/item/clothing/mask/gas/sechailer	security gas mask
+/obj/item/clothing/shoes/sneakers/rainbow	rainbow shoes
+/obj/item/clothing/shoes/winterboots	winter boots
+/obj/item/clothing/gloves/boxing/blue	boxing gloves
+/obj/item/clothing/gloves/boxing/green	boxing gloves
+/obj/item/clothing/gloves/boxing/yellow	boxing gloves
+/obj/item/clothing/gloves/boxing	boxing gloves
+/obj/item/clothing/mask/luchador	Luchador Mask
+/obj/item/clothing/mask/luchador/rudos	Rudos Mask
+/obj/item/clothing/mask/luchador/tecnicos	Tecnicos Mask
+/obj/item/clothing/mask/gas/atmos	atmospheric gas mask
+/obj/item/clothing/glasses/meson/engine/tray	optical t-ray scanner
+/obj/item/clothing/glasses/sunglasses/gar/supergar	giga gar glasses
+/obj/item/clothing/glasses/hud/security/sunglasses/eyepatch	eyepatch HUD
+/obj/item/clothing/glasses/hud/security/sunglasses/gars/supergars	giga HUD gar glasses
+/obj/item/clothing/mask/gas/sechailer/swat	SWAT mask
+/obj/item/clothing/mask/breath/medical	medical mask
+/obj/item/clothing/mask/muzzle	muzzle
+/obj/item/clothing/accessory/armband/cargo	cargo bay guard armband
+/obj/item/clothing/accessory/armband/engine	engineering guard armband
+/obj/item/clothing/accessory/armband/medblue	medical guard armband
+/obj/item/clothing/accessory/armband/science	science guard armband
+/obj/item/clothing/gloves/krav_maga/sec	krav maga gloves
+/obj/item/clothing/mask/bandana/black	black bandana
+/obj/item/clothing/mask/bandana/skull	skull bandana
+/obj/item/clothing/accessory/pocketprotector	pocket protector
+/obj/item/clothing/mask/bandana/green	green bandana
+/obj/item/clothing/mask/bandana/red	red bandana
+/obj/item/clothing/mask/bandana/blue	blue bandana
+/obj/item/clothing/mask/bandana/gold	gold bandana

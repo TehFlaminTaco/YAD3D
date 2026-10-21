@@ -1,0 +1,29 @@
+# DM path <TAB> in-game name <TAB> how many are placed on BoxStation (if any)
+/obj/item/clothing/head/helmet/bluetaghelm	blue laser tag helmet
+/obj/item/clothing/head/helmet/redtaghelm	red laser tag helmet
+/obj/item/clothing/head/helmet/space/emergency	space helmet
+/obj/item/clothing/head/powdered_wig	powdered wig
+/obj/item/clothing/head/soft/black	black cap
+/obj/item/clothing/head/soft/grey	grey cap	(x1 on BoxStation)
+/obj/item/clothing/head/soft/paramedic	paramedic cap
+/obj/item/clothing/head/soft/rainbow	rainbow cap	(x1 on BoxStation)
+/obj/item/clothing/head/that	top-hat	(x1 on BoxStation)
+/obj/item/clothing/mask/bandana/black	black bandana
+/obj/item/clothing/mask/bandana/blue	blue bandana
+/obj/item/clothing/mask/bandana/gold	gold bandana
+/obj/item/clothing/mask/bandana/green	green bandana
+/obj/item/clothing/mask/bandana/red	red bandana
+/obj/item/clothing/mask/bandana/skull	skull bandana
+/obj/item/clothing/mask/luchador/rudos	Rudos Mask
+/obj/item/clothing/mask/luchador/tecnicos	Tecnicos Mask
+/obj/item/clothing/mask/muzzle	muzzle
+/obj/item/clothing/shoes/clown_shoes	clown shoes
+/obj/item/clothing/shoes/sneakers/blue	blue shoes
+/obj/item/clothing/shoes/sneakers/brown	brown shoes
+/obj/item/clothing/shoes/sneakers/orange	orange shoes	(x4 on BoxStation)
+/obj/item/clothing/shoes/sneakers/rainbow	rainbow shoes	(x1 on BoxStation)
+/obj/item/clothing/suit/armor/reactive/teleport	reactive teleport armor
+/obj/item/clothing/suit/hooded/wintercoat/engineering	engineering winter coat
+/obj/item/clothing/suit/jacket	bomber jacket
+/obj/item/clothing/suit/jacket/leather	leather jacket
+/obj/item/clothing/suit/jacket/leather/overcoat	leather overcoat

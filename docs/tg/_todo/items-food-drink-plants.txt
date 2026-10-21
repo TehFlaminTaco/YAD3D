@@ -1,0 +1,70 @@
+# item types to document (DM path, in-game name)
+/obj/item/reagent_containers/food/drinks/soda_cans/cola	Space Cola
+/obj/item/reagent_containers/food/snacks/chips	chips
+/obj/item/reagent_containers/food/drinks/coffee	robust coffee
+/obj/item/reagent_containers/food/snacks/grown/banana	banana
+/obj/item/reagent_containers/food/drinks/bottle/bottleofnothing	bottle of nothing
+/obj/item/kitchen/knife/combat/survival	survival knife
+/obj/item/kitchen/fork	fork
+/obj/item/kitchen/fork/plastic	plastic fork
+/obj/item/kitchen/knife	kitchen knife
+/obj/item/kitchen/knife/plastic	plastic knife
+/obj/item/kitchen/spoon/plastic	plastic spoon
+/obj/item/reagent_containers/food/condiment/enzyme	universal enzyme
+/obj/item/reagent_containers/food/condiment/flour	flour sack
+/obj/item/reagent_containers/food/condiment/peppermill	pepper mill
+/obj/item/reagent_containers/food/condiment/rice	rice sack
+/obj/item/reagent_containers/food/condiment/saltshaker	salt shaker
+/obj/item/reagent_containers/food/condiment/sugar	sugar sack
+/obj/item/reagent_containers/food/drinks/beer	space beer
+/obj/item/reagent_containers/food/drinks/bottle/holywater	flask of holy water
+/obj/item/reagent_containers/food/drinks/bottle/vodka/badminka	Badminka vodka
+/obj/item/reagent_containers/food/drinks/bottle/whiskey	Uncle Git's special reserve
+/obj/item/reagent_containers/food/drinks/drinkingglass	drinking glass
+/obj/item/reagent_containers/food/drinks/drinkingglass/shotglass	shot glass
+/obj/item/reagent_containers/food/drinks/flask/gold	captain's flask
+/obj/item/reagent_containers/food/drinks/shaker	shaker
+/obj/item/reagent_containers/food/snacks/baguette	baguette
+/obj/item/reagent_containers/food/snacks/breadslice/plain	bread slice
+/obj/item/reagent_containers/food/snacks/donut	donut
+/obj/item/reagent_containers/food/snacks/energybar	High-power energy bars
+/obj/item/reagent_containers/food/snacks/grown/citrus/orange	orange
+/obj/item/reagent_containers/food/snacks/grown/cocoapod	cocoa pod
+/obj/item/reagent_containers/food/snacks/grown/grapes	bunch of grapes
+/obj/item/reagent_containers/food/snacks/grown/harebell	harebell
+/obj/item/reagent_containers/food/snacks/grown/onion	onion
+/obj/item/reagent_containers/food/snacks/grown/poppy	poppy
+/obj/item/reagent_containers/food/snacks/grown/potato	potato
+/obj/item/reagent_containers/food/snacks/grown/watermelon	watermelon
+/obj/item/reagent_containers/food/snacks/grown/wheat	wheat
+/obj/item/reagent_containers/food/snacks/meat/rawcutlet/plain	raw cutlet
+/obj/item/reagent_containers/food/snacks/mint	mint
+/obj/item/reagent_containers/food/snacks/monkeycube	monkey cube
+/obj/item/reagent_containers/food/snacks/pie/cream	banana cream pie
+/obj/item/seeds/ambrosia	pack of ambrosia vulgaris seeds
+/obj/item/seeds/apple	pack of apple seeds
+/obj/item/seeds/banana	pack of banana seeds
+/obj/item/seeds/carrot	pack of carrot seeds
+/obj/item/seeds/cocoapod	pack of cocoa pod seeds
+/obj/item/seeds/garlic	pack of garlic seeds
+/obj/item/seeds/grape	pack of grape seeds
+/obj/item/seeds/grass	pack of grass seeds
+/obj/item/seeds/onion	pack of onion seeds
+/obj/item/seeds/orange	pack of orange seeds
+/obj/item/seeds/potato	pack of potato seeds
+/obj/item/seeds/pumpkin	pack of pumpkin seeds
+/obj/item/seeds/sugarcane	pack of sugarcane seeds
+/obj/item/seeds/tomato	pack of tomato seeds
+/obj/item/seeds/tower	pack of tower-cap mycelium
+/obj/item/seeds/watermelon	pack of watermelon seeds
+/obj/item/seeds/wheat	pack of wheat seeds
+/obj/item/trash/boritos	boritos bag
+/obj/item/trash/can	crushed can
+/obj/item/trash/candy	candy
+/obj/item/trash/chips	chips
+/obj/item/trash/plate	plate
+/obj/item/trash/sosjerky	Scaredy's Private Reserve Beef Jerky
+/obj/item/reagent_containers/food/drinks/soda_cans/canned_laughter	Canned Laughter
+/obj/item/reagent_containers/food/condiment/milk	space milk
+/obj/item/reagent_containers/food/condiment/soymilk	soy milk
+/obj/item/reagent_containers/food/snacks/meat/slab/monkey	monkey meat

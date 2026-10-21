@@ -1,0 +1,4 @@
+# DM path <TAB> in-game name <TAB> how many are placed on BoxStation (if any)
+/obj/item/target/alien/anchored	shooting target	(x1 on BoxStation)
+/obj/item/target/clown	shooting target	(x2 on BoxStation)
+/obj/item/target/syndicate	shooting target	(x2 on BoxStation)

@@ -1,0 +1,40 @@
+# item types to document (DM path, in-game name)
+/obj/item/newspaper	newspaper
+/obj/item/paper/fluff/holodeck/disclaimer	Holodeck Disclaimer
+/obj/item/paper/fluff/jobs/security/beepsky_mom	Note from Beepsky's Mom
+/obj/item/paper/fluff/jobs/security/court_judgement	paper- 'Judgement'
+/obj/item/paper/guides/jobs/engi/gravity_gen	paper- 'Generate your own gravity!'
+/obj/item/paper/guides/jobs/engi/solars	paper- 'Going green! Setup your own solar array instructions.'
+/obj/item/paper/guides/jobs/hydroponics	paper- 'Greetings from Billy Bob'
+/obj/item/paper/monitorkey	monitor decryption key
+/obj/item/paper/pamphlet/gateway	pamphlet
+/obj/item/paper_bin	paper bin
+/obj/item/paper_bin/carbon	carbon paper bin
+/obj/item/pda/atmos	atmospherics PDA
+/obj/item/pda/bar	bartender PDA
+/obj/item/pda/botanist	botanist PDA
+/obj/item/pda/captain	captain PDA
+/obj/item/pda/cargo	cargo technician PDA
+/obj/item/pda/chaplain	chaplain PDA
+/obj/item/pda/chemist	chemist PDA
+/obj/item/pda/clown	clown PDA
+/obj/item/pda/cook	cook PDA
+/obj/item/pda/curator	curator PDA
+/obj/item/pda/detective	detective PDA
+/obj/item/pda/engineering	engineering PDA
+/obj/item/pda/geneticist	geneticist PDA
+/obj/item/pda/heads/ce	chief engineer PDA
+/obj/item/pda/heads/cmo	chief medical officer PDA
+/obj/item/pda/heads/hop	head of personnel PDA
+/obj/item/pda/heads/hos	head of security PDA
+/obj/item/pda/heads/rd	research director PDA
+/obj/item/pda/janitor	janitor PDA
+/obj/item/pda/lawyer	lawyer PDA
+/obj/item/pda/medical	medical PDA
+/obj/item/pda/mime	mime PDA
+/obj/item/pda/quartermaster	quartermaster PDA
+/obj/item/pda/roboticist	roboticist PDA
+/obj/item/pda/security	security PDA
+/obj/item/pda/shaftminer	shaft miner PDA
+/obj/item/pda/toxins	scientist PDA
+/obj/item/pet_carrier	pet carrier

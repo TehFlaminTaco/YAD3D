@@ -1,0 +1,111 @@
+# item types to document (DM path, in-game name)
+/obj/item/flashlight	flashlight
+/obj/item/card/id	identification card
+/obj/item/pda	PDA
+/obj/item/geiger_counter	Geiger counter
+/obj/item/assembly/igniter	igniter
+/obj/item/radio/headset	radio headset
+/obj/item/radio/headset/headset_eng	engineering radio headset
+/obj/item/pda/atmos	atmospherics PDA
+/obj/item/radio/headset/headset_srv	service radio headset
+/obj/item/pda/bar	bartender PDA
+/obj/item/pda/botanist	botanist PDA
+/obj/item/radio/headset/heads/captain/alt	the captain's bowman headset
+/obj/item/pda/captain	captain PDA
+/obj/item/card/id/gold	gold identification card
+/obj/item/radio/headset/headset_cargo	supply radio headset
+/obj/item/pda/cargo	cargo technician PDA
+/obj/item/pda/chaplain	chaplain PDA
+/obj/item/camera/spooky	camera obscura
+/obj/item/radio/headset/headset_med	medical radio headset
+/obj/item/pda/chemist	chemist PDA
+/obj/item/radio/headset/heads/ce	the chief engineer's headset
+/obj/item/card/id/silver	silver identification card
+/obj/item/pda/heads/ce	chief engineer PDA
+/obj/item/radio/headset/heads/cmo	the chief medical officer's headset
+/obj/item/pda/heads/cmo	chief medical officer PDA
+/obj/item/pinpointer/crew	crew pinpointer
+/obj/item/flashlight/pen/paramedic	paramedic penlight
+/obj/item/pda/clown	clown PDA
+/obj/item/pda/cook	cook PDA
+/obj/item/pda/curator	curator PDA
+/obj/item/radio/headset/headset_sec/alt	security bowman headset
+/obj/item/pda/detective	detective PDA
+/obj/item/radio/headset/headset_sci	science radio headset
+/obj/item/pda/geneticist	geneticist PDA
+/obj/item/flashlight/pen	penlight
+/obj/item/radio/headset/heads/hop	the head of personnel's headset
+/obj/item/pda/heads/hop	head of personnel PDA
+/obj/item/radio/headset/heads/hos/alt	the head of security's bowman headset
+/obj/item/pda/heads/hos	head of security PDA
+/obj/item/pda/janitor	janitor PDA
+/obj/item/radio/headset/headset_srvsec	law and order headset
+/obj/item/pda/lawyer	lawyer PDA
+/obj/item/pda/medical	medical PDA
+/obj/item/pda/mime	mime PDA
+/obj/item/card/id/prisoner	prisoner ID card
+/obj/item/radio/headset/headset_srvmed	psychology headset
+/obj/item/pda/quartermaster	quartermaster PDA
+/obj/item/radio/headset/heads/rd	the research director's headset
+/obj/item/pda/heads/rd	research director PDA
+/obj/item/pda/roboticist	roboticist PDA
+/obj/item/pda/toxins	scientist PDA
+/obj/item/pda/security	security PDA
+/obj/item/radio/headset/headset_cargo/mining	mining radio headset
+/obj/item/pda/shaftminer	shaft miner PDA
+/obj/item/flashlight/seclite	seclite
+/obj/item/pda/engineering	engineering PDA
+/obj/item/t_scanner	T-ray scanner
+/obj/item/pda/viro	virology PDA
+/obj/item/pda/warden	warden PDA
+/obj/item/ai_module/core/freeformcore	'Freeform' Core AI Module
+/obj/item/ai_module/core/full/asimov	'Asimov' Core AI Module
+/obj/item/ai_module/core/full/custom	Default Core AI Module
+/obj/item/ai_module/reset	'Reset' AI module
+/obj/item/ai_module/reset/purge	'Purge' AI Module
+/obj/item/ai_module/supplied/freeform	'Freeform' AI Module
+/obj/item/ai_module/supplied/oxygen	'OxygenIsToxicToHumans' AI Module
+/obj/item/ai_module/supplied/protect_station	'ProtectStation' AI Module
+/obj/item/ai_module/supplied/quarantine	'Quarantine' AI Module
+/obj/item/ai_module/zeroth/onehuman	'OneHuman' AI Module
+/obj/item/aicard	intelliCard
+/obj/item/assembly/prox_sensor	proximity sensor
+/obj/item/assembly/signaler	remote signaling device
+/obj/item/assembly/timer	timer
+/obj/item/beacon	tracking beacon
+/obj/item/camera	camera
+/obj/item/camera/detective	Detective's camera
+/obj/item/camera_film	film cartridge
+/obj/item/cartridge/atmos	BreatheDeep cartridge
+/obj/item/cartridge/engineering	Power-ON cartridge
+/obj/item/cartridge/lawyer	P.R.O.V.E. cartridge
+/obj/item/cartridge/quartermaster	space parts & space vendors cartridge
+/obj/item/cartridge/signal/toxins	Signal Ace 2 cartridge
+/obj/item/electronics/airalarm	air alarm electronics
+/obj/item/flashlight/lamp	desk lamp
+/obj/item/flashlight/lamp/bananalamp	banana lamp
+/obj/item/flashlight/lamp/green	desk lamp
+/obj/item/flashlight/lantern	lantern
+/obj/item/mmi	Man-Machine Interface
+/obj/item/paicard	personal AI device
+/obj/item/pinpointer/nuke	pinpointer
+/obj/item/radio/off	station bounced radio
+/obj/item/taperecorder	universal recorder
+/obj/item/electronics/tracker	tracker electronics
+/obj/item/megaphone/clown	clown's megaphone
+/obj/item/cartridge/captain	Value-PAK cartridge
+/obj/item/radio/headset/heads/captain	the captain's headset
+/obj/item/card/id/captains_spare	captain's spare ID
+/obj/item/cartridge/cmo	Med-U DELUXE cartridge
+/obj/item/megaphone/command	command megaphone
+/obj/item/radio/headset/headset_sec	security radio headset
+/obj/item/binoculars	binoculars
+/obj/item/cartridge/ce	Power-On DELUXE cartridge
+/obj/item/cartridge/hop	HumanResources9001 cartridge
+/obj/item/cartridge/hos	R.O.B.U.S.T. DELUXE cartridge
+/obj/item/radio/headset/heads/hos	the head of security's headset
+/obj/item/megaphone/sec	security megaphone
+/obj/item/t_scanner/adv_mining_scanner/lesser	automatic mining scanner
+/obj/item/megaphone/cargo	supply megaphone
+/obj/item/card/id/departmental_budget/car	departmental card (FUCK)
+/obj/item/cartridge/rd	Signal Ace DELUXE cartridge

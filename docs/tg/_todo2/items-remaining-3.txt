@@ -1,0 +1,40 @@
+# item types to document (DM path, in-game name)
+/obj/item/coin/gold	coin
+/obj/item/coin/iron	coin
+/obj/item/coin/plasma	coin
+/obj/item/coin/silver	coin
+/obj/item/construction/plumbing	Plumbing Constructor
+/obj/item/defibrillator/compact/loaded	compact defibrillator
+/obj/item/defibrillator/loaded	defibrillator
+/obj/item/dest_tagger	destination tagger
+/obj/item/disk/nuclear	nuclear authentication disk
+/obj/item/electronics/airalarm	air alarm electronics
+/obj/item/electronics/tracker	tracker electronics
+/obj/item/electropack	electropack
+/obj/item/etherealballdeployer	Portable Ethereal Disco Ball
+/obj/item/export_scanner	export scanner
+/obj/item/fireaxe	fire axe
+/obj/item/gavelblock	gavel block
+/obj/item/gavelhammer	gavel hammer
+/obj/item/grenade/barrier	barrier grenade
+/obj/item/grenade/chem_grenade	chemical grenade
+/obj/item/grenade/chem_grenade/cleaner	cleaner grenade
+/obj/item/gun/ballistic/revolver/russian	Russian revolver
+/obj/item/gun/ballistic/shotgun/doublebarrel	double-barreled shotgun
+/obj/item/gun/ballistic/shotgun/riot	riot shotgun
+/obj/item/gun/syringe	syringe gun
+/obj/item/hand_labeler	hand labeler
+/obj/item/hand_tele	hand tele
+/obj/item/hemostat	hemostat
+/obj/item/implanter/exile	implanter (exile)
+/obj/item/inducer	inducer
+/obj/item/key/displaycase	display case key
+/obj/item/key/janitor	key
+/obj/item/key/security	key
+/obj/item/kitchen/rollingpin	rolling pin
+/obj/item/latexballon	latex glove
+/obj/item/melee/baton/loaded	stun baton
+/obj/item/mining_voucher	mining voucher
+/obj/item/mmi	Man-Machine Interface
+/obj/item/modular_computer/tablet/preset/advanced	tablet computer
+/obj/item/nanite_remote	nanite remote control

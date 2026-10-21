@@ -1,0 +1,29 @@
+# DM path <TAB> in-game name <TAB> how many are placed on BoxStation (if any)
+/obj/item/reagent_containers/glass/bottle/multiver	multiver bottle	(x1 on BoxStation)
+/obj/item/reagent_containers/glass/bottle/nutrient/ez	bottle of E-Z-Nutrient	(x1 on BoxStation)
+/obj/item/reagent_containers/glass/bottle/nutrient/rh	bottle of Robust Harvest	(x1 on BoxStation)
+/obj/item/reagent_containers/glass/bottle/toxin	toxin bottle
+/obj/item/reagent_containers/glass/bowl	bowl	(x8 on BoxStation)
+/obj/item/reagent_containers/glass/bucket	bucket	(x9 on BoxStation)
+/obj/item/reagent_containers/hypospray/cmo	hypospray
+/obj/item/reagent_containers/hypospray/medipen	epinephrine medipen
+/obj/item/reagent_containers/hypospray/medipen/survival	survival emergency medipen
+/obj/item/reagent_containers/pill/patch/aiuri	aiuri patch (burn)	(x1 on BoxStation)
+/obj/item/reagent_containers/spray/cleaner	space cleaner	(x6 on BoxStation)
+/obj/item/reagent_containers/spray/pepper	pepperspray	(x2 on BoxStation)
+/obj/item/reagent_containers/spray/waterflower	water flower
+/obj/item/reagent_containers/syringe/antiviral	syringe (spaceacillin)	(x1 on BoxStation)
+/obj/item/reagent_containers/syringe/lethal/execution	lethal injection syringe
+/obj/item/restraints/legcuffs/beartrap	bear trap	(x2 on BoxStation)
+/obj/item/retractor	retractor	(x1 on BoxStation)
+/obj/item/scalpel	scalpel	(x1 on BoxStation)
+/obj/item/shield/riot/tele	telescopic shield
+/obj/item/soap/deluxe	soap	(x2 on BoxStation)
+/obj/item/soap/nanotrasen	soap	(x2 on BoxStation)
+/obj/item/soapstone	soapstone
+/obj/item/stack/ducts/fifty	stack of duct	(x4 on BoxStation)
+/obj/item/stack/license_plates/empty/fifty	empty license plate	(x6 on BoxStation)
+/obj/item/stack/medical/bruise_pack	bruise pack
+/obj/item/stack/medical/gauze	medical gauze	(x1 on BoxStation)
+/obj/item/stack/medical/ointment	ointment
+/obj/item/stack/package_wrap	package wrapper	(x14 on BoxStation)

@@ -1,0 +1,29 @@
+# DM path <TAB> in-game name <TAB> how many are placed on BoxStation (if any)
+/obj/item/ai_module/core/freeformcore	'Freeform' Core AI Module	(x1 on BoxStation)
+/obj/item/ai_module/core/full/asimov	'Asimov' Core AI Module	(x1 on BoxStation)
+/obj/item/ai_module/core/full/custom	Default Core AI Module	(x1 on BoxStation)
+/obj/item/ai_module/reset	'Reset' AI module	(x2 on BoxStation)
+/obj/item/ai_module/reset/purge	'Purge' AI Module	(x1 on BoxStation)
+/obj/item/ai_module/supplied/freeform	'Freeform' AI Module	(x1 on BoxStation)
+/obj/item/ai_module/supplied/oxygen	'OxygenIsToxicToHumans' AI Module	(x1 on BoxStation)
+/obj/item/ai_module/supplied/protect_station	'ProtectStation' AI Module	(x1 on BoxStation)
+/obj/item/ai_module/supplied/quarantine	'Quarantine' AI Module	(x1 on BoxStation)
+/obj/item/ai_module/zeroth/onehuman	'OneHuman' AI Module	(x1 on BoxStation)
+/obj/item/assembly/prox_sensor	proximity sensor	(x12 on BoxStation)
+/obj/item/assembly/signaler	remote signaling device	(x12 on BoxStation)
+/obj/item/assembly/timer	timer	(x12 on BoxStation)
+/obj/item/bodypart/l_arm/robot/surplus	surplus prosthetic left arm
+/obj/item/bodypart/l_leg/robot/surplus	surplus prosthetic left leg
+/obj/item/bodypart/r_arm/robot/surplus	surplus prosthetic right arm
+/obj/item/bodypart/r_leg/robot/surplus	surplus prosthetic right leg
+/obj/item/camera/detective	Detective's camera	(x1 on BoxStation)
+/obj/item/camera/spooky	camera obscura
+/obj/item/camera_film	film cartridge	(x3 on BoxStation)
+/obj/item/card/id/departmental_budget/car	departmental card (FUCK)
+/obj/item/circular_saw	circular saw	(x1 on BoxStation)
+/obj/item/clothing/gloves/boxing/blue	boxing gloves
+/obj/item/clothing/gloves/boxing/green	boxing gloves
+/obj/item/clothing/gloves/boxing/yellow	boxing gloves
+/obj/item/clothing/gloves/color/rainbow	rainbow gloves	(x1 on BoxStation)
+/obj/item/clothing/head/crown/fancy	magnificent crown
+/obj/item/clothing/head/helmet	helmet	(x1 on BoxStation)

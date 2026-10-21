@@ -1,0 +1,29 @@
+# DM path <TAB> in-game name <TAB> how many are placed on BoxStation (if any)
+/obj/item/stack/pipe_cleaner_coil/random	pipe cleaner coil	(x6 on BoxStation)
+/obj/item/stack/sheet/glass/fifty	glass	(x14 on BoxStation)
+/obj/item/stack/sheet/metal/fifty	metal	(x24 on BoxStation)
+/obj/item/stack/sheet/metal/five	metal	(x2 on BoxStation)
+/obj/item/stack/spacecash/c10	space cash	(x1 on BoxStation)
+/obj/item/stack/spacecash/c100	space cash	(x1 on BoxStation)
+/obj/item/stack/spacecash/c200	space cash	(x1 on BoxStation)
+/obj/item/stack/wrapping_paper	wrapping paper	(x1 on BoxStation)
+/obj/item/stock_parts/cell/high/plus	high-capacity power cell+	(x13 on BoxStation)
+/obj/item/storage/box/prisoner	box of prisoner IDs	(x3 on BoxStation)
+/obj/item/storage/box/rxglasses/spyglasskit	spyglass kit
+/obj/item/storage/box/shipping	box of shipping supplies	(x2 on BoxStation)
+/obj/item/storage/firstaid/brute	brute trauma treatment kit	(x2 on BoxStation)
+/obj/item/storage/firstaid/emergency	emergency first-aid kit
+/obj/item/storage/firstaid/fire	burn treatment kit	(x2 on BoxStation)
+/obj/item/storage/firstaid/o2	oxygen deprivation treatment kit	(x2 on BoxStation)
+/obj/item/storage/firstaid/regular	first-aid kit	(x19 on BoxStation)
+/obj/item/storage/firstaid/toxin	toxin treatment kit	(x3 on BoxStation)
+/obj/item/storage/pill_bottle/dice	bag of dice	(x2 on BoxStation)
+/obj/item/storage/pill_bottle/happinesspsych	happiness pills
+/obj/item/storage/pill_bottle/lsdpsych	mindbreaker toxin pills
+/obj/item/storage/pill_bottle/mannitol	bottle of mannitol pills
+/obj/item/storage/pill_bottle/mutadone	bottle of mutadone pills	(x1 on BoxStation)
+/obj/item/storage/pill_bottle/paxpsych	pax pills
+/obj/item/storage/pill_bottle/psicodine	bottle of psicodine pills
+/obj/item/surgical_drapes	surgical drapes	(x2 on BoxStation)
+/obj/item/t_scanner/adv_mining_scanner/lesser	automatic mining scanner
+/obj/item/target/alien	shooting target	(x2 on BoxStation)
