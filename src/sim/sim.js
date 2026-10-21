@@ -34,6 +34,7 @@ import { breathRate } from '../shared/items.js';
 import { breathOf, GAS_IDS } from '../shared/gases.js';
 import { Dispensers } from './dispensers.js';
 import { Anchoring } from './anchoring.js';
+import { PipeFittings } from './pipefit.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -120,6 +121,7 @@ export class Sim {
     this.tanks = new Tanks(this);
     this.dispensers = new Dispensers(this);
     this.anchoring = new Anchoring(this);
+    this.pipefit = new PipeFittings(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 
@@ -443,6 +445,7 @@ export class Sim {
       gone: g.props.interact.filter((it) => it.gone && it.kind !== 'closet').map((it) => it.idx),    // things that were blown up
       pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv(), ...g.pipenet.pv()],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
       pd: g.atmosdev.pd(),                                                                         // canisters broken open: no longer in the way
+      ps: g.propLog,                                                                               // props made while the game runs
       pa: [...g.anchorLog],                                                                        // props bolted down or freed
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
@@ -803,6 +806,28 @@ export class Sim {
     g.powersim.blast(c, r, Math.ceil(heavy / TILE) + 1, o.l | 0);
     g.atmosdev.blast(c, r, o.heavy ?? 0, o.light ?? 0, o.l | 0);
     this.lights.blast(g, c, r, Math.ceil(light / TILE));
+  }
+
+  /**
+   * Make props while the game runs (the specs are level prop records: see Grid.addProps). Everyone is told, and whoever joins later; returns the new records, which have their
+   * indexes in `props.interact` from here on. Other things that count props (the pipe network, the power machines) are told by the caller.
+   */
+  addProps(g, specs) {
+    const added = g.addProps(specs);
+    g.propLog.push(...specs);
+    g.emit({ e: 'p+', sp: specs });
+    this.physics.touch(g);
+    return added.interact;
+  }
+
+  /** A prop is taken away (it stays in the lists, hidden: its index is never used again). Everyone is told. */
+  removeProp(g, it) {
+    if (it.gone) return;
+    it.gone = true;
+    g.world.boxDrop(it);
+    if (it.bh && it.anc) g.world.solid[g.world.idx(it.c, it.r, it.l | 0)] = 0;
+    g.emit({ e: 'pg', i: it.idx });
+    this.physics.touch(g);
   }
 
   /** The wall switch of a room's lights. */

@@ -21,6 +21,7 @@ export class Grid {
     this.kind = o.kind || 'station';            // station | shuttle | pod | ...
     this.name = o.name || decoded.bp;
     this.level = decoded.level;
+    this.rects = rects;                         // the sprite rectangles props are built with (also for props made while the game runs)
     this.spawns = decoded.spawns;               // where jobs start: [{ job, x, y }] in tiles
     this.map = null;                            // set by GameMap.add
     this.tf = o.tf ? tfClone(o.tf) : tfIdentity();
@@ -33,6 +34,18 @@ export class Grid {
     this.world.grid = this;
     this.props = buildPropData(this.world, rects, decoded.props, decoded.level);
     this.doors = this.props.doors.map((p, i) => this.makeDoor(p, i));
+  }
+
+  /**
+   * Props made while the game runs (a machine fastened down, a structure put up): `specs` are records like the level's own (`{k, x, y, l, d, s, p, ...}`, x and y the tile), built by the
+   * same code and appended to the same lists, so both sides count them alike (the server sends the specs, in order, and a late joiner gets them all). Returns what was added
+   * (`props.added`: `interact`, `statics`, `doors`, `lights`...).
+   */
+  addProps(specs) {
+    buildPropData(this.world, this.rects, specs, this.level, this.props);
+    const added = this.props.added;
+    for (const p of added.doors) this.doors.push(this.makeDoor(p, this.doors.length));
+    return added;
   }
 
   /** A door for prop record `p`, number `idx` in this grid's own list (clients and server count them the same way). */

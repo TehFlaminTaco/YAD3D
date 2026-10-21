@@ -142,6 +142,17 @@ export class GridView {
     }
   }
 
+  /** Props were made while the game runs (`Grid.addProps`): draw what they brought. */
+  addProps(added) {
+    this.addStatics(added.statics);
+    for (const it of added.closets) this.setClosetView(it);
+    for (const it of added.interact) {
+      if (it.gone && it.kind !== 'closet') this.setPropGone(it);
+      if (it.pv) this.setPropVariant(it);
+    }
+    for (const d of this.grid.doors.slice(this.grid.doors.length - added.doors.length)) this.addDoorView(d);
+  }
+
   /** Show a closet as its state says: closed, locked, welded or open (or gone). */
   setClosetView(it) {
     const rc = this.rects[closetSprite(it)];

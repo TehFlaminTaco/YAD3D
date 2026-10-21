@@ -134,6 +134,7 @@ export class Actions {
       sim.tell(m, 'notice', it.lit ? 'You turn on the welding tool.' : 'You turn off the welding tool.');
       return;
     }
+    if (it.fit) return sim.pipefit.rotate(m, it);                          // a pipe fitting: a quarter turn
     if (d.tray) { it.on = !it.on; m.dirty = true; sim.sound('beep', m, 0.3); return; }           // the T-ray scanner (t_scanner.dm attack_self: no message)
     if (d.storage) {
       if (m.openContainers.has(it.id)) m.openContainers.delete(it.id); else m.openContainers.add(it.id);
@@ -230,6 +231,7 @@ export class Actions {
       return;
     }
     if (held?.def.analyzer && rec.item.mix) { scanMix(sim, m, rec.item.mix, `the ${rec.item.name}`); return; }       // a gas analyzer on a tank lying there
+    if (held?.def.tool === 'wrench' && rec.item.fit && sim.pipefit.fasten(m, rec)) return;                          // a wrench on a pipe fitting lying there: it is fastened down
     // a held container takes the item in
     if (held?.def.storage && m.intent === 'help') {
       const why = storageReason(held, rec.item);
@@ -293,7 +295,7 @@ export class Actions {
     if (it.kind === 'closet') return sim.closets.click(c, m, it, held, alt);
     if (it.mach && it.mach.click(c, m, held, alt)) return;                        // a machine with its own rules (the power machines: src/sim/power/)
     if (it.gone) return;
-    if (held?.def.tool === 'wrench' && sim.anchoring.wrench(m, it, held)) return;     // a wrench fastens down or frees what the DM lets it (anchoring.js)
+    if (held?.def.tool === 'wrench' && (sim.anchoring.wrench(m, it, held) || sim.pipefit.unfasten(m, it, held))) return;     // a wrench fastens down or frees what the DM lets it (anchoring.js), or takes a pipe machine off its pipe (pipefit.js)
     if (sim.tanks.click(m, it, held)) return;                                     // a fuel or water tank: refill from it
     if (/^\/?structure\/tank_dispenser/.test(it.path || '')) return sim.dispensers.click(c, m, it, held);
     if (it.kind === 'container') return this.openContainer(m, it);

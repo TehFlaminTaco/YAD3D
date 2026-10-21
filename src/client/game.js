@@ -205,6 +205,7 @@ export class Game {
     rep.on('dbg', (ev) => this.debugMenu.reply(ev));
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('area', (ev) => gv(ev)?.rebuildLights());
+    rep.on('p+', (ev) => { const v = gv(ev); if (v) v.addProps(v.grid.props.added); });
     rep.on('pv', (ev) => { const v = gv(ev); if (v) v.setPropVariant(v.grid.props.interact[ev.i]); });
     rep.on('pg', (ev) => { const v = gv(ev); if (v) v.setPropGone(v.grid.props.interact[ev.i]); });
     rep.on('light', (ev) => { const v = gv(ev); if (v) v.setLightStatus(v.grid.props.lights[ev.i]); });

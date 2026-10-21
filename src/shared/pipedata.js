@@ -42,6 +42,29 @@ export const turnCW = (d) => CW[d];
 export const turnCCW = (d) => ({ [N]: W, [W]: S, [S]: E, [E]: N })[d];
 export { OPP };
 
+/** How far a picture drawn facing south is turned about the vertical (the floor sprites' `yaw`) to face `d`: east -90 degrees, north 180, west 90. */
+const FACE = { [S]: 0, [E]: -Math.PI / 2, [N]: Math.PI, [W]: Math.PI / 2 };
+export const turnBetween = (from, to) => (FACE[to] ?? 0) - (FACE[from] ?? 0);
+
+/** The way a built machine faces when its fitting faces `d` (construction.dm fixed_dir): a binary one (a pump, a valve) is built facing north or east whichever way the fitting was turned. */
+export const fixedDir = (path, d) => (/\/binary\//.test(path) ? ({ [S]: N, [W]: E })[d] ?? d : d);
+
+export const DIR_NAME = { [N]: 'north', [S]: 'south', [E]: 'east', [W]: 'west' };
+/** The index of a direction among a fitting's four pictures (south, north, east, west). */
+export const FACE_INDEX = { [S]: 0, [N]: 1, [E]: 2, [W]: 3 };
+
+/**
+ * The level prop record of a machine put down on tile (c, r) of deck `l` from its fitting `fit` (`{p, n, d, mv, ly}`: what it was and how it was set): the pictures are the machine's own, drawn
+ * facing south and turned to face `d`.
+ */
+export function fittingSpec(level, fit, c, r, l, d) {
+  const t = level.fittings?.[fit.p];
+  if (!t) return null;
+  return {
+    k: 'sprite', x: c, y: r, l, d, n: fit.n, p: fit.p, s: t.sv[0], sv: t.sv, flat: 1, ly: fit.ly, den: 0, cont: 0, anc: 1, rot: t.meter ? 0 : turnBetween(t.bd, d), ...(fit.mv ? { mv: fit.mv } : {}),
+  };
+}
+
 /** The key of a pipe's picture in `level.pipeSprites`. */
 export const pipeSpriteKey = (code, layer, col) => `${code & 31}-${layer}-${col}`;
 

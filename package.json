@@ -19,6 +19,8 @@
     "test:atmos": "node tools/atmostest.mjs",
     "test:pipes": "node tools/pipetest.mjs",
     "test:anchor": "node tools/anchortest.mjs",
+    "test:runtime": "node tools/runtimetest.mjs",
+    "test:fittings": "node tools/fittingtest.mjs",
     "test:soak": "node tools/simtest.mjs 12 --player",
     "test:ui": "node tools/uitest.mjs",
     "test:net": "node tools/nettest.mjs"

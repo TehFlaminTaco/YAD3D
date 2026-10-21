@@ -215,6 +215,51 @@ export class PipeNet {
     for (const m of GL) { const f = m.vol / V; for (const id of GAS_IDS) m.g[id] = tot[id] * f; }
   }
 
+  /** What each pipe holds, by slot (its share of its pipeline's gas by volume): the gas a rebuilt network keeps (`assemble(keep)`). */
+  snapshot() {
+    const w = this.world, keep = new Map();
+    for (const line of this.lines) {
+      const tot = line.air.vol;
+      if (!(tot > 0)) continue;
+      for (const s of line.slots) {
+        const vol = SHAPES[w.pipe[s] & 31].vol, m = new Mix(vol);
+        for (const id of GAS_IDS) m.g[id] = line.air.g[id] * vol / tot;
+        keep.set(s, m);
+      }
+    }
+    return keep;
+  }
+
+  /** The network changed (a machine put down or taken off): join everything again, keeping the gas the pipes hold. */
+  rebuild() {
+    const keep = this.snapshot();
+    this.link();
+    this.assemble(keep);
+  }
+
+  /** A prop record that came after the network was made (a machine fastened down): its device joins. Returns it, or null for a prop that is not a pipe machine. */
+  adopt(it) {
+    const dev = makeDevice(this, it, norm(it.path));
+    if (!dev) return null;
+    this.devices.push(dev);
+    if (!this.devAt.has(dev.i)) this.devAt.set(dev.i, []);
+    this.devAt.get(dev.i).push(dev);
+    it.mach = dev;
+    this.rebuild();
+    dev.start?.();
+    return dev;
+  }
+
+  /** A machine is taken off its pipes. */
+  unadopt(dev) {
+    const k = this.devices.indexOf(dev);
+    if (k >= 0) this.devices.splice(k, 1);
+    const at = this.devAt.get(dev.i);
+    if (at) { const j = at.indexOf(dev); if (j >= 0) at.splice(j, 1); if (!at.length) this.devAt.delete(dev.i); }
+    if (dev.it.mach === dev) dev.it.mach = null;
+    this.rebuild();
+  }
+
   /** The gas of the pipe on tile `i`, layer `ly`: its whole pipeline's (meters read it). */
   airAt(i, ly) { const s = this.slotAt(i, ly), l = s >= 0 ? this.lineOf[s] : -1; return l >= 0 ? this.lines[l].air : null; }
 

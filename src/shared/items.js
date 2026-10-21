@@ -3,6 +3,7 @@
  * come from the real SS13 item definitions (level.itemdefs). Behaviour is a small prefix table below.
  */
 import { Mix, molesAt, ONE_ATMOSPHERE, O2STANDARD, N2STANDARD } from './gases.js';
+import { DIR_NAME } from './pipedata.js';
 
 const TOOLS = ['/obj/item/screwdriver', '/obj/item/wrench', '/obj/item/weldingtool', '/obj/item/crowbar', '/obj/item/wirecutters', '/obj/item/multitool',
   '/obj/item/stack/cable_coil', '/obj/item/t_scanner', '/obj/item/flashlight', '/obj/item/extinguisher', '/obj/item/analyzer', '/obj/item/geiger_counter'];
@@ -158,6 +159,7 @@ export function describeState(it) {
   if (d.jetpack) return `${Math.round(it.gas / d.jetpack.cap * 100)}% gas`;
   if (d.tool === 'welder') return `fuel ${Math.ceil(it.fuel)}${it.lit ? ', lit' : ''}`;
   if (d.tray) return it.on ? 'on' : 'off';
+  if (it.fit) return `facing ${DIR_NAME[it.fit.d] ?? 'south'}`;
   if (d.charges) return `${it.charges} charges`;
   if (it.amount !== undefined && d.stack > 1) return `x${it.amount}`;
   if (d.storage) return `${it.contents.length} item${it.contents.length === 1 ? '' : 's'}`;

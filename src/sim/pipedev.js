@@ -1,5 +1,5 @@
 import { N, S, E, W, OPP } from '../shared/config.js';
-import { Mix, GAS_IDS, GAS_NAME, ONE_ATMOSPHERE, CELL_VOLUME, molesAt, pumpGas, O2STANDARD, N2STANDARD, AIR_MODE } from '../shared/gases.js';
+import { Mix, GAS_IDS, GAS_NAME, ONE_ATMOSPHERE, CELL_VOLUME, molesAt, kpaOf, pumpGas, O2STANDARD, N2STANDARD, AIR_MODE } from '../shared/gases.js';
 import { CH } from '../shared/power.js';
 import { turnCW } from '../shared/pipedata.js';
 import { esc } from '../shared/util.js';
@@ -64,6 +64,25 @@ export class Device {
   examine() { return []; }
   click() { return false; }
   console() { return null; }
+
+  /** Why a wrench cannot take it off its pipe, if it cannot (the DM's `can_unwrench` overrides): one that is running, or a connector with a machine on it. */
+  unwrenchRefusal() {
+    const the = `the ${this.name}`;
+    if (this.isConnector && this.device) return `You cannot unwrench ${the}, detach ${this.device.name ? `the ${this.device.name}` : 'it'} first!`;
+    if (!this.isConnector && !this.isValve && this.on && this.operational) return `You cannot unwrench ${the}, turn it off first!`;
+    return null;
+  }
+
+  /** What its gas does when it is taken away: it goes out into the room. */
+  release() {
+    const a = this.grid.atmos, c = this.it.c, r = this.it.r;
+    for (const mix of this.airs) {
+      const kpa = {};
+      for (const id of GAS_IDS) kpa[id] = kpaOf(mix.g[id], CELL_VOLUME);
+      a.addGases(c, r, kpa, this.it.l | 0);
+      mix.clear();
+    }
+  }
 }
 
 /** A row of console buttons that nudge a number: -100 -10 -1 +1 +10 +100. */

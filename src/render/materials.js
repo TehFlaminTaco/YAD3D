@@ -125,7 +125,11 @@ void main() {
     vec3 r = vec3(n.z, 0.0, -n.x);
     world = iA.xyz + r * (iB.z + cn.x * iB.x) + up * (iB.w + cn.y * iB.y);
   } else {
-    world = iA.xyz + vec3(iB.z + cn.x * iB.x, 0.0, iB.w - (cn.y - 0.5) * iB.y);
+    // lying on the floor (3) or hung from the ceiling (2): turned about its middle by yaw (a pipe machine put down facing another way)
+    vec2 off = vec2(iB.z + cn.x * iB.x, iB.w - (cn.y - 0.5) * iB.y);
+    float cs = cos(iD.x), sn = sin(iD.x);
+    off = vec2(off.x * cs - off.y * sn, off.x * sn + off.y * cs);
+    world = iA.xyz + vec3(off.x, 0.0, off.y);
   }
   world = (modelMatrix * vec4(world, 1.0)).xyz;
   vUv = vec2(mix(iUV.x, iUV.z, cn.x + 0.5), mix(iUV.w, iUV.y, cn.y));

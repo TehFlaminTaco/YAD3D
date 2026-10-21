@@ -364,6 +364,8 @@ GAME_ITEMS = [
     '/obj/item/stock_parts/cell/high/plus', '/obj/item/stock_parts/cell/crap',
     # the engine's fuel (tank_dispenser.dm, collector.dm)
     '/obj/item/tank/internals/plasma', '/obj/item/tank/internals/oxygen',
+    # what a pipe machine becomes when it is unwrenched (construction.dm)
+    '/obj/item/pipe', '/obj/item/pipe_meter',
     '/obj/item/clothing/under/color/grey', '/obj/item/clothing/shoes/sneakers/black', '/obj/item/storage/backpack',
     # what windows and grilles drop and are rebuilt from (window.dm spawnDebris, grille.dm deconstruct)
     '/obj/item/stack/rods', '/obj/item/stack/sheet/rglass', '/obj/item/stack/sheet/plasmaglass', '/obj/item/stack/sheet/plasmarglass', '/obj/item/shard',
@@ -587,6 +589,42 @@ def atmos_prop(p, v, r, d, base, spr):
     if pv:
         rec['mv'] = pv                             # (the vars the map sets: `pv` is already what a prop calls the picture it shows)
     return rec
+
+
+# the machines a wrench takes off their pipes (can_unwrench = TRUE in the DM): unary / binary / trinary component, by its name
+FITTABLE = {('unary', 'vent_pump'), ('unary', 'vent_scrubber'), ('unary', 'portables_connector'), ('unary', 'outlet_injector'),
+            ('binary', 'pump'), ('binary', 'valve'), ('trinary', 'filter'), ('trinary', 'mixer')}
+
+
+def fitting_for(p, r, spr, table):
+    """What a pipe machine becomes when it is unwrenched (construction.dm: a pipe fitting, `/obj/item/pipe`, picture `pipe_state` in pipe_item.dmi, four ways round) and what it looks like
+    put down again: `table[path]` = {n: the name of the fitting, s: its picture facing S, N, E, W, sv: the machine's own pictures facing south (turned by the game for the other ways),
+    bd: the way those face, meter: 1 for a gas meter}. Only the machines that can be unwrenched."""
+    key = p.split('/', 2)[2]
+    if key in table:
+        return
+    PI = AT + 'pipes/pipe_item.dmi'
+    if p.startswith('/obj/machinery/meter'):
+        sv = [spr.add([(AT + 'pipes/meter.dmi', st, S, None, None)]) for st in METER_STATES]
+        item = spr.add([(PI, 'meter', S, None, None)])
+        if item >= 0 and all(s_ >= 0 for s_ in sv):
+            table[key] = {'n': 'meter', 's': [item] * 4, 'sv': sv, 'bd': S, 'meter': 1}
+        return
+    if not p.startswith('/obj/machinery/atmospherics/components/'):
+        return
+    q = p[len('/obj/machinery/atmospherics/components/'):]
+    kind, _, rest = q.partition('/')
+    if (kind, rest.split('/')[0]) not in FITTABLE:
+        return
+    typ = resolve('/obj/machinery/atmospherics/components/' + '/'.join(q.split('/')[:2]))
+    state = r.get('pipe_state') or typ.get('pipe_state')
+    pic = atmos_pictures(p, r, S, spr)
+    if not state or not pic or pic.get('stand') or not sl.get_dmi(PI).has(state):
+        return
+    items = [spr.add([(PI, state, dd, None, None)]) for dd in (S, N, E, W)]
+    if any(s_ < 0 for s_ in items) or any(s_ < 0 for s_ in pic['sv']):
+        return
+    table[key] = {'n': clean_name(typ.get('name', '')) or 'pipe machine', 's': items, 'sv': pic['sv'], 'bd': pic.get('dir') or S}
 
 
 def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
@@ -882,6 +920,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                 rec = atmos_prop(p, v, r, d, {'x': x - 1, 'y': Ht - y, 'd': d, 'n': clean_name(r.get('name', ''))}, spr)
                 if rec:
                     props.append(rec)
+                    fitting_for(p, r, spr, shared.setdefault('fittings', {}))
                     stats['pipe_part'] += 1
                 else:
                     missing[p] += 1
@@ -1502,7 +1541,7 @@ def build(mapname):
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'lightItems': light_items, 'tiles': base['tiles'],
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'lightItems': light_items, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,
