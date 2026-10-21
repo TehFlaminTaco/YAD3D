@@ -1171,6 +1171,8 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                         # slid along the wall by the map's other pixel offset (side by side buttons, an alarm off to one side): +x on a north or south wall, +z on an east or west one
                         lat = int(max(-14, min(14, mpx if side in (N, S) else -mpy)))
                         rec = dict(base, k='wm', d=face, sd=side, s=sp, sub=sub, p=p)
+                        if sub == 'button' and p.startswith('/obj/machinery/button/ignition') and isinstance(r.get('id'), str):
+                            rec['id'] = r['id'].strip('"')                  # which igniters and sparkers it works (the ones with the same id)
                         if sub == 'apc' and isinstance(v.get('areastring'), str):
                             rec['as'] = v['areastring'].strip('"')        # the area it controls (by its path), when the map says
                         if sub == 'apc':
@@ -1255,6 +1257,14 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                     continue
                 cont = 1 if p.startswith(('/obj/structure/closet', '/obj/structure/rack')) else 0
                 rec = dict(base, k='sprite', s=sp, den=den, bb=1, cont=cont, p=p.split('/', 2)[2])
+                if p.startswith('/obj/machinery/space_heater') and all(dmi.has(q) for q in ('sheater-off', 'sheater-standby', 'sheater-heat', 'sheater-cool', 'sheater-open')):
+                    # off, standby, heating, cooling (spaceheater.dm update_icon_state), then the same with the hatch open: the pictures `sv` the sim picks from
+                    rec['sv'] = [spr.add([(icon, 'sheater-' + st_, d, None, None)] + ([(icon, 'sheater-open', d, None, None)] if op else [])) for op in (0, 1) for st_ in ('off', 'standby', 'heat', 'cool')]
+                if p.startswith(('/obj/machinery/igniter', '/obj/machinery/sparker')):
+                    if isinstance(r.get('id'), str):
+                        rec['id'] = r['id'].strip('"')                      # (igniter.dm: the ignition switch with the same id works it)
+                    if p.startswith('/obj/machinery/igniter') and dmi.has('igniter0') and dmi.has('igniter1'):
+                        rec['sv'] = [spr.add([(icon, 'igniter0', d, None, None)]), spr.add([(icon, 'igniter1', d, None, None)])]       # off, on
                 if any(sl.get_dmi(l[0]).states[l[1]].dirs > 1 for l in layers):
                     # it looks different from every side: the game picks the picture by where you stand (S, N, E, W as the thing is turned)
                     fr = [spr.add(dir_set(layers, dd)) for dd in (S, N, E, W)]

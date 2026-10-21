@@ -10,6 +10,65 @@ const OXYGEN_BURN_RATE_BASE = 1.4, PLASMA_OXYGEN_FULLBURN = 10, PLASMA_BURN_RATE
 const MINIMUM_MOLE_COUNT = 0.01;
 const CYCLE = 0.5;                                 // seconds between one SSair cycle and the next
 const IGNITER_EVERY = 2;                           // igniter.dm process: every machine tick
+const SPARKER_COOLDOWN = 5;                        // igniter.dm sparker: 50 deciseconds between sparks
+const BUTTON_COOLDOWN = 3;                         // doorcontrol.dm control/igniter: 30 deciseconds
+const the = (it) => `the ${it.name}`;
+
+/** The igniter (igniter.dm): on, and with power, it sets its tile alight every two seconds (1000 K over 500 litres); a hand, or the ignition switch with its id, switches it. */
+class Igniter {
+  constructor(fire, g, it) {
+    this.fire = fire; this.g = g; this.it = it;
+    this.id = it.id && it.id !== 'null' ? it.id : null;
+    this.on = /\/on(\/|$)/.test(it.path || '');
+    this.v = this.on ? 1 : 0;
+    it.mach = this;
+  }
+  get tile() { return this.g.world.idx(this.it.c, this.it.r, this.it.l | 0); }
+  get powered() { return this.g.power.powered(this.g.world.areaIdx[this.tile], CH.EQUIP); }
+  variant() { return this.on && this.powered ? 1 : 0; }
+  touch() {
+    const v = this.variant();
+    if (v === this.v) return;
+    this.v = v;
+    this.g.emit({ e: 'pv', i: this.it.idx, v });
+  }
+  toggle() { this.on = !this.on; this.touch(); }
+  click(c, m, held) {
+    if (held) return false;
+    this.toggle();                                                                  // attack_hand: it is switched, with no word said
+    this.fire.sim.sound('beep', { grid: this.g, x: this.it.x, z: this.it.z, l: this.it.l | 0 }, 0.3);
+    return true;
+  }
+}
+
+/** The wall-mounted igniter (igniter.dm sparker): a spark that lights its tile, once every five seconds; a screwdriver cuts it off or joins it again. */
+class Sparker {
+  constructor(fire, g, it) {
+    this.fire = fire; this.g = g; this.it = it;
+    this.id = it.id && it.id !== 'null' ? it.id : null;
+    this.disable = false; this.last = -1e9;
+    it.mach = this;
+  }
+  get tile() { return this.g.world.idx(this.it.c, this.it.r, this.it.l | 0); }
+  get powered() { return this.g.power.powered(this.g.world.areaIdx[this.tile], CH.EQUIP); }
+  ignite() {
+    const sim = this.fire.sim, it = this.it;
+    if (!this.powered || this.disable || sim.time < this.last + SPARKER_COOLDOWN) return false;
+    this.last = sim.time;
+    sim.sound('sparks', { grid: this.g, x: it.x, z: it.z, l: it.l | 0 }, 0.6);
+    this.fire.expose(this.g, this.tile, 1000, 2500);
+    return true;
+  }
+  click(c, m, held) {
+    const sim = this.fire.sim;
+    if (held?.def.tool !== 'screwdriver') return false;
+    this.disable = !this.disable;
+    sim.chat.visible(m, `${m.name} ${this.disable ? 'disables' : 'reconnects'} ${the(this.it)}!`, 'notice', 10, m);
+    sim.tell(m, 'notice', this.disable ? `You disable the connection to ${the(this.it)}.` : `You fix the connection to ${the(this.it)}.`);
+    sim.sound('screwdriver', { grid: this.g, x: this.it.x, z: this.it.z, l: this.it.l | 0 }, 0.6);
+    return true;
+  }
+}
 
 /**
  * Plasma combustion (reactions.dm plasmafire): in a mixture at or over 373 kelvin with plasma and oxygen, plasma burns into carbon dioxide (and a quarter as much water vapor) using up 1.4 less
@@ -67,9 +126,22 @@ export class Fire {
       return;
     }
     if (temperature > PLASMA_MINIMUM_BURN_TEMPERATURE && tox > 0.5) {
-      fires.set(i, { vol: volume * 25, temp: temperature, just: true, st: 1 });
+      const born = { vol: volume * 25, temp: temperature, just: true, st: 1 };
+      fires.set(i, born);
       (g.fireOn ??= new Set()).add(i);
+      this.burn(g, i, born);                                                // (Initialize -> perform_exposure: it burns what it covers at once, while `just_spawned`)
     }
+  }
+
+  /** perform_exposure, the part for a hotspot that does not fill its tile (or is new): it takes its share of the tile's gas, heats it to its own temperature and lets it react; it is as big as the fire that made. */
+  burn(g, i, f) {
+    const cell = g.atmos.cell(i);
+    const affected = cell.remove(Math.min(1, f.vol / CELL_VOLUME) * cell.total());
+    affected.t = f.temp;
+    const fire = plasmaFire(affected);
+    f.temp = affected.t;
+    f.vol = fire * FIRE_GROWTH_RATE;
+    cell.merge(affected);
   }
 
   /** The same for a point in the grid's frame (what holds a flame there: a welding tool in a hand). */
@@ -103,15 +175,35 @@ export class Fire {
     }
   }
 
-  /** The igniters of the map (`machinery/igniter`; those that start on are `igniter/on`): a lit one with power exposes its tile to 1000 kelvin (igniter.dm process). */
-  igniters(g) {
-    if (!g.igniterList) g.igniterList = g.props.interact.filter((it) => /^\/?machinery\/igniter/.test(it.path || ''));
-    for (const it of g.igniterList) {
-      if (it.gone) continue;
-      it.ign ??= { on: /\/on(\/|$)/.test(it.path) };
-      if (!it.ign.on || !g.power.powered(g.world.areaIdx[g.world.idx(it.c, it.r, it.l | 0)], CH.EQUIP)) continue;
-      this.expose(g, g.world.idx(it.c, it.r, it.l | 0), 1000, 500);
+  /** The grid is made: its igniters and mounted igniters (the map's `machinery/igniter`, `igniter/on` for those that start on, and `machinery/sparker`) become machines. */
+  attach(g) {
+    g.igniterList = []; g.sparkerList = [];
+    for (const it of g.props.interact) {
+      const p = (it.path || '').replace(/^\//, '');
+      if (/^machinery\/igniter/.test(p)) g.igniterList.push(new Igniter(this, g, it));
+      else if (/^machinery\/sparker/.test(p)) g.sparkerList.push(new Sparker(this, g, it));
     }
+  }
+
+  /** Every two seconds each lit igniter that has power exposes its tile to 1000 kelvin (igniter.dm process). */
+  igniters(g) {
+    for (const d of g.igniterList || []) {
+      if (d.it.gone || !d.on || !d.powered) continue;
+      this.expose(g, d.tile, 1000, 500);
+    }
+  }
+
+  /** An ignition switch (`button/ignition`) is pressed: the mounted igniters with its id spark, the igniters with its id are switched. Returns false if it is not one. */
+  button(m, it) {
+    if (!/button\/ignition/.test(it.path || '')) return false;
+    const sim = this.sim, g = it.grid;
+    sim.sound('terminal_key', it, 0.6);
+    if (sim.time < (it.cool ?? 0)) return true;
+    it.cool = sim.time + BUTTON_COOLDOWN;
+    if (!it.id) return true;
+    for (const s of g.sparkerList || []) if (s.id === it.id) s.ignite();
+    for (const d of g.igniterList || []) if (d.id === it.id && !d.it.gone) d.toggle();
+    return true;
   }
 
   cycle(g) {
@@ -139,14 +231,7 @@ export class Fire {
       if (bypassing) {
         f.vol = (result.get(i) ?? 0) * FIRE_GROWTH_RATE;
         f.temp = a.temp[i];
-      } else {
-        const affected = cell.remove(Math.min(1, f.vol / CELL_VOLUME) * cell.total());
-        affected.t = f.temp;
-        const fire = plasmaFire(affected);
-        f.temp = affected.t;
-        f.vol = fire * FIRE_GROWTH_RATE;
-        cell.merge(affected);
-      }
+      } else this.burn(g, i, f);
       let st = bypassing ? 3 : f.vol > CELL_VOLUME * 0.4 ? 2 : 1;
       if (st !== f.st) { f.st = st; on.push([i, st]); }
       if (bypassing && a.temp[i] > FIRE_MINIMUM_TEMPERATURE_TO_SPREAD) {       // radiated heat lights the tiles next to it

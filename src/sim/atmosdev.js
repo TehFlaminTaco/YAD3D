@@ -13,6 +13,7 @@ const a_ = (name) => `the ${name}`;
 const bar = (frac, n = 20) => '█'.repeat(Math.round(Math.max(0, Math.min(1, frac)) * n)) + '░'.repeat(n - Math.round(Math.max(0, Math.min(1, frac)) * n));
 
 const CAN_MIN = ONE_ATMOSPHERE / 10, CAN_MAX = ONE_ATMOSPHERE * 10;                 // canister.dm can_min_release_pressure, can_max_release_pressure
+const CAN_HEAT_LIMIT = 5000, CAN_PRESSURE_LIMIT = 50000;                               // canister.dm heat_limit, pressure_limit
 const PUMP_MIN = ONE_ATMOSPHERE / 10, PUMP_MAX = ONE_ATMOSPHERE * 25;               // pump.dm PUMP_MIN_PRESSURE, PUMP_MAX_PRESSURE
 const SCRUB_DEFAULT = ['tox', 'co2', 'n2o', 'bz', 'h2o'];                           // scrubber.dm: what a new one scrubs (the DM's list, as far as the game has the gases)
 
@@ -223,10 +224,18 @@ export class Canister extends Portable {
   }
 
   process() {
-    if (this.broken || !this.valve) return;
-    const out = this.holding ? this.holding.mix : (this.air() || this.vacuum());
-    releaseGas(this.mix, out, this.release);
-    this.touch();
+    if (this.broken) return;
+    if (this.valve) {
+      const out = this.holding ? this.holding.mix : (this.air() || this.vacuum());
+      releaseGas(this.mix, out, this.release);
+    }
+    // too hot or too full burns it (canister.dm process_atmos: take_damage(clamp(heat / limit x pressure / limit, 5, 50)), with no armour against it)
+    const p = this.mix.pressure(), t = this.mix.t;
+    if (t > CAN_HEAT_LIMIT || p > CAN_PRESSURE_LIMIT) {
+      this.hp -= Math.max(5, Math.min(50, (t / CAN_HEAT_LIMIT) * (p / CAN_PRESSURE_LIMIT)));
+      if (this.hp <= 250 * 0.4) { this.breakOpen(); return; }
+    }
+    if (this.valve) this.touch();
   }
 
   afterTank(m, closeValve) { if (closeValve) this.valve = false; this.touch(); }

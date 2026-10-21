@@ -30,6 +30,8 @@ export class GridSim extends Grid {
     this.firedoors = new FireDoors(sim, this);
     this.atmosdev = new AtmosDevices(sim, this);   // the canisters, pumps and scrubbers standing about, and the air alarms
     this.pipenet = new PipeNet(sim, this);         // the pipes, and the vents, pumps and filters on them
+    sim.fire.attach(this);                         // the igniters and the mounted igniters
+    sim.heaters.attach(this);                      // the space heaters
     this.built = new BuiltSet(w);
     this.tileLog = [];                         // tile events since the round began, for late joiners
     this.deadPanes = [];                       // thin windows smashed or taken apart: [c, r, d]

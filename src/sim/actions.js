@@ -309,7 +309,7 @@ export class Actions {
         case 'newscaster': sim.terminals.open(c, 'news', { area, grid: g }); return;
         case 'status_display': case 'ai_status_display': sim.terminals.open(c, 'status', { area, grid: g }); return;
         case 'firealarm': sim.sound('alarm', it, 0.6); g.firedoors.fireAlarm(45); sim.chat.visible(m, `${m.name} pulls the fire alarm.`, 'notice', 10); return;
-        case 'button': sim.sound('terminal_key', it, 0.6); return;
+        case 'button': if (!sim.fire.button(m, it)) sim.sound('terminal_key', it, 0.6); return;
         case 'mirror': if (m.look) c.outbox.push({ e: 'mirror', look: m.look }); return;
         default: return this.examineProp(m, it);
       }

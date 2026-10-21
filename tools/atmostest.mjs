@@ -296,6 +296,30 @@ section('a canister can be broken, and cut apart', () => {
   ok(metal.reduce((s, f) => s + (f.item.amount ?? 1), 0) >= 10, 'leaving ten sheets of metal');
 });
 
+section('a canister too hot or too full', () => {
+  const { g, at, step, can } = round();
+  const c = can('nitrogen').find((m) => at.isCell[m.tile] && !m.broken);
+  step(2);
+  ok(c.hp === 250 && !c.broken, 'a canister of cold gas is whole');
+  c.mix.t = 2000;
+  step(5);
+  ok(c.hp === 250, 'warm gas does it no harm (the limit is 5000 K)');
+  c.mix.t = 6000;
+  const hp0 = c.hp;
+  step(0.6);
+  ok(c.hp < hp0 && c.hp <= hp0 - 5 && !c.broken, `gas over 5000 K burns it (5 or more a go: ${hp0} to ${c.hp.toFixed(0)})`);
+  step(16);
+  ok(c.broken && c.mix.total() === 0, 'and in fifteen seconds (30 of those 5 burns brings it to 40%) it gives way: broken open');
+  const d = can('oxygen').find((m) => at.isCell[m.tile] && !m.broken);
+  d.mix.t = 293.15;
+  for (const id of Object.keys(d.mix.g)) d.mix.g[id] = 0;
+  d.mix.g.o2 = 25000;
+  const hp = d.hp;
+  step(0.6);
+  ok(d.mix.pressure() > 50000 && d.hp < hp, `and so does gas over 500 atmospheres (${Math.round(d.mix.pressure())} kPa)`);
+  void g;
+});
+
 section('the portable pump', () => {
   const { at, step, dev, standBy, click, hold, msgs, empty } = round();
   const p = dev.list.find((m) => m instanceof Pump && at.isCell[m.tile]);

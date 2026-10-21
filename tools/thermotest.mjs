@@ -8,6 +8,7 @@ import { SIM_DT, TILE } from '../src/shared/config.js';
 import { T20C, T0C } from '../src/shared/gases.js';
 import { CH } from '../src/shared/power.js';
 import { SHAPES } from '../src/shared/pipedata.js';
+import { attach, allItems } from '../src/sim/inventory.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = loadSimData(root);
@@ -185,6 +186,95 @@ section('heat-exchanging pipes', () => {
   net.reconcile(line);
   step(60);
   ok(line.air.t < 500, `a long run of them in space cools a hot pipeline (800 K to ${line.air.t.toFixed(0)} K in a minute)`);
+});
+
+section('space heaters', () => {
+  const r = round();
+  const { g, sim, a, A, step, standBy, msgs } = r;
+  const list = g.heaterList;
+  ok(list.length >= 10, `the map has space heaters (${list.length})`);
+  ok(list.every((h) => !h.on && h.cell.charge === 1000 && h.target === T20C && !h.panelOpen), 'they start off, with a full power cell of 1000 units, set to 20 C, the hatch closed');
+  const h = list.find((q) => g.atmos.isCell[q.tile]);
+  const i = h.tile, at = g.atmos;
+  // heating
+  at.temp[i] = 250;
+  h.on = true; h.mode = 1;
+  const cap = at.heatCap(i), t0 = at.temp[i], c0 = h.cell.charge;
+  h.process();
+  const required = Math.min((T20C - t0) * cap, 40000);
+  ok(near(at.temp[i], t0 + required / cap, 1e-3) && h.mode === 2, `in a cold room it heats the tile's air: up to 40 kJ a go (${t0} to ${at.temp[i].toFixed(2)} K)`);
+  ok(near(c0 - h.cell.charge, required / 20000, 1e-6), `and uses a unit of charge for every 20 kJ (${(c0 - h.cell.charge).toFixed(2)})`);
+  ok(h.variant() === 2, 'it looks like it is heating');
+  // within a degree of the target
+  at.temp[i] = T20C + 0.5;
+  const c1 = h.cell.charge;
+  h.process();
+  ok(h.mode === 1 && h.cell.charge === c1 && near(at.temp[i], T20C + 0.5, 1e-6), 'within a degree of its target it stands by, and uses nothing');
+  // cooling
+  at.temp[i] = 330;
+  h.process();
+  ok(h.mode === 3 && at.temp[i] < 330, `in a hot room it cools (${at.temp[i].toFixed(2)} K)`);
+  h.setMode = 'heat';
+  at.temp[i] = 330; h.process();
+  ok(h.mode === 1 && at.temp[i] === 330, 'but not when it is set to heat only');
+  h.setMode = 'cool'; at.temp[i] = 250; h.process();
+  ok(h.mode === 1 && at.temp[i] === 250, 'nor heat when set to cool only');
+  h.setMode = 'auto';
+  // running dry
+  h.cell.charge = 0; at.temp[i] = 250; h.process();
+  ok(!h.on, 'with no charge left it switches itself off');
+  h.on = true; h.cell.charge = 1;
+  h.process();
+  ok(h.cell.charge < 1, 'and takes what is left');
+  // by the clock
+  h.on = true; h.cell.charge = 1000; at.temp[i] = 250;
+  const before = at.temp[i];
+  sim.heaters.acc = 0;
+  step(4.1);
+  ok(at.temp[i] > before, 'the game runs it every two seconds');
+  h.on = false;
+  // working it
+  ok(standBy(h), 'she stands next to one');
+  const driver = sim.newItem('/obj/item/screwdriver');
+  attach(sim, driver, { t: 'hand', mob: a, i: a.active });
+  h.click(A, a, driver);
+  ok(h.panelOpen && msgs().includes('You open the hatch on the space heater.'), 'a screwdriver opens the hatch');
+  ok(h.variant() === 4, 'and it shows');
+  const con = h.console(A);
+  ok(/Target\s+20 °C/.test(con.html) && con.buttons.some((b) => b.label === 'Turn on') && con.buttons.some((b) => b.label === '+10'), 'the console shows the target, with buttons to change it now the hatch is open');
+  con.buttons.find((b) => b.label === '+10').fn();
+  ok(h.target === 303, 'the target goes up by ten (a whole number of kelvin: the DM rounds it)');
+  for (let k = 0; k < 8; k++) h.console(A).buttons.find((b) => b.label === '+10').fn();
+  ok(near(h.target, 333.15), 'but no higher than 60 C');
+  for (let k = 0; k < 10; k++) h.console(A).buttons.find((b) => b.label === '-10').fn();
+  ok(near(h.target, 273.15), 'or lower than 0 C');
+  h.click(A, a, driver);
+  ok(!h.panelOpen && h.console(A).buttons.every((b) => !/^[+-]\d+$/.test(b.label)), 'with the hatch shut the target cannot be changed');
+  h.click(A, a, driver);
+  const cell = sim.newItem('/obj/item/stock_parts/cell/high');
+  const kept = h.cell.charge;
+  h.console(A).buttons.find((b) => b.label === 'Eject cell').fn();
+  ok(h.cell === null && allItems(a).some((q) => /stock_parts\/cell/.test(q.path)), 'with the hatch open the cell comes out into her hands');
+  ok(h.examine()[1] === 'There is no power cell installed.', 'and it says there is none');
+  const held = allItems(a).find((q) => /stock_parts\/cell/.test(q.path));
+  h.on = true; h.process();
+  ok(!h.on, 'with no cell it will not run');
+  h.click(A, a, held);
+  ok(h.cell && near(h.cell.charge, kept) && !allItems(a).some((q) => q === held), 'she puts it back, and it keeps its charge');
+  void cell;
+  h.click(A, a, driver);
+  const again = sim.newItem('/obj/item/stock_parts/cell/high');
+  attach(sim, again, { t: 'hand', mob: a, i: 1 - a.active });
+  a.active = 1 - a.active;
+  h.click(A, a, again);
+  ok(msgs().includes('The hatch must be open to insert a power cell!'), 'with the hatch shut a cell will not go in');
+  const ex = h.examine();
+  ok(ex[0] === 'The space heater is off, and the hatch is closed.' && /^The charge meter reads 100%\.$/.test(ex[1]) && /Temperature range at 30°C\. Heating power at 40kJ\. Power consumption at 100%\./.test(ex[2]), `examine: ${ex.join(' ')}`);
+  // the clients
+  const before2 = r.inbox.length;
+  h.on = true; h.mode = 3; h.touch();
+  sim.step(0.1);
+  ok(r.inbox.slice(before2).some((m) => m.t === 'ev' && m.list.some((e) => e.e === 'pv' && e.i === h.it.idx && e.v === 3)), 'everyone is shown it cooling');
 });
 
 section('the clients', () => {

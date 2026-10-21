@@ -43,6 +43,7 @@ import { Assemblies } from './assemblies.js';
 import { AtmosControl } from './atmoscontrol.js';
 import { Radiation } from './radiation.js';
 import { Fire } from './fire.js';
+import { SpaceHeaters } from './heaters.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -136,6 +137,7 @@ export class Sim {
     this.atmoscontrol = new AtmosControl(this);
     this.radiation = new Radiation(this);
     this.fire = new Fire(this);
+    this.heaters = new SpaceHeaters(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 
@@ -506,6 +508,7 @@ export class Sim {
     this.sun.update(dt);
     for (const g of this.grids.values()) { g.atmos.update(dt); g.powersim.update(dt); g.atmosdev.update(dt); g.pipenet.update(dt); }
     this.fire.update(dt);
+    this.heaters.update(dt);
     this.shuttles.update(dt);
     this.physics.step(dt);
     this.ai.update(dt);

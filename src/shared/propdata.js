@@ -136,7 +136,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
           : sprite({ tag: 'sprite', rect: p.s, mode: p.bb ? 0 : 1, x: cx, y, z: cz, w, h, ox: (rc.ox + rc.w / 2 - rc.fw / 2) * PX, oy: 0, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz, l], ...(p.fr ? { views: p.fr, face: p.d } : {}) });
         // what is bolted down fills its tile; what is loose is a box of its own size that can be dragged about
         const loose = !!p.den && !p.anc;
-        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, l, x: cx, z: cz, y0: y, y1: y + (p.flat ? 0.4 : Math.max(1.0, h)), rad: 0.8, flat: !!p.flat, ly: p.ly, mv: p.mv, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0, sc: p.sc, sk: p.sk, sv: p.sv, bh: p.den ? blockHalf(w) : 0, spec: p };
+        const it = { idx: out.interact.length, grid, kind: p.cont ? 'container' : 'prop', name: p.n || 'thing', path: p.p, c, r, l, x: cx, z: cz, y0: y, y1: y + (p.flat ? 0.4 : Math.max(1.0, h)), rad: 0.8, flat: !!p.flat, ly: p.ly, mv: p.mv, id: p.id, opened: false, st, anc: !!p.anc, ds: p.ds || 0, dense: loose, d: p.d, x0: cx, z0: cz, d0: p.d, half: loose ? blockHalf(w) : 0, sc: p.sc, sk: p.sk, sv: p.sv, bh: p.den ? blockHalf(w) : 0, spec: p };
         if (loose) world.boxAdd(it); else if (p.den) world.solid[i] = 1;
         out.interact.push(it); out.added.interact.push(it);
         break;
@@ -171,7 +171,7 @@ export function buildPropData(world, rects, props, level, prev = null) {
         const depth = p.ow ? TILE / 2 + 0.03 + 0.012 * k : TILE / 2 - 0.03 - 0.012 * k, lat = (p.lat || 0) * PX;
         const x = cx + sdx * depth + (sdx ? 0 : lat), z = cz + sdz * depth + (sdz ? 0 : lat);
         const st = sprite({ tag: 'wm', rect: p.s, mode: 1, x, y: yb + yc - h / 2, z, w, h, yaw: DIR_YAW[p.d] ?? 0, lit: [cx, cz, l], emit: p.sub === 'status_display' || p.sub === 'newscaster' ? 0.6 : 0 });
-        const it = { idx: out.interact.length, grid, kind: 'wm', sub: p.sub, name: p.n || p.sub, path: p.p, c, r, l, x, z, y0: yb + yc - h / 2, y1: yb + yc + h / 2, rad: 0.6, st, sd: p.sd, as: p.as, sv: p.sv, base: { x, z, y0: yb + yc - h / 2, S } };
+        const it = { idx: out.interact.length, grid, kind: 'wm', sub: p.sub, id: p.id, name: p.n || p.sub, path: p.p, c, r, l, x, z, y0: yb + yc - h / 2, y1: yb + yc + h / 2, rad: 0.6, st, sd: p.sd, as: p.as, sv: p.sv, base: { x, z, y0: yb + yc - h / 2, S } };
         out.interact.push(it); out.added.interact.push(it);
         break;
       }

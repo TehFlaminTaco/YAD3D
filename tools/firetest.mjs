@@ -6,7 +6,7 @@ import { initPhysics } from '../src/shared/physics.js';
 import { Sim } from '../src/sim/sim.js';
 import { Replica } from '../src/client/state.js';
 import { SIM_DT, TILE } from '../src/shared/config.js';
-import { Mix, T20C, CELL_VOLUME, CELL_MOLES_PER_KPA } from '../src/shared/gases.js';
+import { Mix, T20C, CELL_VOLUME, CELL_MOLES_PER_KPA, GAS_IDS } from '../src/shared/gases.js';
 import { plasmaFire } from '../src/sim/fire.js';
 import { attach, detach } from '../src/sim/inventory.js';
 
@@ -114,17 +114,57 @@ section('what starts a fire', () => {
 });
 
 section('an igniter', () => {
+  const plasma = (r, it) => { for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) if (r.atm.isCell[r.w.idx(it.c + dc, it.r + dr)]) r.atm.addGases(it.c + dc, it.r + dr, { tox: 100, o2: 100 }); };
   const off = round(), ig0 = off.g.props.interact.find((it) => /^\/?machinery\/igniter$/.test(it.path || ''));
-  for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) if (off.atm.isCell[off.w.idx(ig0.c + dc, ig0.r + dr)]) off.atm.addGases(ig0.c + dc, ig0.r + dr, { tox: 100, o2: 100 });
+  plasma(off, ig0);
   off.step(4);
-  ok(!off.events().some((e) => e.e === 'fire'), 'an igniter that is off does nothing');
-  const { g, w, atm, step, events } = round();
-  const ig = g.props.interact.find((it) => /^\/?machinery\/igniter$/.test(it.path || ''));
-  const i = w.idx(ig.c, ig.r), area = w.areaIdx[i];
-  for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) if (atm.isCell[w.idx(ig.c + dc, ig.r + dr)]) atm.addGases(ig.c + dc, ig.r + dr, { tox: 100, o2: 100 });
-  ig.ign = { on: true };
-  step(4);
-  ok(!g.power.powered(area, 0) || events().some((e) => e.e === 'fire' && e.on.some(([j]) => j === i)), 'one that is on sets plasma alight on its tile (if the room has power)');
+  ok(!off.events().some((e) => e.e === 'fire') && ig0.mach.on === false, 'an igniter that is off does nothing');
+  const r = round();
+  const ig = r.g.props.interact.find((it) => /^\/?machinery\/igniter$/.test(it.path || ''));
+  const i = r.w.idx(ig.c, ig.r);
+  plasma(r, ig);
+  ig.mach.on = true;
+  r.step(4);
+  ok(r.g.power.powered(r.w.areaIdx[i], 0) && r.events().some((e) => e.e === 'fire' && e.on.some(([j]) => j === i)), 'one that is on sets plasma alight on its tile');
+  // a hand switches it
+  const h = round(), hi = h.g.props.interact.find((it) => /^\/?machinery\/igniter$/.test(it.path || ''));
+  h.a.grid = h.g; h.a.x = hi.x + 1; h.a.z = hi.z; h.a.l = hi.l | 0;
+  h.sim.handle(h.A, { t: 'click', target: { k: 'prop', g: h.g.id, idx: hi.idx }, yaw: 0, pitch: 0 });
+  h.step(0.2);
+  ok(hi.mach.on === true && hi.mach.v === 1, 'a hand switches it on, and it looks lit');
+  ok(h.events().some((e) => e.e === 'pv' && e.i === hi.idx && e.v === 1), 'everyone is shown');
+});
+
+section('the ignition switches', () => {
+  const r = round();
+  const buttons = r.g.props.interact.filter((it) => it.kind === 'wm' && /button\/ignition/.test(it.path || ''));
+  ok(buttons.length === 4 && buttons.every((b) => b.id), `the four ignition switches of the map have their ids (${buttons.map((b) => b.id).join(', ')})`);
+  const igniters = r.g.igniterList, sparkers = r.g.sparkerList;
+  ok(igniters.length === 2 && sparkers.length === 2, `two igniters and two mounted igniters (${igniters.length}, ${sparkers.length})`);
+  const pairs = buttons.map((b) => [b, [...igniters, ...sparkers].filter((d) => d.id === b.id)]);
+  ok(pairs.every(([, d]) => d.length === 1), 'each switch has the one igniter that goes with it');
+  // the incinerator's: toggles its igniter
+  const [sw, [ig]] = pairs.find(([, d]) => d[0].on !== undefined);
+  const before = ig.on;
+  ok(r.sim.fire.button({ name: 'Alice' }, sw) === true, 'a press is taken');
+  ok(ig.on === !before, 'and the igniter with its id is switched');
+  r.sim.fire.button({ name: 'Alice' }, sw);
+  ok(ig.on === !before, 'but not again within three seconds');
+  r.step(3.2);
+  r.sim.fire.button({ name: 'Alice' }, sw);
+  ok(ig.on === before, 'and again when they have passed');
+  // a mounted igniter sparks
+  const [ssw, [sp]] = pairs.find(([b, d]) => d[0] && d[0].disable !== undefined);
+  const w = r.w, i = sp.tile;
+  for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) if (r.atm.isCell[w.idx(sp.it.c + dc, sp.it.r + dr)]) r.atm.addGases(sp.it.c + dc, sp.it.r + dr, { tox: 100, o2: 100 });
+  r.sim.fire.button({ name: 'Alice' }, ssw);
+  ok(r.atm.arrs[GAS_IDS.indexOf('co2')][i] > 0.1 && r.atm.temp[i] > 400, 'a mounted igniter spark is a big one: plasma burnt into carbon dioxide on its tile at once, and heated it');
+  r.step(2);
+  ok(r.g.fires?.has(i) && sp.last !== -1e9, 'the mounted igniter with the switch\'s id sparks, and the plasma on its tile burns');
+  sp.last = -1e9;
+  sp.disable = true;
+  ok(sp.ignite() === false, 'a screwdriver can cut it off');
+  ok(r.sim.fire.button({ name: 'Alice' }, { path: '/obj/machinery/button/door' }) === false, 'and a door button is not an ignition switch');
 });
 
 section('the clients', () => {
