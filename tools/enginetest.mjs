@@ -53,6 +53,7 @@ const fresh = (ps) => {
   for (const k of a.arrs.keys()) a.arrs[k][i] = 0;
   a.arrs[GAS_IDS.indexOf('o2')][i] = 21.3; a.arrs[GAS_IDS.indexOf('n2')][i] = 80;
   a.temp[i] = 293.15;
+  for (const d of ps.grid.pipenet.devices) if (d.load) d.setLoad(0);                    // (nor do the pipes run, so what the freezers drew while they cooled their first gas would stay)
 };
 const welded = (M) => M.emitter.filter((e) => e.welded);
 const loose = (M) => M.emitter.filter((e) => !e.anchored);

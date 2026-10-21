@@ -69,7 +69,7 @@ section('the station starts lit', () => {
   step(10);
   ok(ps.status() === 'normal', 'power is normal');
   ok(M.apc.every((a) => a.chan.every((v) => v === 3) && a.operating), 'every APC has all three channels on');
-  ok(M.apc.every((a) => a.percent > 88), 'and a charged cell');
+  ok(M.apc.every((a) => a.percent > 80), 'and a charged cell (the server room freezer, which starts on, takes a few percent of its cell as it cools its first air)');
   ok(main().viewavail > 100000 && main().viewload > 50000, `the main network makes ${Math.round(main().viewavail)} W and uses ${Math.round(main().viewload)} W`);
   const L = g.props.lights[0];
   ok(lightMode(L, g.power, g.world.areas).on, 'a lamp is lit');

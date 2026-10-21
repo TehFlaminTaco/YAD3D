@@ -234,6 +234,7 @@ npm run test:radiation # radiation waves from the supermatter, what they do, clo
 npm run test:temperature # gas at a temperature, rooms, pipes, body temperature in heat and cold (35 assertions)
 npm run test:fire     # plasma fire: the reaction, hotspots, what starts them (25 assertions)
 npm run test:supermatter # the supermatter crystal: gas, damage, warnings, countdown, delamination (60 assertions)
+npm run test:thermo   # freezers, heaters and the heat-exchanging pipes (39 assertions)
 npm run test:soak     # a 12 minute simulated shift with a player attached
 npm run serve &       # then:
 npm run test:ui       # ~190 assertions, about 4 minutes; headless Chromium, local round: look and hands modes, hands, drag and drop, the inventory HUD, bags,

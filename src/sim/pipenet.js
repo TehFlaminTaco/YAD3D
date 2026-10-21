@@ -1,11 +1,13 @@
-import { N, S, E, W, DV, OPP } from '../shared/config.js';
-import { GAS_IDS, Mix, ONE_ATMOSPHERE, O2STANDARD, N2STANDARD, CELL_VOLUME, MINIMUM_HEAT_CAPACITY, molesAt, kpaOf } from '../shared/gases.js';
+import { N, S, E, W, DV, OPP, KIND } from '../shared/config.js';
+import { GAS_IDS, Mix, ONE_ATMOSPHERE, O2STANDARD, N2STANDARD, CELL_VOLUME, MINIMUM_HEAT_CAPACITY, TCMB, molesAt, kpaOf } from '../shared/gases.js';
 import { SHAPES, PIPE_SLOTS, PIPE_HIDDEN, JUNCTION_DIR } from '../shared/pipedata.js';
 import { makeDevice } from './pipedev.js';
 
 const PROCESS = 0.5;                                                   // seconds between one run of the air machinery and the next (SSair)
 const norm = (p) => (p || '').replace(/^\/?(obj\/)?/, '');
 const isHE = (kind) => kind === 'he' || kind === 'junction';
+const HE_CONDUCTIVITY = 0.1, HE_MIN_DIFFERENCE = 20;                    // WINDOW_HEAT_TRANSFER_COEFFICIENT, minimum_temperature_difference (a junction's is 0 / 300: it passes no heat)
+const SPACE_HEAT_CAPACITY = 700000;                                    // turf/open/space heat_capacity
 
 /**
  * A pipeline (datum_pipeline.dm): the pipes that are joined end to end, with the nodes of every machine that is on them. It is one volume of gas, its pipes' 35 litres an end; each machine node on it has
@@ -193,6 +195,29 @@ export class PipeNet {
     };
     for (let s = 0; s < n * PIPE_SLOTS; s++) if (w.pipe[s] && this.lineOf[s] < 0) grow(s);
     for (const d of this.devices) for (const p of d.ports) if (!inLine.has(p)) grow(p);
+    this.he = [];                                                      // the heat-exchanging pipes, which trade heat with the tile they are in
+    for (let s = 0; s < n * PIPE_SLOTS; s++) if (w.pipe[s] && SHAPES[w.pipe[s] & 31].kind === 'he' && this.lineOf[s] >= 0) this.he.push(s);
+  }
+
+  /**
+   * heat_exchanging process_atmos / pipeline temperature_interact: a heat-exchanging pipe shares heat with the air of its tile (or, out in space, with the cold of it), if they differ by more than
+   * 20 kelvin. Its pipeline gives up (or takes) `0.1 x the difference x` the heat capacity of its share of the gas and the tile's, joined (harmonic): the tile gets the heat.
+   */
+  exchange(s) {
+    const w = this.world, a = this.grid.atmos, line = this.lines[this.lineOf[s]];
+    if (!line || !(line.air.vol > 0)) return;
+    const t = s % this.n, air = line.air;
+    let envT, envC, modeled = false;
+    if (a.isCell[t] && !w.airBlock[t]) { envT = a.temp[t]; envC = a.heatCap(t); modeled = true; }
+    else if (w.kind[t] === KIND.SPACE || w.kind[t] === KIND.LATTICE) { envT = TCMB; envC = SPACE_HEAT_CAPACITY; }
+    else return;
+    if (Math.abs(envT - air.t) <= HE_MIN_DIFFERENCE) return;
+    const total = air.heatCapacity(), partial = total * (SHAPES[w.pipe[s] & 31].vol / air.vol);
+    if (!(partial > MINIMUM_HEAT_CAPACITY) || !(envC > MINIMUM_HEAT_CAPACITY) || !(total > MINIMUM_HEAT_CAPACITY)) return;
+    const heat = HE_CONDUCTIVITY * (air.t - envT) * (partial * envC / (partial + envC));
+    air.t = Math.max(TCMB, air.t - heat / total);
+    if (modeled) a.heat(t, heat);
+    line.update = true;
   }
 
   /** Share out the gas of the pipeline `start` and of everything open to it (an open valve, a connector with a machine on it): by volume, so every mixture is the same pressure (pipeline.dm reconcile_air). */
@@ -320,6 +345,7 @@ export class PipeNet {
       this.acc -= PROCESS;
       for (const line of this.lines) if (line.update) { line.update = false; this.reconcile(line); }
       for (const d of this.devices) d.process();
+      for (const s of this.he) this.exchange(s);
     }
   }
 }

@@ -1,5 +1,5 @@
 import { N, S, E, W, OPP } from '../shared/config.js';
-import { Mix, GAS_IDS, GAS_NAME, ONE_ATMOSPHERE, CELL_VOLUME, molesAt, kpaOf, pumpGas, O2STANDARD, N2STANDARD, AIR_MODE } from '../shared/gases.js';
+import { Mix, GAS_IDS, GAS_NAME, ONE_ATMOSPHERE, CELL_VOLUME, molesAt, kpaOf, pumpGas, O2STANDARD, N2STANDARD, AIR_MODE, T20C, T0C } from '../shared/gases.js';
 import { CH } from '../shared/power.js';
 import { turnCW } from '../shared/pipedata.js';
 import { esc } from '../shared/util.js';
@@ -324,11 +324,67 @@ class Tank extends Device {
   examine() { return [`The pressure gauge reads ${Math.round(this.airs[0].pressure())} kPa.`]; }
 }
 
-/** A machine that sits on a pipe and does nothing here (a thermomachine and a cryo cell need temperature, which the game has not): its node is joined to the network all the same. */
+/** A machine that sits on a pipe and does nothing here (the cryo cell): its node is joined to the network all the same. */
 class Inert extends Device {
   constructor(net, it, path, rest) {
     super(net, it, path, [200]);
     this.noPower = true;
+  }
+}
+
+/**
+ * The freezer and the heater (thermomachine.dm): while it is on and joined to a pipe it takes the gas it holds to a temperature between its target and where it was, as if it were `heatCapacity`
+ * joules a kelvin of something at the target (5,000 with the lowest grade of matter bins), and the pipeline mixes it with the rest. It costs `heatCapacity x the change / 10` watts. With the lowest
+ * grade of parts a freezer goes down to 73.15 K and a heater up to 573.15 K; it starts at 20 C, a freezer that starts on at its coldest. (The DM does not ask for power; here it does.)
+ */
+class Thermo extends Device {
+  constructor(net, it, path, rest) {
+    super(net, it, path, [200]);
+    this.freezer = rest[0] === 'freezer';
+    this.on = rest.includes('on');
+    this.heatCapacity = 5000;
+    this.min = this.freezer ? 73.15 : T20C;
+    this.max = this.freezer ? T20C : 573.15;
+    this.target = T20C;
+    if (this.freezer && this.on) this.target = this.min;
+    if (rest.includes('coldroom')) this.target = T0C - 14;
+    this.name = this.name || (this.freezer ? 'freezer' : 'heater');
+  }
+  variant() { return this.on && this.operational ? 1 : 0; }
+
+  process() {
+    if (!this.on || !this.operational || this.nodes[0] == null) { this.setLoad(0); return; }
+    const air = this.airs[0], cap = air.heatCapacity(), combined = this.heatCapacity + cap, old = air.t;
+    if (combined > 0) air.t = (this.heatCapacity * this.target + cap * air.t) / combined;
+    const delta = Math.abs(old - air.t);
+    if (delta > 1) { this.setLoad(this.heatCapacity * delta / 10); this.updateParents(); } else this.setLoad(0);
+  }
+
+  setTarget(t) { this.target = clamp(Math.round(t * 100) / 100, this.min, this.max); }
+
+  examine() {
+    const k = (v) => `${Math.round(v * 100) / 100}K (${Math.round((v - T0C) * 100) / 100}C)`;
+    return [`The thermostat is set to ${k(this.target)}.`, `The status display reads: Efficiency ${this.heatCapacity / 50}%.`, `Temperature range ${Math.round(this.min * 100) / 100}K - ${Math.round(this.max * 100) / 100}K (${Math.round((this.min - T0C) * 100) / 100}C - ${Math.round((this.max - T0C) * 100) / 100}C).`];
+  }
+
+  click(c, m, held, alt) {
+    if (held) return false;
+    if (alt) { this.setTarget(this.freezer ? this.min : this.max); this.touch(); this.sim.tell(m, 'info', `The thermostat is set to ${this.target}K.`); return true; }
+    this.sim.terminals.open(c, 'portable', { machine: this, grid: this.grid, name: this.name });
+    return true;
+  }
+
+  console() {
+    return {
+      title: this.freezer ? 'Freezer' : 'Heater', live: true,
+      html: `<span class="h">${esc(this.name)}</span>\n\nPower             ${onOff(this.on)}${this.operational ? '' : '  <span class="b">(no power)</span>'}${this.nodes[0] == null ? '  <span class="w">(not on a pipe)</span>' : ''}\nTarget            ${this.target.toFixed(2)} K  <span class="d">(${this.min.toFixed(2)} to ${this.max.toFixed(2)})</span>\nTemperature       ${this.airs[0].t.toFixed(2)} K\nPressure          ${Math.round(this.airs[0].pressure())} kPa\nDraw              ${Math.round(this.load)} W`,
+      buttons: [
+        { label: this.on ? 'Turn off' : 'Turn on', fn: () => { this.on = !this.on; this.touch(); } },
+        ...[-100, -10, -1, 1, 10, 100].map((s) => ({ label: s > 0 ? `+${s}` : `${s}`, fn: () => this.setTarget(this.target + s) })),
+        { label: `Target: ${this.freezer ? 'min' : 'max'}`, fn: () => this.setTarget(this.freezer ? this.min : this.max) },
+        { label: 'Target: reset', fn: () => this.setTarget(T20C) },
+      ],
+    };
   }
 }
 
@@ -575,6 +631,7 @@ export function makeDevice(net, it, path) {
       case 'portables_connector': return new Connector(net, it, path);
       case 'outlet_injector': return new Injector(net, it, path, rest);
       case 'tank': return new Tank(net, it, path, rest);
+      case 'thermomachine': return new Thermo(net, it, path, rest);
       default: return new Inert(net, it, path, rest);
     }
   }
