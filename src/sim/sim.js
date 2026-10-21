@@ -44,6 +44,7 @@ import { AtmosControl } from './atmoscontrol.js';
 import { Radiation } from './radiation.js';
 import { Fire } from './fire.js';
 import { SpaceHeaters } from './heaters.js';
+import { Frames } from './frames.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -134,6 +135,7 @@ export class Sim {
     this.pipekit = new PipeKit(this);
     this.airlocks = new Airlocks(this);
     this.assemblies = new Assemblies(this);
+    this.frames = new Frames(this);
     this.atmoscontrol = new AtmosControl(this);
     this.radiation = new Radiation(this);
     this.fire = new Fire(this);
@@ -459,7 +461,7 @@ export class Sim {
       pw: g.powersim.state(),
       lights: g.props.lights.filter((L) => L.status).map((L) => [L.idx, L.status]),                 // the fixtures that are not whole
       gone: g.props.interact.filter((it) => it.gone && it.kind !== 'closet').map((it) => it.idx),    // things that were blown up
-      pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv(), ...g.pipenet.pv(), ...this.assemblies.pv(g)],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
+      pv: [...Object.values(g.powersim.machines).flat().filter((a) => a.rec?.idx !== undefined && a.v !== 0).map((a) => [a.rec.idx, a.v]), ...g.atmosdev.pv(), ...g.pipenet.pv(), ...this.assemblies.pv(g), ...this.frames.pv(g)],      // machines that show another picture (an APC open, an emitter running, a canister with a tank in it)
       pd: g.atmosdev.pd(),                                                                         // canisters broken open: no longer in the way
       ps: g.propLog,                                                                               // props made while the game runs
       pi: [...g.pipeLog].map(([s, v]) => [s, ...v]),                                               // pipes laid or taken up

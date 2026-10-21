@@ -1,4 +1,4 @@
-import { TILE, KIND } from '../shared/config.js';
+import { TILE, KIND, N, S, E, W, OPP } from '../shared/config.js';
 import { GIRDER, girderLook } from '../shared/walls.js';
 import { RECIPES, stackKey, stackInfo, menuFor } from '../shared/stacks.js';
 import { place, attach, consume } from './inventory.js';
@@ -119,6 +119,11 @@ export class Stacks {
       else if (R.build === 'girder') {
         const [c, r] = tile;
         sim.addBuilt(m.grid, 'girder', c, r, GIRDER.NORMAL);
+        this.moveOut(m, c, r);
+      } else if (R.build === 'frame:computer') {
+        const [c, r] = tile, mc = Math.floor(m.x / TILE), mr = Math.floor(m.z / TILE), dc = c - mc, dr = r - mr;
+        const forward = Math.abs(dr) >= Math.abs(dc) ? (dr < 0 ? N : S) : (dc > 0 ? E : W);          // (it faces you: its screen towards the one who built it)
+        sim.frames.buildComputer(m.grid, c, r, OPP[forward]);
         this.moveOut(m, c, r);
       } else if (R.build?.startsWith('asm:')) {
         const [c, r] = tile;

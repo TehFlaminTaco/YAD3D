@@ -1632,7 +1632,7 @@ section('stacks', () => {
 
   // ---- what the menu offers (stack.dm ui_interact)
   const menu = (n) => menuFor(METAL, n, 'metal sheet');
-  ok(JSON.stringify(menu(12).map((r) => r.mults).slice(0, 4)) === '[[1,5],[1,5,10,12],[1],[1]]' && menu(12).slice(4).length === 19 && menu(12).slice(4).every((r) => JSON.stringify(r.mults) === '[1]') && menu(3).slice(6).every((r) => !r.can), 'at 12 sheets: floor tiles 1x and 5x (the 20 tile cap), rods 1x 5x 10x 12x, girders once, the two light fixture frames and an APC frame once, and each of the 17 airlock assemblies once (4 sheets each: none with 3)');
+  ok(JSON.stringify(menu(12).map((r) => r.mults).slice(0, 4)) === '[[1,5],[1,5,10,12],[1],[1]]' && menu(12).slice(4).length === 20 && menu(12).slice(4).every((r) => JSON.stringify(r.mults) === '[1]') && menu(3).slice(7).every((r) => !r.can) && !menu(3)[3].can && menu(3)[4].can, 'at 12 sheets: floor tiles 1x and 5x (the 20 tile cap), rods 1x 5x 10x 12x, girders once, the computer frame, the two light fixture frames and an APC frame once, and each of the 17 airlock assemblies once (with 3 sheets: not the computer frame (5), nor an airlock assembly (4), but the light frames and the APC frame (1 or 2))');
   ok(menu(1)[2].can === false && menu(1)[0].can === true, 'girders need two sheets');
   ok(menu(3)[0].label === '4x floor tiles (1 metal sheet)' && menu(3)[1].label === '2x metal rods (1 metal sheet)' && menu(3)[2].label === 'wall girders (2 metal sheets)', 'the labels are the DM\'s');
 
@@ -1677,7 +1677,7 @@ section('stacks', () => {
   inbox.a.length = 0;
   sim.handle(A, { t: 'key', k: 'activate' }); step(0.1);
   const open = evs(inbox.a, 'stack').at(-1);
-  ok(open && open.id === sheets.id && open.amount === 12 && open.one === 'metal sheet' && open.recipes.length === 23, 'Z on a stack sends its menu');
+  ok(open && open.id === sheets.id && open.amount === 12 && open.one === 'metal sheet' && open.recipes.length === 24, 'Z on a stack sends its menu');
   // making things: floor tiles come out in your free hand, 4 for a sheet
   sim.handle(A, { t: 'stack', op: 'make', item: sheets.id, i: 0, mult: 1 }); step(0.1);
   const tiles = a.hands[1];

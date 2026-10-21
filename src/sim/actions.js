@@ -295,6 +295,7 @@ export class Actions {
     if (it.kind === 'closet') return sim.closets.click(c, m, it, held, alt);
     if (it.mach && it.mach.click(c, m, held, alt)) return;                        // a machine with its own rules (the power machines: src/sim/power/)
     if (it.gone) return;
+    if (it.frame && sim.frames.click(m, it, held)) return;                          // a computer frame: wrench, board, screwdriver, cable, glass (frames.js)
     if (it.asm && sim.assemblies.click(m, it, held)) return;                        // an airlock assembly: wrench, cable, electronics, screwdriver, crowbar, welder (assemblies.js)
     if (held?.def.tool === 'wrench' && (sim.anchoring.wrench(m, it, held) || sim.pipefit.unfasten(m, it, held))) return;     // a wrench fastens down or frees what the DM lets it (anchoring.js), or takes a pipe machine off its pipe (pipefit.js)
     if (sim.tanks.click(m, it, held)) return;                                     // a fuel or water tank: refill from it
@@ -315,6 +316,7 @@ export class Actions {
       }
     }
     const p = it.path || '';
+    if (/computer/.test(p) && held?.def.tool === 'screwdriver' && sim.frames.disconnect(m, it, held)) return;              // a computer is unscrewed back to its frame
     if (/computer/.test(p)) {
       let type = 'generic';
       for (const [k, v] of COMPUTER_TYPES) if (p.includes(k)) { type = v; break; }
@@ -857,6 +859,7 @@ export class Actions {
 
   propText(it, m) {
     if (it.asm) return this.sim.assemblies.examine(it);
+    if (it.frame) return this.sim.frames.examine(it);
     const d = this.sim.level.descs[it.path] || this.sim.level.descs[(it.path || '').replace(/^\//, '')];
     const out = [`This is ${a(it.name || 'thing')}.`, d?.[1] || ''];
     if (it.kind === 'closet') out.push(...this.sim.closets.examineLines(it));

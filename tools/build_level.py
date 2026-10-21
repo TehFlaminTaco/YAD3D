@@ -339,6 +339,27 @@ WEIGHT = {'WEIGHT_CLASS_TINY': 1, 'WEIGHT_CLASS_SMALL': 2, 'WEIGHT_CLASS_NORMAL'
 # an APC's pictures, in the order the sim numbers them (src/sim/power/machines.js APC_VARIANTS)
 APC_STATES = ['apc0', 'apc1', 'apc2', 'apcmaint', 'apc-b', 'apc1-nocover', 'apc2-nocover', 'apc1-b-nocover', 'apc2-b-nocover', 'apcewires']
 
+# the circuit boards of the tech storage racks: what each `techstorage` spawner of the map puts down (lootdrop.dm, all of its list, none twice)
+TECH_STORAGE = {
+    'service': ['/obj/item/circuitboard/computer/arcade/battle', '/obj/item/circuitboard/computer/arcade/orion_trail', '/obj/item/circuitboard/machine/autolathe', '/obj/item/circuitboard/computer/mining',
+                '/obj/item/circuitboard/machine/ore_redemption', '/obj/item/circuitboard/machine/mining_equipment_vendor', '/obj/item/circuitboard/machine/microwave',
+                '/obj/item/circuitboard/machine/chem_dispenser/drinks', '/obj/item/circuitboard/machine/chem_dispenser/drinks/beer', '/obj/item/circuitboard/computer/slot_machine'],
+    'rnd': ['/obj/item/circuitboard/computer/aifixer', '/obj/item/circuitboard/machine/rdserver', '/obj/item/circuitboard/machine/mechfab', '/obj/item/circuitboard/machine/circuit_imprinter/department',
+            '/obj/item/circuitboard/computer/teleporter', '/obj/item/circuitboard/machine/destructive_analyzer', '/obj/item/circuitboard/computer/rdconsole',
+            '/obj/item/circuitboard/computer/nanite_chamber_control', '/obj/item/circuitboard/computer/nanite_cloud_controller', '/obj/item/circuitboard/machine/nanite_chamber',
+            '/obj/item/circuitboard/machine/nanite_programmer', '/obj/item/circuitboard/machine/nanite_program_hub', '/obj/item/circuitboard/computer/scan_consolenew', '/obj/item/circuitboard/machine/dnascanner'],
+    'security': ['/obj/item/circuitboard/computer/secure_data', '/obj/item/circuitboard/computer/security', '/obj/item/circuitboard/computer/prisoner'],
+    'engineering': ['/obj/item/circuitboard/computer/atmos_alert', '/obj/item/circuitboard/computer/stationalert', '/obj/item/circuitboard/computer/powermonitor'],
+    'tcomms': ['/obj/item/circuitboard/computer/message_monitor', '/obj/item/circuitboard/machine/telecomms/broadcaster', '/obj/item/circuitboard/machine/telecomms/bus',
+               '/obj/item/circuitboard/machine/telecomms/server', '/obj/item/circuitboard/machine/telecomms/receiver', '/obj/item/circuitboard/machine/telecomms/processor',
+               '/obj/item/circuitboard/machine/announcement_system', '/obj/item/circuitboard/computer/comm_server', '/obj/item/circuitboard/computer/comm_monitor'],
+    'medical': ['/obj/item/circuitboard/machine/chem_dispenser', '/obj/item/circuitboard/computer/med_data', '/obj/item/circuitboard/machine/smoke_machine', '/obj/item/circuitboard/machine/chem_master',
+                '/obj/item/circuitboard/computer/pandemic'],
+    'ai': ['/obj/item/circuitboard/computer/aiupload', '/obj/item/circuitboard/computer/borgupload', '/obj/item/circuitboard/aicore'],
+    'command': ['/obj/item/circuitboard/computer/crew', '/obj/item/circuitboard/computer/communications', '/obj/item/circuitboard/computer/card'],
+    'rnd_secure': ['/obj/item/circuitboard/computer/mecha_control', '/obj/item/circuitboard/computer/apc_control', '/obj/item/circuitboard/computer/robotics'],
+}
+
 GAME_ITEMS = [
     '/obj/item/crowbar', '/obj/item/wrench', '/obj/item/screwdriver', '/obj/item/wirecutters', '/obj/item/weldingtool',
     '/obj/item/flashlight', '/obj/item/storage/toolbox/mechanical', '/obj/item/storage/toolbox/emergency',
@@ -1192,6 +1213,18 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                     missing[p] += 1
                 continue
 
+            # --- the tech storage racks: every board of the spawner's list, on its tile
+            if p.startswith('/obj/effect/spawner/lootdrop/techstorage/'):
+                for q in TECH_STORAGE.get(p.split('/')[-1], []):
+                    rq = resolve(q)
+                    stq, iconq = rq.get('icon_state'), rq.get('icon')
+                    if isinstance(stq, str) and icon_ok(iconq, stq):
+                        spq = spr.add([(iconq, stq, S, None, None)])
+                        if spq >= 0:
+                            props.append(dict(base, n=clean_name(rq.get('name', '')), k='item', s=spq, p=q))
+                            stats['item'] += 1
+                continue
+
             # --- random loot
             if p.startswith('/obj/effect/spawner/lootdrop'):
                 props.append(dict(base, k='loot', cat=p.split('/')[-1]))
@@ -1264,6 +1297,14 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                 if p.startswith('/obj/machinery/space_heater') and all(dmi.has(q) for q in ('sheater-off', 'sheater-standby', 'sheater-heat', 'sheater-cool', 'sheater-open')):
                     # off, standby, heating, cooling (spaceheater.dm update_icon_state), then the same with the hatch open: the pictures `sv` the sim picks from
                     rec['sv'] = [spr.add([(icon, 'sheater-' + st_, d, None, None)] + ([(icon, 'sheater-open', d, None, None)] if op else [])) for op in (0, 1) for st_ in ('off', 'standby', 'heat', 'cool')]
+                if p.startswith('/obj/machinery/computer/'):
+                    circuit = resolve(p).get('circuit')
+                    if isinstance(circuit, str) and '/circuitboard/computer' in circuit:                           # which board a computer is made from, and what a board makes (computer frames build them back)
+                        shared.setdefault('computerBoards', {})[p.split('/', 2)[2]] = circuit
+                        if circuit not in shared.setdefault('boards', {}):
+                            rb = resolve(circuit)
+                            bp = rb.get('build_path')
+                            shared['boards'][circuit] = {'n': clean_name(rb.get('name', '')), 'bp': bp.split('/', 2)[2] if isinstance(bp, str) and bp.startswith('/obj/') else '', 'cn': clean_name(resolve(bp).get('name', '')) if isinstance(bp, str) and bp.startswith('/obj/') else ''}
                 if p.startswith(('/obj/machinery/igniter', '/obj/machinery/sparker')):
                     if isinstance(r.get('id'), str):
                         rec['id'] = r['id'].strip('"')                      # (igniter.dm: the ignition switch with the same id works it)
@@ -1313,6 +1354,9 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                     psp[key] = spr.add(pipe_layers(code, ly, 0))
         pipe_fittings(spr, shared.setdefault('fittings', {}))
         assembly_types(spr, shared.setdefault('assemblies', {}))
+        fr_icon = 'icons/obj/stock_parts.dmi'                                      # a computer frame, as it is put together (state 0 to 4), from each of its four sides: S, N, E, W
+        if icon_ok(fr_icon, '0') and icon_ok(fr_icon, '4'):
+            shared['frames'] = {'computer': [[spr.add([(fr_icon, str(st_), dd, None, None)]) for st_ in range(5)] for dd in (S, N, E, W)]}
         fire_icon = 'icons/effects/fire.dmi'                                       # a fire on a tile (LINDA_fire.dm hotspot: 1 small, 2 bigger, 3 fills it): the frames of each
         if icon_ok(fire_icon, '1'):
             fdmi = sl.get_dmi(fire_icon)
@@ -1342,6 +1386,7 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                     want.append(v)
     # everything lying around on the map is an item the game should know (so a hardsuit helmet on a shelf can be worn)
     want += sorted({pr['p'] for pr in props if pr['k'] == 'item' and pr.get('p')})
+    want += sorted(shared.get('boards', {}))                                           # (a computer taken apart leaves its board)
     pop = populate()
 
     def flat_rows(rows):
@@ -1681,7 +1726,7 @@ def build(mapname):
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'fittingTypes': device_types(shared.get('fittings', {})), 'assemblies': shared.get('assemblies', {}), 'fireSprites': shared.get('fire_sprites', []), 'lightItems': light_items, 'tiles': base['tiles'],
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'fittingTypes': device_types(shared.get('fittings', {})), 'assemblies': shared.get('assemblies', {}), 'fireSprites': shared.get('fire_sprites', []), 'frames': shared.get('frames', {}), 'boards': shared.get('boards', {}), 'computerBoards': shared.get('computerBoards', {}), 'lightItems': light_items, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,
