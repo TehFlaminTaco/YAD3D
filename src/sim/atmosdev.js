@@ -16,8 +16,8 @@ const CAN_MIN = ONE_ATMOSPHERE / 10, CAN_MAX = ONE_ATMOSPHERE * 10;             
 const PUMP_MIN = ONE_ATMOSPHERE / 10, PUMP_MAX = ONE_ATMOSPHERE * 25;               // pump.dm PUMP_MIN_PRESSURE, PUMP_MAX_PRESSURE
 const SCRUB_DEFAULT = ['tox', 'co2', 'n2o', 'bz', 'h2o'];                           // scrubber.dm: what a new one scrubs (the DM's list, as far as the game has the gases)
 
-/** The temperature the game keeps everything at: the DM's T20C. */
-const TEMP = '20 °C (293.15 K)';
+/** How the analyzer writes a temperature (scanners.dm: `[round(T - T0C)] °C ([round(T, 0.01)] K)`). */
+export const tempText = (t) => `${Math.round(t - 273.15)} °C (${Math.round(t * 100) / 100} K)`;
 
 /**
  * What the gas analyzer says of a mixture (scanners.dm atmosanalyzer_scan): moles, volume, pressure, each gas's share, the temperature. `name` is how the thing is called ("the canister").
@@ -35,7 +35,7 @@ export function scanMix(sim, m, mix, name) {
       const mol = mix.g[id];
       if (mol > 0) sim.tell(m, 'info', `${GAS_NAME[id]}: ${Math.round(mol / total * 10000) / 100} % (${Math.round(mol * 100) / 100} mol)`);
     }
-    sim.tell(m, 'info', `Temperature: ${TEMP}`);
+    sim.tell(m, 'info', `Temperature: ${tempText(mix.t)}`);
   } else sim.tell(m, 'info', `${name[0].toUpperCase()}${name.slice(1)} is empty!`);
   return true;
 }
@@ -54,7 +54,7 @@ export function scanAir(sim, m) {
   row('co2', e.co2 / total <= 0.01);
   row('tox', e.tox / total <= 0.005);
   for (const id of ['n2o', 'bz', 'h2o']) if (e[id] > 0) row(id, false);
-  sim.tell(m, 'info', `Temperature: ${TEMP}`);
+  sim.tell(m, 'info', `Temperature: ${tempText(e.temperature)}`);
   return true;
 }
 const kpaToMoles = (kpa) => kpa * CELL_VOLUME / (8.31 * 293.15);
@@ -523,7 +523,7 @@ export class AirAlarm {
     const avg = a.areaStats.get(this.area);
     return {
       title: 'Air Alarm', live: true,
-      html: `<span class="h">${esc(this.grid.world.areas[this.area]?.n || this.name)}</span>   <span class="d">${this.locked ? 'locked' : 'unlocked'}</span>\n\nStatus         ${level === 2 ? '<span class="b">DANGER</span>' : level === 1 ? '<span class="w">Warning</span>' : '<span class="c">Optimal</span>'}\n${lines.join('\n')}\nTemperature    <span class="c">20.00 °C</span>\nArea average   ${avg !== undefined ? avg.toFixed(1) + ' kPa' : 'n/a'}\n\nMode           ${airModeName(this.mode)}   ${this.grid.power.areaPowered(this.area) ? '' : '<span class="b">(no power)</span>'}${canUse ? '' : '\n\n<span class="w">The interface is locked.</span>'}`,
+      html: `<span class="h">${esc(this.grid.world.areas[this.area]?.n || this.name)}</span>   <span class="d">${this.locked ? 'locked' : 'unlocked'}</span>\n\nStatus         ${level === 2 ? '<span class="b">DANGER</span>' : level === 1 ? '<span class="w">Warning</span>' : '<span class="c">Optimal</span>'}\n${lines.join('\n')}\nTemperature    <span class="${['c', 'w', 'b'][danger('temperature', e.temperature)]}">${(e.temperature - 273.15).toFixed(2)} °C</span>\nArea average   ${avg !== undefined ? avg.toFixed(1) + ' kPa' : 'n/a'}\n\nMode           ${airModeName(this.mode)}   ${this.grid.power.areaPowered(this.area) ? '' : '<span class="b">(no power)</span>'}${canUse ? '' : '\n\n<span class="w">The interface is locked.</span>'}`,
       buttons: AIR_MODES.map((md) => ({ label: `${md.id === this.mode ? '* ' : ''}${md.name}`, disabled: !canUse, fn: () => { this.setMode(md.id); this.sim.tell(m, 'notice', `The air alarm is set to ${md.name}.`); } })),
     };
   }

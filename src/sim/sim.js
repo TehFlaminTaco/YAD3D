@@ -30,6 +30,8 @@ import { Lights } from './lights.js';
 import { Tanks } from './tanks.js';
 import { AI } from './ai.js';
 import { attach, detach, place, recalc, internalsSource, spaceSafe, moveSlow, serializeInv, allItems, TANK_EMPTY } from './inventory.js';
+
+const THERMAL_PART = [0.3, 0.15, 0.15, 0.15, 0.05, 0.15, 0.05];       // THERMAL_PROTECTION_HEAD, CHEST, GROIN, LEGS, FEET, ARMS, HANDS: what share of the body each is
 import { breathRate } from '../shared/items.js';
 import { breathOf, GAS_IDS } from '../shared/gases.js';
 import { Dispensers } from './dispensers.js';
@@ -649,7 +651,8 @@ export class Sim {
       m.stunned = Math.max(0, m.stunned - dt);
       const [c, r] = m.tile;
       const a = m.grid?.atmos;                                       // in the void there is no air at all
-      const env = a ? a.gasesAt(c, r, m.l | 0) : Object.fromEntries([['pressure', 0], ...GAS_IDS.map((id) => [id, 0])]);
+      const env = a ? a.gasesAt(c, r, m.l | 0) : Object.fromEntries([['pressure', 0], ['temperature', 2.7], ...GAS_IDS.map((id) => [id, 0])]);
+      if (!m.humanoid) env.temperature = undefined;                  // (only people keep a body temperature)
       let internals = false, breath = null;
       if (m.humanoid && m.internals) {
         const src = internalsSource(m);
@@ -660,13 +663,37 @@ export class Sim {
           if (src.mix.total() <= TANK_EMPTY) { m.internals = false; this.tell(m, 'danger', 'Your air tank runs dry!'); }
         }
       }
-      m.body.tick(dt, { ...env, breath, safeSuit: m.kind === 'carp' || (m.humanoid && spaceSafe(m)), internals: internals || m.kind === 'carp' });
+      m.body.tick(dt, { ...env, breath, safeSuit: m.kind === 'carp' || (m.humanoid && spaceSafe(m)), internals: internals || m.kind === 'carp', insulation: m.humanoid ? (T, now) => this.insulation(m, T, now) : undefined });
+      if (m.humanoid && m.body.tempAlert !== m.tempShown) {          // the alert on the screen (alert.dm hot / cold)
+        m.tempShown = m.body.tempAlert;
+        if (m.tempShown === 'hot') this.tell(m, 'warning', "You're flaming hot! Get somewhere cooler and take off any insulating clothing like a fire suit.");
+        else if (m.tempShown === 'cold') this.tell(m, 'warning', "You're freezing cold! Get somewhere warmer and take off any insulating clothing like a space suit.");
+      }
       if (m.kind === 'human' && !m.body.dead) {                      // nitrous oxide (lungs.dm: over 1 kPa you are knocked out for a bit, over 5 you sleep)
         const pp = (breath || (internals ? null : env))?.n2o || 0;
         if (pp > 5) m.stunned = Math.max(m.stunned, 20);
         else if (pp > 1) m.stunned = Math.max(m.stunned, 6);
       }
     }
+  }
+
+  /**
+   * How much of the heat (or the cold) of `T` kelvin their clothes keep out, 0 to 1 (carbon.dm get_heat_protection / get_cold_protection): the body parts that something they wear covers and
+   * that is good against that temperature (`th` of the item: the hottest it takes, the parts, the coldest, the parts), added up by how much of the body each is. A suit and a helmet for space keep out all cold.
+   * `now` is their body temperature: it is heat that is meant if `T` is above it.
+   */
+  insulation(m, T, now) {
+    const heat = T > now;
+    if (!heat && spaceSafe(m)) return 1;
+    let mask = 0;
+    for (const it of Object.values(m.worn)) {
+      const th = it?.th;
+      if (!th) continue;
+      if (heat) { if (th[0] >= T) mask |= th[1]; } else if (th[2] <= Math.max(T, 2.7)) mask |= th[3];
+    }
+    let s = 0;
+    for (let k = 0; k < 7; k++) if (mask & (1 << k)) s += THERMAL_PART[k];
+    return s;
   }
 
   onMobDeath(m, cause) {

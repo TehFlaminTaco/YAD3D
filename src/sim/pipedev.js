@@ -118,12 +118,12 @@ class VentPump extends Device {
       let delta = 10000;
       if (this.checks & EXT_BOUND) delta = Math.min(delta, this.ext - envP);
       if (this.checks & INT_BOUND) delta = Math.min(delta, air.pressure() - this.int);
-      if (delta > 0) env.merge(air.remove(molesAt(delta, CELL_VOLUME)));
+      if (delta > 0) env.merge(air.remove(molesAt(delta, CELL_VOLUME, air.t)));
     } else {
       let delta = 10000;
       if (this.checks & EXT_BOUND) delta = Math.min(delta, envP - this.ext);
       if (this.checks & INT_BOUND) delta = Math.min(delta, this.int - air.pressure());
-      if (delta > 0) air.merge(env.remove(molesAt(delta, air.vol)));
+      if (delta > 0) air.merge(env.remove(molesAt(delta, air.vol, env.t)));
     }
     this.updateParents();
   }
@@ -290,7 +290,7 @@ class Injector extends Device {
     if (!this.on || !this.operational) return;
     const air = this.airs[0], env = this.room();
     if (!env) return;
-    env.merge(air.remove(molesAt(air.pressure(), this.rate)));
+    env.merge(air.remove(molesAt(air.pressure(), this.rate, air.t)));
     this.updateParents();
   }
   click(c, m, held) {
@@ -418,12 +418,12 @@ class DPVent extends Device {
       let delta = 10000;
       if (this.checks & 1) delta = Math.min(delta, this.ext - env.pressure());
       if (this.checks & 2) delta = Math.min(delta, a1.pressure() - this.inMin);
-      if (delta > 0 && a1.total() > 0) { env.merge(a1.remove(molesAt(delta, CELL_VOLUME))); if (this.parents[0]) this.parents[0].update = true; }
+      if (delta > 0 && a1.total() > 0) { env.merge(a1.remove(molesAt(delta, CELL_VOLUME, a1.t))); if (this.parents[0]) this.parents[0].update = true; }
     } else {                                                                                // room -> output
       let delta = 10000;
       if (this.checks & 1) delta = Math.min(delta, env.pressure() - this.ext);
       if (this.checks & 2) delta = Math.min(delta, this.outMax - a2.pressure());
-      if (delta > 0) { a2.merge(env.remove(molesAt(delta, a2.vol))); if (this.parents[1]) this.parents[1].update = true; }
+      if (delta > 0) { a2.merge(env.remove(molesAt(delta, a2.vol, env.t))); if (this.parents[1]) this.parents[1].update = true; }
     }
   }
 }
@@ -493,7 +493,7 @@ class Mixer extends Device {
     if (!this.on || (!this.linked && !this.operational)) return;
     const [a1, a2, out] = this.airs;
     if (out.pressure() >= this.target) return;
-    const general = molesAt(this.target - out.pressure(), out.vol);
+    const general = molesAt(this.target - out.pressure(), out.vol, a1.t);
     let t1 = this.c1 * general, t2 = this.c2 * general;
     const m1 = a1.total(), m2 = a2.total();
     if (!this.c2) { t1 = Math.min(t1, m1); t2 = 0; }
@@ -543,6 +543,7 @@ class Meter extends Device {
     return 0;
   }
   reading() { const ly = this.pipeLayer(), air = ly ? this.net.airAt(this.i, ly) : null; return air ? air.pressure() : null; }
+  temperature() { const ly = this.pipeLayer(), air = ly ? this.net.airAt(this.i, ly) : null; return air ? air.t : null; }
   variant() {
     const p = this.operational ? this.reading() : null;
     if (p === null || p <= 0.15 * ONE_ATMOSPHERE) return 0;
@@ -555,7 +556,7 @@ class Meter extends Device {
   process() { this.touch(); }
   status() {
     const p = this.reading();
-    return p === null ? 'The connect error light is blinking.' : `The pressure gauge reads ${Math.round(p * 100) / 100} kPa; 293.15 K (20 °C).`;
+    return p === null ? 'The connect error light is blinking.' : `The pressure gauge reads ${Math.round(p * 100) / 100} kPa; ${Math.round(this.temperature() * 100) / 100} K (${Math.round(this.temperature() - 273.15)} °C).`;
   }
   examine() { return [this.status()]; }
   click(c, m, held) { if (held) return false; if (this.operational) this.sim.tell(m, 'info', this.status()); return true; }

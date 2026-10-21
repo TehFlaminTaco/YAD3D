@@ -1,5 +1,9 @@
 import { TILE, KIND, N, S, E, W } from './config.js';
-import { GAS_IDS, Mix, CELL_VOLUME, CELL_MOLES_PER_KPA, AIR_MODE } from './gases.js';
+import { GAS_IDS, Mix, CELL_VOLUME, CELL_MOLES_PER_KPA, AIR_MODE, SPECIFIC_HEAT, T20C, MINIMUM_HEAT_CAPACITY } from './gases.js';
+
+const T20F = Math.fround(T20C);                       // what a tile's temperature is stored as (a Float32Array)
+const CAPS = GAS_IDS.map((id) => SPECIFIC_HEAT[id]);  // specific heats in `GAS_IDS` order
+const RELAX = 45;                                     // seconds: how fast the floor and the walls bring a warm or cold room back to 20 degrees (heat is shared with turfs of 10,000 J/K: turf.dm heat_capacity)
 
 const STD_O2 = 21.3, STD_N2 = 80.0;
 const K = 0.2;            // fraction of the pressure difference exchanged per pass
@@ -30,6 +34,9 @@ export class Atmos {
     this.bz = new Float32Array(n);
     this.h2o = new Float32Array(n);                    // partial pressures in kPa, per tile (`GAS_IDS` order)
     this.arrs = GAS_IDS.map((id) => this[id]);
+    this.temp = new Float32Array(n).fill(T20F);        // kelvin, per tile. The arrays above are then not what the gas presses with but what it would at 20 degrees (moles, in a way); `total` is the pressure it really makes
+    this.thermal = false;                              // has anything ever been other than 20 degrees? (until then none of the heat is looked at)
+    this.warm = new Set();                             // the tiles that are not at 20 degrees
     this.hot = GAS_IDS.map((id) => id === 'o2' || id === 'n2' || id === 'tox');         // which gases are in the air anywhere (the others are skipped until somebody lets one out)
     this.mode = new Uint8Array(world.areas.length).fill(AIR_MODE.SCRUBBING);          // what each room's air alarm has its vents and scrubbers doing
     this.isCell = new Uint8Array(n);
@@ -103,9 +110,40 @@ export class Atmos {
   }
 
   // (off the edge of the array, and in the void, there is no air at all)
+  /** What all the gases of tile index `i` would press with at 20 degrees: moles, as kPa in a tile (what the arrays hold). */
+  sum20(i) {
+    return this.o2[i] + this.n2[i] + this.tox[i] + this.co2[i] + this.n2o[i] + this.bz[i] + this.h2o[i];
+  }
   /** The pressure of all the gases together in tile index `i`. */
   total(i) {
-    return this.o2[i] + this.n2[i] + this.tox[i] + this.co2[i] + this.n2o[i] + this.bz[i] + this.h2o[i];
+    const s = this.o2[i] + this.n2[i] + this.tox[i] + this.co2[i] + this.n2o[i] + this.bz[i] + this.h2o[i];
+    return this.thermal ? s * this.temp[i] / T20F : s;
+  }
+  /** What the gas of tile `i` can hold in heat, J/K (moles x specific heat). */
+  heatCap(i) {
+    let s = 0;
+    for (let k = 0; k < CAPS.length; k++) s += this.arrs[k][i] * CAPS[k];
+    return s * CELL_MOLES_PER_KPA;
+  }
+  temperatureAt(c, r, l = 0) { return this.world.inb(c, r, l) ? this.temp[this.world.idx(c, r, l)] : 2.7; }
+
+  /** Gas of heat capacity `capAdd` J/K at `tAdd` kelvin has been added to tile `i`, which had `capBefore` before: it is the temperature their heat makes together. */
+  mixIn(i, capBefore, capAdd, tAdd) {
+    if (!(capAdd > 0)) return;
+    const cur = this.temp[i];
+    if (!this.thermal && Math.abs(tAdd - T20F) < 1e-4 && Math.abs(cur - T20F) < 1e-4) return;
+    this.thermal = true;
+    this.temp[i] = capBefore > MINIMUM_HEAT_CAPACITY ? (cur * capBefore + tAdd * capAdd) / (capBefore + capAdd) : tAdd;
+    if (this.temp[i] !== T20F) this.warm.add(i);
+  }
+
+  /** `joules` go into (or out of) the gas of tile `i`. */
+  heat(i, joules) {
+    const c = this.heatCap(i);
+    if (!(c > MINIMUM_HEAT_CAPACITY)) return;
+    this.thermal = true;
+    this.temp[i] = Math.max(2.7, this.temp[i] + joules / c);
+    if (this.temp[i] !== T20F) this.warm.add(i);
   }
   pressureAt(c, r, l = 0) {
     if (!this.world.inb(c, r, l)) return 0;
@@ -113,11 +151,13 @@ export class Atmos {
   }
   o2At(c, r, l = 0) { return this.world.inb(c, r, l) ? this.o2[this.world.idx(c, r, l)] : 0; }
   toxAt(c, r, l = 0) { return this.world.inb(c, r, l) ? this.tox[this.world.idx(c, r, l)] : 0; }
-  /** Every gas's partial pressure at a tile: { o2, n2, tox, co2, n2o, bz, h2o, pressure } (all 0 off the array). */
+  /** Every gas's partial pressure at a tile: { o2, n2, tox, co2, n2o, bz, h2o, pressure, temperature } (all 0 off the array; space is 2.7 kelvin). */
   gasesAt(c, r, l = 0) {
-    const out = { pressure: 0 };
+    const out = { pressure: 0, temperature: 2.7 };
     const i = this.world.inb(c, r, l) ? this.world.idx(c, r, l) : -1;
-    for (let k = 0; k < GAS_IDS.length; k++) { out[GAS_IDS[k]] = i >= 0 ? this.arrs[k][i] : 0; out.pressure += out[GAS_IDS[k]]; }
+    const f = i >= 0 && this.thermal ? this.temp[i] / T20F : 1;
+    for (let k = 0; k < GAS_IDS.length; k++) { out[GAS_IDS[k]] = i >= 0 ? this.arrs[k][i] * f : 0; out.pressure += out[GAS_IDS[k]]; }
+    if (i >= 0 && this.isCell[i]) out.temperature = this.temp[i];
     return out;
   }
 
@@ -133,7 +173,7 @@ export class Atmos {
     const i = this.world.idx(c, r, l);
     const was = this.isCell[i];
     this.buildTopology(false);
-    if (!(was && this.isCell[i])) for (const arr of this.arrs) arr[i] = 0;
+    if (!(was && this.isCell[i])) { for (const arr of this.arrs) arr[i] = 0; this.temp[i] = T20F; this.warm.delete(i); }
   }
 
   /** Pressure-driven push (m/s) felt at a world position on deck `l`. */
@@ -160,18 +200,23 @@ export class Atmos {
     if (!this.world.inb(c, r, l)) return;
     const i = this.world.idx(c, r, l);
     if (!this.isCell[i]) return;
+    const before = this.thermal ? this.heatCap(i) : 0;
     this.o2[i] += o2; this.n2[i] += n2; this.tox[i] += tox;
+    if (this.thermal) this.mixIn(i, before, (o2 * CAPS[0] + n2 * CAPS[1] + tox * CAPS[2]) * CELL_MOLES_PER_KPA, T20F);
   }
 
-  /** Let gas out into a tile: `kpa` is how much each gas adds to its pressure ({ co2: 40 }). A tile that holds no air (a wall, space) takes none. */
-  addGases(c, r, kpa, l = 0) {
+  /** Let gas out into a tile: `kpa` is how much each gas adds to its pressure at 20 degrees ({ co2: 40 }), at `t` kelvin. A tile that holds no air (a wall, space) takes none. */
+  addGases(c, r, kpa, l = 0, t = T20C) {
     if (!this.world.inb(c, r, l)) return false;
     const i = this.world.idx(c, r, l);
     if (!this.isCell[i]) return false;
+    const before = this.thermal || t !== T20C ? this.heatCap(i) : 0;
+    let add = 0;
     for (let k = 0; k < GAS_IDS.length; k++) {
       const v = kpa[GAS_IDS[k]];
-      if (v) { this.arrs[k][i] += v; this.hot[k] = true; }
+      if (v) { this.arrs[k][i] += v; this.hot[k] = true; add += v * CAPS[k]; }
     }
+    this.mixIn(i, before, add * CELL_MOLES_PER_KPA, t);
     return true;
   }
 
@@ -194,14 +239,35 @@ export class Atmos {
     const { world } = this;
     const { airBlock, edge } = world;
     const arrs = this.arrs.filter((_, k) => this.hot[k]);
-    const pairs = this.pairs;
+    const caps = CAPS.filter((_, k) => this.hot[k]);
+    const pairs = this.pairs, temp = this.temp, thermal = this.thermal, warm = this.warm;
     for (let pass = 0; pass < PASSES; pass++) {
       for (let k = 0; k < pairs.length; k += 3) {
         const a = pairs[k], b = pairs[k + 1];
         if (airBlock[a] || airBlock[b]) continue;
         const dir = pairs[k + 2];
         if (edge[a] & dir) continue;
-        for (let g = 0; g < arrs.length; g++) { const arr = arrs[g], d = (arr[a] - arr[b]) * K; arr[a] -= d; arr[b] += d; }
+        const ta = thermal ? temp[a] : T20F, tb = thermal ? temp[b] : T20F;
+        if (ta === T20F && tb === T20F) {
+          for (let g = 0; g < arrs.length; g++) { const arr = arrs[g], d = (arr[a] - arr[b]) * K; arr[a] -= d; arr[b] += d; }
+        } else {
+          // gas goes where the pressure is lower (`arr` x temperature is its partial pressure), carrying the temperature it had; each tile ends up at the temperature its heat makes
+          const tm = 0.5 * (ta + tb);
+          let capA = 0, capB = 0, ab = 0, ba = 0;
+          for (let g = 0; g < arrs.length; g++) { capA += arrs[g][a] * caps[g]; capB += arrs[g][b] * caps[g]; }
+          for (let g = 0; g < arrs.length; g++) {
+            const arr = arrs[g];
+            let d = K * (arr[a] * ta - arr[b] * tb) / tm;
+            if (d > arr[a]) d = arr[a]; else if (-d > arr[b]) d = -arr[b];
+            arr[a] -= d; arr[b] += d;
+            if (d > 0) ab += d * caps[g]; else ba -= d * caps[g];
+          }
+          const na = capA - ab + ba, nb = capB - ba + ab;
+          if (na > MINIMUM_HEAT_CAPACITY) temp[a] = (capA * ta - ab * ta + ba * tb) / na;
+          if (nb > MINIMUM_HEAT_CAPACITY) temp[b] = (capB * tb - ba * tb + ab * ta) / nb;
+          if (temp[a] !== T20F) warm.add(a);
+          if (temp[b] !== T20F) warm.add(b);
+        }
       }
       for (const i of this.sinkCells) {
         if (airBlock[i]) continue;
@@ -210,8 +276,18 @@ export class Atmos {
       }
     }
     this.ventsAndScrubbers();
+    if (this.warm.size) this.relax(TICK);
     // gas can't pool in solid cells (closed doors keep what they had; walls none)
     this.leaking = this.sinkCells.size;
+  }
+
+  /** The floors and walls take warmth from a hot room and give it to a cold one: it goes back to 20 degrees (a tile with no gas in it has no temperature to speak of). */
+  relax(dt) {
+    const f = 1 - Math.exp(-dt / RELAX), temp = this.temp;
+    for (const i of this.warm) {
+      const t = temp[i] + (T20F - temp[i]) * f;
+      if (Math.abs(t - T20F) < 0.05 || !this.isCell[i]) { temp[i] = T20F; this.warm.delete(i); } else temp[i] = t;
+    }
   }
 
   /**
@@ -313,26 +389,34 @@ export class Atmos {
 /** A tile's air as a `Mix`-like thing (gases.js): taking from it and giving to it change the tile. A tile is 2500 litres; its gases are kept as partial pressures. */
 export class CellMix {
   constructor(atmos, i) { this.atmos = atmos; this.i = i; this.vol = CELL_VOLUME; }
-  total() { return this.atmos.total(this.i) * CELL_MOLES_PER_KPA; }
+  /** The temperature of the tile's air. */
+  get t() { return this.atmos.temp[this.i]; }
+  /** Moles (the arrays hold what the gas would press with at 20 degrees, which is moles in a way). */
+  total() { return this.atmos.sum20(this.i) * CELL_MOLES_PER_KPA; }
   pressure() { return this.atmos.total(this.i); }
-  pp(id) { return this.atmos[id][this.i]; }
+  pp(id) { return this.atmos[id][this.i] * (this.atmos.thermal ? this.atmos.temp[this.i] / T20F : 1); }
+  heatCapacity() { return this.atmos.heatCap(this.i); }
   remove(moles) {
-    const a = this.atmos, i = this.i, t = this.total(), out = new Mix(this.vol);
+    const a = this.atmos, i = this.i, t = this.total(), out = new Mix(this.vol, {}, a.temp[i]);
     if (t <= 0 || moles <= 0) return out;
     const f = Math.min(1, moles / t);
     for (let k = 0; k < GAS_IDS.length; k++) { const arr = a.arrs[k], m = arr[i] * f; out.g[GAS_IDS[k]] = m * CELL_MOLES_PER_KPA; arr[i] -= m; }
     return out;
   }
   removeGases(ids) {
-    const a = this.atmos, i = this.i, out = new Mix(this.vol);
+    const a = this.atmos, i = this.i, out = new Mix(this.vol, {}, a.temp[i]);
     for (const id of ids) { const arr = a.arrs[GAS_IDS.indexOf(id)]; out.g[id] += arr[i] * CELL_MOLES_PER_KPA; arr[i] = 0; }
     return out;
   }
   merge(mix) {
     const a = this.atmos, i = this.i;
+    const before = a.thermal || mix.t !== T20C ? a.heatCap(i) : 0;
     for (let k = 0; k < GAS_IDS.length; k++) {
       const m = mix.g[GAS_IDS[k]];
       if (m > 0) { a.arrs[k][i] += m / CELL_MOLES_PER_KPA; a.hot[k] = true; }
     }
+    a.mixIn(i, before, mix.heatCapacity(), mix.t);
   }
+  /** `joules` of heat go into the tile's air (or out of it). */
+  heat(joules) { this.atmos.heat(this.i, joules); }
 }

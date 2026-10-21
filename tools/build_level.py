@@ -627,6 +627,36 @@ def fitting_for(p, r, spr, table):
     table[key] = {'n': clean_name(typ.get('name', '')) or 'pipe machine', 's': items, 'sv': pic['sv'], 'bd': pic.get('dir') or S}
 
 
+_ATMOS_DEFS = {}
+
+
+def thermal_limit(v):
+    """A temperature limit of a piece of clothing (a number, or one of the *_TEMP_PROTECT defines of atmospherics.dm), or None."""
+    if v is None:
+        return None
+    s = str(v).strip().strip('"')
+    if not _ATMOS_DEFS:
+        for line in open(os.path.join(TREE, 'code', '__DEFINES', 'atmospherics.dm'), encoding='utf-8', errors='replace'):
+            m = re.match(r'#define\s+(\w+)\s+([0-9.]+)', line)
+            if m:
+                _ATMOS_DEFS[m.group(1)] = float(m.group(2))
+    try:
+        return float(s)
+    except ValueError:
+        return _ATMOS_DEFS.get(s)
+
+
+THERMAL_BITS = {'HEAD': 1, 'CHEST': 2, 'GROIN': 4, 'LEGS': 8, 'FEET': 16, 'ARMS': 32, 'HANDS': 64, 'FULL_BODY': 127}
+
+
+def thermal_parts(v):
+    """`heat_protection` / `cold_protection` (CHEST|GROIN|LEGS...) as bits."""
+    out = 0
+    for tok in re.findall(r'[A-Z_]+', str(v or '')):
+        out |= THERMAL_BITS.get(tok, 0)
+    return out
+
+
 def airlock_frames(r, spr):
     """The pictures of an airlock whose DM vars are `r`: closed, each frame of opening, open (the sprite ids, `fr` of a door record), or None if the picture is missing."""
     icon = r.get('icon')
@@ -1341,6 +1371,13 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
             am = re.search(r'"rad"\s*=\s*(-?\d+)', str(raw.get('armor') or ''))
             if am and int(am.group(1)) > 0 and slots:
                 itemdefs[pth]['rd'] = int(am.group(1))
+            # what it keeps the heat and the cold out of (`th`: [the hottest it protects against, the parts of the body it does that for, the coldest, the parts]): the temperature limits and
+            # `heat_protection` / `cold_protection` of the DM (atmospherics.dm *_TEMP_PROTECT; the parts as bits: head 1, chest 2, groin 4, legs 8, feet 16, arms 32, hands 64)
+            if slots:
+                hot, cold = thermal_limit(raw.get('max_heat_protection_temperature')), thermal_limit(raw.get('min_cold_protection_temperature'))
+                hm, cm = thermal_parts(raw.get('heat_protection')), thermal_parts(raw.get('cold_protection'))
+                if (hot and hm) or (cold is not None and cm):
+                    itemdefs[pth]['th'] = [hot or 0, hm if hot else 0, cold if cold is not None else 0, cm if cold is not None else 0]
             if pth == '/obj/item/geiger_counter' and all(icon_ok(icon, 'geiger_on_%d' % k) for k in range(1, 6)):
                 gv = [spr.add([(icon, 'geiger_off', S, None, None)])] + [spr.add([(icon, 'geiger_on_%d' % k, S, None, None)]) for k in range(1, 6)]
                 if all(x >= 0 for x in gv):

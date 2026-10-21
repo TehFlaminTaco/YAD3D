@@ -144,7 +144,7 @@ export function spriteOf(it) { return (it.lit || it.on) && it.spriteOn !== undef
 
 export function makeItemData(db, path, extra = {}) {
   const info = db.info(path), def = db.behavior(path);
-  const it = { id: 0, path, name: extra.name || info.n, sprite: info.s, spriteOn: info.sa, w: info.w, slots: info.sl, force: info.f, rd: info.rd || 0, def, ...extra };
+  const it = { id: 0, path, name: extra.name || info.n, sprite: info.s, spriteOn: info.sa, w: info.w, slots: info.sl, force: info.f, rd: info.rd || 0, th: info.th, def, ...extra };
   if (def.gun) it.shots = def.gun.shots;
   if (def.tank || def.plasmaTank) it.mix = tankMix(def, path);
   if (def.jetpack) it.gas = def.jetpack.cap;

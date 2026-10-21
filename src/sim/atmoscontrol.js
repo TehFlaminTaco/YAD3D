@@ -52,28 +52,28 @@ export class AtmosControl {
   read(g, key) {
     const it = this.sensor(g, key);
     if (!it) return null;
-    let pressure = 0, parts = {};
+    let pressure = 0, temperature = 293.15, parts = {};
     if (key.startsWith('loop:')) {
       const dev = it.mach, air = dev ? g.pipenet.airAt(dev.i, dev.pipeLayer()) : null;
       if (!air) return null;
-      pressure = air.pressure();
+      pressure = air.pressure(); temperature = air.t;
       const tot = GAS_IDS.reduce((s, id) => s + air.g[id], 0);
       if (tot > 0) for (const id of GAS_IDS) parts[id] = air.g[id] / tot * 100;
     } else {
       const gas = g.atmos.gasesAt(it.c, it.r, it.l | 0);
-      pressure = gas.pressure;
+      pressure = gas.pressure; temperature = gas.temperature;
       const tot = GAS_IDS.reduce((s, id) => s + (gas[id] || 0), 0);
       if (tot > 0) for (const id of GAS_IDS) parts[id] = (gas[id] || 0) / tot * 100;
     }
     const shares = GAS_IDS.filter((id) => parts[id] > 0.05).sort((a, b) => parts[b] - parts[a]).map((id) => [GAS_NAME[id], parts[id]]);
-    return { pressure, shares };
+    return { pressure, temperature, shares };
   }
 
   block(g, key, label) {
     const r = this.read(g, key);
     if (!r) return `<span class="h">${esc(label)}</span>\n  <span class="w">no signal</span>\n`;
     const rows = r.shares.map(([n, pct]) => `  ${esc(n).padEnd(16)} ${pct.toFixed(1).padStart(6)} %`).join('\n');
-    return `<span class="h">${esc(label)}</span>\n  Pressure         ${r.pressure.toFixed(1).padStart(8)} kPa   Temperature  293.15 K\n${rows || '  (empty)'}\n`;
+    return `<span class="h">${esc(label)}</span>\n  Pressure         ${r.pressure.toFixed(1).padStart(8)} kPa   Temperature  ${r.temperature.toFixed(2)} K\n${rows || '  (empty)'}\n`;
   }
 
   // ------------------------------------------------------------------ the consoles

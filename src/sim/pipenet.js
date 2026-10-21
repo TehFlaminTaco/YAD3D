@@ -1,5 +1,5 @@
 import { N, S, E, W, DV, OPP } from '../shared/config.js';
-import { GAS_IDS, Mix, ONE_ATMOSPHERE, O2STANDARD, N2STANDARD, CELL_VOLUME, molesAt, kpaOf } from '../shared/gases.js';
+import { GAS_IDS, Mix, ONE_ATMOSPHERE, O2STANDARD, N2STANDARD, CELL_VOLUME, MINIMUM_HEAT_CAPACITY, molesAt, kpaOf } from '../shared/gases.js';
 import { SHAPES, PIPE_SLOTS, PIPE_HIDDEN, JUNCTION_DIR } from '../shared/pipedata.js';
 import { makeDevice } from './pipedev.js';
 
@@ -207,12 +207,13 @@ export class PipeNet {
         if (dev.isConnector && dev.device) GL.push(dev.device.mix);
       }
     }
-    let V = 0;
+    let V = 0, E = 0, C = 0;
     const tot = {};
     for (const id of GAS_IDS) tot[id] = 0;
-    for (const m of GL) { V += m.vol; for (const id of GAS_IDS) tot[id] += m.g[id]; }
+    for (const m of GL) { V += m.vol; for (const id of GAS_IDS) tot[id] += m.g[id]; const c = m.heatCapacity(); E += c * m.t; C += c; }
     if (V <= 0) return;
     for (const m of GL) { const f = m.vol / V; for (const id of GAS_IDS) m.g[id] = tot[id] * f; }
+    if (C > MINIMUM_HEAT_CAPACITY) { const t = E / C; for (const m of GL) m.t = t; }                  // (and they are all at the temperature their heat makes)
   }
 
   /** What each pipe holds, by slot (its share of its pipeline's gas by volume): the gas a rebuilt network keeps (`assemble(keep)`). */
@@ -222,7 +223,7 @@ export class PipeNet {
       const tot = line.air.vol;
       if (!(tot > 0)) continue;
       for (const s of line.slots) {
-        const vol = SHAPES[w.pipe[s] & 31].vol, m = new Mix(vol);
+        const vol = SHAPES[w.pipe[s] & 31].vol, m = new Mix(vol, {}, line.air.t);
         for (const id of GAS_IDS) m.g[id] = line.air.g[id] * vol / tot;
         keep.set(s, m);
       }
@@ -276,7 +277,7 @@ export class PipeNet {
   spill(i, mix) {
     const w = this.world, wh = w.W * w.H, rem = i % wh, kpa = {};
     for (const id of GAS_IDS) kpa[id] = kpaOf(mix.g[id], CELL_VOLUME);
-    this.grid.atmos.addGases(rem % w.W, Math.floor(rem / w.W), kpa, Math.floor(i / wh));
+    this.grid.atmos.addGases(rem % w.W, Math.floor(rem / w.W), kpa, Math.floor(i / wh), mix.t);
     mix.clear();
   }
 

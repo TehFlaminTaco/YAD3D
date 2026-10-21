@@ -569,6 +569,7 @@ export class Actions {
     const sim = this.sim;
     const b = o.body;
     sim.tell(m, 'info', `Analyzing results for ${o.name}: Overall status: ${b.dead ? 'Deceased' : Math.round(b.health / b.max * 100) + '% healthy'}. Brute: ${Math.round(b.brute)}, burn: ${Math.round(b.burn)}, toxin: ${Math.round(b.tox)}, suffocation: ${Math.round(b.oxy)}.`);
+    if (b.temp !== undefined) sim.tell(m, 'info', `Body temperature: ${(b.temp - 273.15).toFixed(1)}°C (${(b.temp * 1.8 - 459.67).toFixed(1)}°F)`);
     sim.sound('beep', m, 0.4);
     m.cool = 0.5;
   }

@@ -1,7 +1,8 @@
 /**
- * Gas, the way atmospherics.dm and gas_mixture.dm count it: moles in a volume, at one temperature (the game has no heat: everything is `T20C`). A room's air is kept as
- * a partial pressure in kPa per tile (`Atmos`); a canister, a tank, a pump or a scrubber holds `Mix`es, moles in litres. Both turn into each other with PV = nRT, and the
- * transfers between them are `pump_gas_to` and `release_gas_to` of the DM.
+ * Gas, the way atmospherics.dm and gas_mixture.dm count it: moles in a volume at a temperature. A room's air is kept as moles per tile in a form that is easy to spread about
+ * (`Atmos`: the pressure the gas would make at `T20C`, and a temperature of its own); a canister, a tank, a pump or a scrubber holds `Mix`es, moles in litres at a temperature `t`.
+ * Both turn into each other with PV = nRT, and the transfers between them are `pump_gas_to` and `release_gas_to` of the DM. Gases of different temperatures that are mixed
+ * end up at the temperature their heat (moles x specific heat x temperature) makes together.
  */
 export const R_IDEAL_GAS_EQUATION = 8.31;            // code/__DEFINES/atmospherics.dm:16
 export const ONE_ATMOSPHERE = 101.325;               //   :18
@@ -16,32 +17,42 @@ export const GASES = [
 ];
 export const GAS_IDS = GASES.map((g) => g[0]);
 export const GAS_NAME = Object.fromEntries(GASES);
+/** J per mole per kelvin (gas_types.dm specific_heat). */
+export const SPECIFIC_HEAT = { o2: 20, n2: 20, tox: 200, co2: 30, n2o: 40, bz: 20, h2o: 40 };
+export const TCMB = 2.7;                             // the temperature of space                            :20
+export const T0C = 273.15;                           //   :24
+export const MINIMUM_HEAT_CAPACITY = 0.0003;         //   :43
 
 const RT = R_IDEAL_GAS_EQUATION * T20C;
-/** Moles that make `kpa` in `litres`, and the pressure `moles` make there. */
-export const molesAt = (kpa, litres) => kpa * litres / RT;
-export const kpaOf = (moles, litres) => moles * RT / litres;
+/** Moles that make `kpa` in `litres` at `t` kelvin (20 degrees if not said), and the pressure `moles` make there. */
+export const molesAt = (kpa, litres, t = T20C) => kpa * litres / (R_IDEAL_GAS_EQUATION * t);
+export const kpaOf = (moles, litres, t = T20C) => moles * R_IDEAL_GAS_EQUATION * t / litres;
 /** How many moles a tile holds for each kPa of pressure. */
 export const CELL_MOLES_PER_KPA = CELL_VOLUME / RT;
 
-/** A gas mixture in a container (gas_mixture.dm), moles of each gas in `vol` litres. */
+/** A gas mixture in a container (gas_mixture.dm), moles of each gas in `vol` litres at `t` kelvin. */
 export class Mix {
-  constructor(vol, g = {}) {
+  constructor(vol, g = {}, t = T20C) {
     this.vol = vol;
+    this.t = t;
     this.g = {};
     for (const id of GAS_IDS) this.g[id] = g[id] || 0;
   }
 
   total() { let s = 0; for (const id of GAS_IDS) s += this.g[id]; return s; }
-  pressure() { return this.vol > 0 ? kpaOf(this.total(), this.vol) : 0; }
+  pressure() { return this.vol > 0 ? kpaOf(this.total(), this.vol, this.t) : 0; }
   /** The partial pressure of one gas. */
-  pp(id) { return this.vol > 0 ? kpaOf(this.g[id], this.vol) : 0; }
-  copy() { return new Mix(this.vol, this.g); }
+  pp(id) { return this.vol > 0 ? kpaOf(this.g[id], this.vol, this.t) : 0; }
+  copy() { return new Mix(this.vol, this.g, this.t); }
   clear() { for (const id of GAS_IDS) this.g[id] = 0; }
+  /** J per kelvin (heat_capacity). */
+  heatCapacity() { let s = 0; for (const id of GAS_IDS) s += this.g[id] * SPECIFIC_HEAT[id]; return s; }
+  /** J (thermal_energy: temperature x heat capacity). */
+  thermalEnergy() { return this.t * this.heatCapacity(); }
 
-  /** remove(amount): take `moles` out, in the proportions it holds; what comes out is its own mixture (of the same volume). */
+  /** remove(amount): take `moles` out, in the proportions it holds; what comes out is its own mixture (of the same volume and the same temperature). */
   remove(moles) {
-    const t = this.total(), out = new Mix(this.vol);
+    const t = this.total(), out = new Mix(this.vol, {}, this.t);
     if (t <= 0 || moles <= 0) return out;
     const f = Math.min(1, moles / t);
     for (const id of GAS_IDS) { const m = this.g[id] * f; out.g[id] = m; this.g[id] -= m; }
@@ -50,27 +61,41 @@ export class Mix {
 
   /** All of the listed gases, and nothing else (what a scrubber filters out). */
   removeGases(ids) {
-    const out = new Mix(this.vol);
+    const out = new Mix(this.vol, {}, this.t);
     for (const id of ids) { out.g[id] += this.g[id]; this.g[id] = 0; }
     return out;
   }
 
-  merge(other) { for (const id of GAS_IDS) this.g[id] += other.g[id]; }
+  /** merge(): the gas of `other` is added, and the temperature is what the heat of both makes. */
+  merge(other) {
+    const c1 = this.heatCapacity(), c2 = other.heatCapacity();
+    if (c2 > 0) {
+      if (c1 > MINIMUM_HEAT_CAPACITY) { if (this.t !== other.t) this.t = (this.t * c1 + other.t * c2) / (c1 + c2); } else this.t = other.t;
+    }
+    for (const id of GAS_IDS) this.g[id] += other.g[id];
+  }
 
-  /** A mix from a canister or tank's state in a save: { o2: moles, ... }. */
-  static fill(vol, kpaByGas) {
-    const m = new Mix(vol);
-    for (const id of GAS_IDS) if (kpaByGas[id]) m.g[id] = molesAt(kpaByGas[id], vol);
+  /** The mix at `t` kelvin has had `joules` put into it (or taken out, if negative): it is warmer (or colder). Returns the new temperature. */
+  heat(joules) {
+    const c = this.heatCapacity();
+    if (c > MINIMUM_HEAT_CAPACITY) this.t = Math.max(TCMB, this.t + joules / c);
+    return this.t;
+  }
+
+  /** A mix from a canister or tank's state in a save: { o2: kPa, ... } (as if at `t`). */
+  static fill(vol, kpaByGas, t = T20C) {
+    const m = new Mix(vol, {}, t);
+    for (const id of GAS_IDS) if (kpaByGas[id]) m.g[id] = molesAt(kpaByGas[id], vol, t);
     return m;
   }
 }
 
-/** gas_mixture.dm pump_gas_to: move gas from `src` into `out` until `out` is at `target` kPa. (Anything with `vol`, `total()`, `pressure()`, `remove()` and `merge()` will do.) */
+/** gas_mixture.dm pump_gas_to: move gas from `src` into `out` until `out` is at `target` kPa. (Anything with `vol`, `t`, `total()`, `pressure()`, `remove()` and `merge()` will do.) */
 export function pumpGas(src, out, target) {
   const start = out.pressure();
   if (target - start < 0.01) return false;
   if (src.total() > 0) {
-    out.merge(src.remove((target - start) * out.vol / RT));
+    out.merge(src.remove((target - start) * out.vol / (R_IDEAL_GAS_EQUATION * (src.t || T20C))));
     return true;
   }
   return false;
@@ -82,16 +107,16 @@ export function releaseGas(src, out, target) {
   if (outP >= Math.min(target, inP - 10)) return false;
   if (src.total() > 0) {
     const delta = Math.min(target - outP, (inP - outP) / 2);
-    out.merge(src.remove(delta * out.vol / RT));
+    out.merge(src.remove(delta * out.vol / (R_IDEAL_GAS_EQUATION * (src.t || T20C))));
     return true;
   }
   return false;
 }
 
-/** The gas a breath is made of when it comes from `mix` through internals (tanks.dm remove_air_volume at the tank's release pressure): the partial pressure of each gas in it, in kPa. */
+/** The gas a breath is made of when it comes from `mix` through internals (tanks.dm remove_air_volume at the tank's release pressure): the partial pressure of each gas in it, in kPa, and its temperature. */
 export function breathOf(mix) {
   const p = mix.pressure(), t = mix.total();
-  const out = { pressure: Math.min(TANK_DEFAULT_RELEASE_PRESSURE, p) };
+  const out = { pressure: Math.min(TANK_DEFAULT_RELEASE_PRESSURE, p), temperature: mix.t };
   for (const id of GAS_IDS) out[id] = t > 0 ? out.pressure * mix.g[id] / t : 0;
   return out;
 }
@@ -129,6 +154,7 @@ const TLV = {
   o2: [16, 19, 135, 140],
   n2: [-1, -1, 1000, 1000],
   co2: [-1, -1, 5, 10],
+  temperature: [273.15, 283.15, 313.15, 339.15],     // T0C, T0C+10, T0C+40, T0C+66
   tox: [-1, -1, 0.2, 0.5], n2o: [-1, -1, 0.2, 0.5], bz: [-1, -1, 0.2, 0.5], h2o: [-1, -1, 0.2, 0.5],         // tlv/dangerous
 };
 export function danger(what, v) {
