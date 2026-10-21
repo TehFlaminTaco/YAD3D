@@ -75,6 +75,10 @@ export class GridView {
     this.mobB = new SpriteBatch(600, mat);        // the people on this grid: drawn here so they stand upright on it, however it is turned in the scene
     this.trayB = new SpriteBatch(400, mat);       // the cables and pipes a T-ray scanner shows under the floor around you
     this.pipeB = new SpriteBatch(big ? 9000 : 400, mat);       // the pipes you can see: those in the open and those on bare plating
+    this.fireB = new SpriteBatch(600, mat);       // the fires (plasma burning on tiles): flames that are lit by themselves
+    this.fireSlot = new Map();                    // tile -> {id, st, ph}: its sprite, how big it is, which frame it is at
+    this.fireFree = [];
+    this.fireT = 0; this.fireFrame = 0;
     this.trayKey = '';
     this.mobFree = [];
     this.cam = { x: 0, y: 0, z: 0, yaw: 0 };      // where the camera is in this grid's frame (set every frame by the WorldView)
@@ -90,7 +94,7 @@ export class GridView {
 
     this.lightField = new LightField(world);
     this.levelMesh = new LevelMesh(world, assets, { tables: props.tables, panes: props.panes });
-    this.group.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh, this.mobB.mesh, this.trayB.mesh, this.pipeB.mesh);
+    this.group.add(this.levelMesh.group, this.stat.mesh, this.dyn.mesh, this.itemB.mesh, this.mobB.mesh, this.trayB.mesh, this.pipeB.mesh, this.fireB.mesh);
     scene.add(this.group);
     this.addStatics(props.statics);
     for (const it of props.closets) this.setClosetView(it);     // the welcome may have told us some are open
@@ -111,6 +115,7 @@ export class GridView {
     this.pipeFree = [];
     this.addPipes();
     this.rebuildLights();
+    if (grid.fireView.size) this.updateFires([...grid.fireView]);
   }
 
   get id() { return this.grid.id; }
@@ -127,7 +132,7 @@ export class GridView {
     this.scene.remove(this.group);
     for (const ch of [...this.levelMesh.chunks.keys()]) this.levelMesh.disposeChunk(ch);
     for (const m of this.mirrors) { m.mesh.geometry.dispose(); m.mat.dispose(); }
-    for (const b of [this.stat, this.dyn, this.itemB, this.mobB, this.trayB, this.pipeB]) b.geometry.dispose();
+    for (const b of [this.stat, this.dyn, this.itemB, this.mobB, this.trayB, this.pipeB, this.fireB]) b.geometry.dispose();
   }
 
   // ------------------------------------------------------------------ static scenery
@@ -283,6 +288,47 @@ export class GridView {
     const v = { d, id, frame: 0 };
     this.doorViews.push(v);
     return v;
+  }
+
+  // ------------------------------------------------------------------ fire
+  /** Fires on tiles (`on`: [[tile index, size 1 to 3]], `off`: [tile index]): flames, animated. */
+  updateFires(on = [], off = []) {
+    const frames = this.assets.level.fireSprites, w = this.grid.world, wh = w.W * w.H;
+    if (!frames?.length) return;
+    for (const i of off) {
+      const s = this.fireSlot.get(i);
+      if (s) { this.fireB.setAlpha(s.id, 0); this.fireFree.push(s.id); this.fireSlot.delete(i); }
+    }
+    for (const [i, st] of on) {
+      let s = this.fireSlot.get(i);
+      if (!s) {
+        const rem = i % wh, c = rem % w.W, r = Math.floor(rem / w.W), l = Math.floor(i / wh);
+        const o = { x: (c + 0.5) * TILE, y: l * DECK_H, z: (r + 0.5) * TILE, mode: 0, w: 1, h: 1, ox: 0, oy: 0, rect: this.rects[frames[0][0]], emit: 1, alpha: 1 };
+        const free = this.fireFree.pop();
+        let id;
+        if (free !== undefined) { id = free; this.fireB.setPos(id, o.x, o.y, o.z); this.fireB.setAlpha(id, 1); this.fireB.setEmit(id, 1); } else id = this.fireB.add(o);
+        s = { id, st, ph: i % 5 };
+        this.fireSlot.set(i, s);
+      }
+      s.st = st;
+      this.setFireRect(s);
+    }
+    this.fireB.flush();
+  }
+
+  setFireRect(s) {
+    const frames = this.assets.level.fireSprites[Math.max(0, Math.min(2, s.st - 1))], rc = this.rects[frames[(this.fireFrame + s.ph) % frames.length]];
+    if (rc) this.fireB.setRect(s.id, rc, rc.w * PX, rc.h * PX, (rc.ox + rc.w / 2 - rc.fw / 2) * PX, 0);
+  }
+
+  /** The flames move: a new frame about eight times a second. */
+  animateFires(dt) {
+    if (!this.fireSlot.size) return;
+    this.fireT += dt;
+    if (this.fireT < 0.125) return;
+    this.fireT = 0; this.fireFrame++;
+    for (const s of this.fireSlot.values()) this.setFireRect(s);
+    this.fireB.flush();
   }
 
   /** A door is gone: its picture goes with it. */
@@ -667,6 +713,7 @@ export class GridView {
     this.updateMirrors(mine, cam, camYaw);
     this.updateTosses(now);
     this.updateFlicker(now);
+    this.animateFires(dt);
     this.stat.flush(); this.dyn.flush(); this.itemB.flush();
   }
 }

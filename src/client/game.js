@@ -206,6 +206,7 @@ export class Game {
     rep.on('mirror', (ev) => this.charedit.show({ mode: 'mirror', look: ev.look, outfit: () => this.myAppearance(), onChange: (look) => this.send({ t: 'mirror', look }) }));
     rep.on('area', (ev) => gv(ev)?.rebuildLights());
     rep.on('p+', (ev) => { const v = gv(ev); if (v) v.addProps(v.grid.props.added); });
+    rep.on('fire', (ev) => { const v = gv(ev); if (v) v.updateFires(ev.on, ev.off); });
     rep.on('door-', (ev) => { const v = gv(ev); if (v) v.removeDoorView(v.grid.doors[ev.i]); });
     rep.on('pipe', (ev) => { const v = gv(ev); if (v) { const w = v.grid.world, i = ev.s % w.n, wh = w.W * w.H, rem = i % wh; v.refreshPipes([[rem % w.W, Math.floor(rem / w.W), Math.floor(i / wh)]]); } });
     rep.on('pv', (ev) => { const v = gv(ev); if (v) v.setPropVariant(v.grid.props.interact[ev.i]); });

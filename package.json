@@ -27,6 +27,7 @@
     "test:atmoscontrol": "node tools/atmoscontroltest.mjs",
     "test:radiation": "node tools/radiationtest.mjs",
     "test:temperature": "node tools/temptest.mjs",
+    "test:fire": "node tools/firetest.mjs",
     "test:soak": "node tools/simtest.mjs 12 --player",
     "test:ui": "node tools/uitest.mjs",
     "test:net": "node tools/nettest.mjs"

@@ -42,6 +42,7 @@ import { Airlocks } from './airlocks.js';
 import { Assemblies } from './assemblies.js';
 import { AtmosControl } from './atmoscontrol.js';
 import { Radiation } from './radiation.js';
+import { Fire } from './fire.js';
 
 const JET_BURN = 3;          // a jetpack's gas used per second of thrust (a full tank: five minutes)
 
@@ -134,6 +135,7 @@ export class Sim {
     this.assemblies = new Assemblies(this);
     this.atmoscontrol = new AtmosControl(this);
     this.radiation = new Radiation(this);
+    this.fire = new Fire(this);
     this.debug = new Debug(this);
     this.closets = new Closets(this, data.closets);       // each grid's closets are set up as it is added, after its floor items: closed closets swallow what lies on them
 
@@ -461,6 +463,7 @@ export class Sim {
       pi: [...g.pipeLog].map(([s, v]) => [s, ...v]),                                               // pipes laid or taken up
       pn: [...g.nameLog],                                                                          // props that were renamed
       dg: [...g.doorGone],                                                                         // doors taken away
+      fire: this.fire.state(g),                                                                    // the fires burning on tiles
       pa: [...g.anchorLog],                                                                        // props bolted down or freed
       doors: g.doors.map((d) => d.state), fdoors: g.firedoors.list.map((f) => (f.closed ? 1 : 0)),
       tiles: g.tileLog, panes: g.deadPanes, closets: this.closets.changed(g), moved: this.people.moved(g),
@@ -502,6 +505,7 @@ export class Sim {
     this.windows.update();
     this.sun.update(dt);
     for (const g of this.grids.values()) { g.atmos.update(dt); g.powersim.update(dt); g.atmosdev.update(dt); g.pipenet.update(dt); }
+    this.fire.update(dt);
     this.shuttles.update(dt);
     this.physics.step(dt);
     this.ai.update(dt);

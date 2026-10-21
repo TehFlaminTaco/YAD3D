@@ -1299,6 +1299,10 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
                     psp[key] = spr.add(pipe_layers(code, ly, 0))
         pipe_fittings(spr, shared.setdefault('fittings', {}))
         assembly_types(spr, shared.setdefault('assemblies', {}))
+        fire_icon = 'icons/effects/fire.dmi'                                       # a fire on a tile (LINDA_fire.dm hotspot: 1 small, 2 bigger, 3 fills it): the frames of each
+        if icon_ok(fire_icon, '1'):
+            fdmi = sl.get_dmi(fire_icon)
+            shared['fire_sprites'] = [[spr.add([(fire_icon, st, S, None, None, f)]) for f in range(min(6, fdmi.states[st].frames))] for st in ('1', '2', '3')]
 
     # loot pool sprites
     pool = []
@@ -1663,7 +1667,7 @@ def build(mapname):
     level = {
         'name': mapname,
         'terrain': {'cols': cols, 'cells': len(cells.imgs), 'ceiling': ceiling_cell, 'flat': flat_cell, **floors},
-        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'fittingTypes': device_types(shared.get('fittings', {})), 'assemblies': shared.get('assemblies', {}), 'lightItems': light_items, 'tiles': base['tiles'],
+        'structs': structs, 'floorTypes': ftypes, 'latCells': lat_cells, 'cableCells': cable_cells, 'cableSprites': cable_sprites, 'pipeSprites': shared.get('pipe_sprites', {}), 'fittings': shared.get('fittings', {}), 'fittingTypes': device_types(shared.get('fittings', {})), 'assemblies': shared.get('assemblies', {}), 'fireSprites': shared.get('fire_sprites', []), 'lightItems': light_items, 'tiles': base['tiles'],
         'areas': areas, 'walls': wall_variants, 'pool': base['pool'],
         'itemdefs': itemdefs, 'mobs': base['mobs'], 'descs': descs,
         'grids': grids,

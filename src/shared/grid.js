@@ -34,6 +34,12 @@ export class Grid {
     this.world.grid = this;
     this.props = buildPropData(this.world, rects, decoded.props, decoded.level);
     this.doors = this.props.doors.map((p, i) => this.makeDoor(p, i));
+    this.fireView = new Map();                                  // fires burning on tiles (tile index -> size 1 to 3): what the client draws
+  }
+
+  /** A fire started, grew or went out on tile `i` (`state` 1 to 3, 0 for out): what the client draws. */
+  setFire(i, state) {
+    if (state) this.fireView.set(i, state); else this.fireView.delete(i);
   }
 
   /** A pipe was laid or taken up: slot `s` of `world.pipe` is shape byte `b`, colour `col`, layer `ly` now (0: none). */

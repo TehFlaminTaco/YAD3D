@@ -650,6 +650,7 @@ export class Actions {
       if (m.dead || !m.humanoid) continue;
       for (const it of allItems(m)) {
         if (it.def.tool !== 'welder' || !it.lit) continue;
+        if (m.hands.includes(it) && m.grid) sim.fire.exposeAt(m.grid, m.x, m.z, m.l | 0, 700, 5);      // open_flame: a lit welding tool in a hand is a flame (700 kelvin)
         it.burn = (it.burn || 0) + dt;
         if (it.burn < 26) continue;
         it.burn = 0;

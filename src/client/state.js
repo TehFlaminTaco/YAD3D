@@ -93,7 +93,8 @@ export class Replica {
     if (gs.ps?.length) g.addProps(gs.ps);
     for (const [s, b, c, y] of gs.pi || []) g.setPipe(s, b, c, y);
     for (const [i, n] of gs.pn || []) if (g.props.interact[i]) g.props.interact[i].name = n;
-    for (const i of gs.dg || []) g.removeDoor(i);                                   // props made while the game runs, before anything that is about props by number
+    for (const i of gs.dg || []) g.removeDoor(i);
+    for (const [i, st] of gs.fire || []) g.setFire(i, st);                                   // props made while the game runs, before anything that is about props by number
     for (const [id, k, c, r, st] of gs.built || []) g.built.add({ id, k, c, r, st, grid: g });
     for (const [i, st] of gs.lights || []) if (g.props.lights[i]) g.props.lights[i].status = st;
     for (const i of gs.gone || []) { const it = g.props.interact[i]; if (it) { it.gone = true; g.world.boxDrop(it); } }
@@ -191,6 +192,7 @@ export class Replica {
       case 'pipe': if (g) g.setPipe(ev.s, ev.b, ev.c, ev.y); break;
       case 'pn': { const it = g?.props.interact[ev.i]; if (it) it.name = ev.n; break; }
       case 'door-': g?.removeDoor(ev.i); break;
+      case 'fire': if (g) { for (const i of ev.off || []) g.setFire(i, 0); for (const [i, st] of ev.on || []) g.setFire(i, st); } break;
       case 'pg': { const it = g?.props.interact[ev.i]; if (it) { it.gone = true; g.world.boxDrop(it); } break; }
       case 'area': if (g) { g.power.set(ev.a, ev.op, ev.ch[0], ev.ch[1], ev.ch[2], ev.mn); g.power.lightSwitch[ev.a] = ev.sw; } break;
       case 'mob+': this.mobs.set(ev.id, { id: ev.id, n: ev.n, job: ev.job, set: ev.set, ap: ev.ap, kind: ev.kind, g: 0, x: 0, z: 0, l: 0, yaw: 0, flags: 0, speed: 0, buf: [], fresh: true }); break;
