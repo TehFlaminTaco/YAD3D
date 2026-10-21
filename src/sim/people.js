@@ -1,7 +1,7 @@
 import { HIDE } from '../shared/looks.js';
 import { moveProp } from '../shared/propdata.js';
 import { between } from '../shared/frames.js';
-import { fitsSlot } from '../shared/items.js';
+import { fitsSlot, spriteOf } from '../shared/items.js';
 import { detach, place, recalc, shiftItem } from './inventory.js';
 import { timeText } from './closets.js';
 
@@ -371,7 +371,7 @@ export class People {
   /** Which slots of `o` are covered by their clothes right now. */
   hidden(o) { return this.sim.appearanceOf(o).h; }
 
-  itemRef(it) { return it ? { id: it.id, n: it.name, s: it.sprite } : null; }
+  itemRef(it) { return it ? { id: it.id, n: it.name, s: spriteOf(it) } : null; }
 
   view(o) {
     const h = this.hidden(o);

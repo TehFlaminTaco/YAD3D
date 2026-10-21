@@ -1210,6 +1210,16 @@ def process(grid, keys, cells, spr, shared, Wd, Ht, full=True, docks=False):
             itemdefs[pth] = {'n': clean_name(r.get('name', pth.split('/')[-1])), 's': sp,
                              'd': r.get('desc') if isinstance(r.get('desc'), str) else '',
                              'w': w, 'sl': slots, 'f': f if isinstance(f, (int, float)) else 0}
+            # what it looks like switched on, `sa` (a lit welding tool: its flame overlay, weldingtool.dm update_overlays; a T-ray scanner: t-ray1, t_scanner toggle_on)
+            on_layers = None
+            if pth.startswith('/obj/item/weldingtool') and icon_ok(icon, st + '-on'):
+                on_layers = [(icon, st, S, None, None), (icon, st + '-on', S, None, None)]
+            elif pth == '/obj/item/t_scanner' and icon_ok(icon, 't-ray1'):
+                on_layers = [(icon, 't-ray1', S, None, None)]
+            if on_layers:
+                sa = spr.add(on_layers)
+                if sa >= 0:
+                    itemdefs[pth]['sa'] = sa
             # seconds to take it off someone / put it on someone (SS13's strip_delay and equip_delay_other; defaults 4 and 2)
             for key, var, dflt in (('sd', 'strip_delay', 4), ('ed', 'equip_delay_other', 2)):
                 secs = delay_seconds(r.get(var))

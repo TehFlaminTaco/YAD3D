@@ -129,7 +129,7 @@ export class Actions {
     if (d.light) return this.toggleLight(m);
     if (d.tool === 'welder') {
       if (it.fuel <= 0) { sim.tell(m, 'warning', 'The welding tool is out of fuel.'); return; }
-      it.lit = !it.lit; m.dirty = true;
+      it.lit = !it.lit; m.dirty = true; m.apDirty = true;
       sim.sound(it.lit ? 'welder_on' : 'beep', m, 0.5);
       sim.tell(m, 'notice', it.lit ? 'You turn on the welding tool.' : 'You turn off the welding tool.');
       return;
@@ -648,7 +648,7 @@ export class Actions {
         it.burn = 0;
         it.fuel = Math.max(0, it.fuel - 1);
         m.dirty = true;
-        if (it.fuel <= 0) { it.lit = false; sim.tell(m, 'notice', `You switch the ${it.name} off.`); sim.sound('beep', m, 0.4); }
+        if (it.fuel <= 0) { it.lit = false; m.apDirty = true; sim.tell(m, 'notice', `You switch the ${it.name} off.`); sim.sound('beep', m, 0.4); }
       }
     }
   }

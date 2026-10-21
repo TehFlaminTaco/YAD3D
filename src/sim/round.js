@@ -16,7 +16,8 @@ export class Round {
     this.state = 'lobby';
     this.countdown = null;
     this.time = 0;
-    this.taken = {};
+    this.taken = {};                                    // job id -> how many hold it (people and NPCs)
+    this.botTaken = {};                                 // ... and how many of those are NPCs: they give way to anyone who wants the job
     this.endedAt = 0;
     this.endTimer = 0;
   }
@@ -26,7 +27,7 @@ export class Round {
     return {
       state: this.state, countdown: this.countdown === null ? null : Math.ceil(this.countdown), time: Math.floor(this.time),
       players: [...sim.clients.values()].map((c) => ({ id: c.id, name: c.name, ready: c.ready, st: c.state })),
-      taken: this.taken,
+      taken: Object.fromEntries(Object.entries(this.taken).map(([k, v]) => [k, v - (this.botTaken[k] || 0)])),         // (what a player sees: NPCs do not hold a job against them)
     };
   }
 
@@ -42,9 +43,32 @@ export class Round {
 
   onLeave(c) { this.broadcast(); if (this.state === 'lobby' && !this.sim.clients.size) this.countdown = null; }
 
+  slotsOf(job, late) { return late ? (job.id === 'assistant' ? 99 : job.total < 0 ? 99 : job.total) : this.sim.jobs.slots(job); }
+
+  /** Positions a player can take: the ones nobody but NPCs holds count as free. */
   free(job, late) {
-    const slots = late ? (job.id === 'assistant' ? 99 : job.total < 0 ? 99 : job.total) : this.sim.jobs.slots(job);
-    return slots - (this.taken[job.id] || 0);
+    return this.slotsOf(job, late) - ((this.taken[job.id] || 0) - (this.botTaken[job.id] || 0));
+  }
+
+  /** Positions an NPC may still be given (they take what is left after the people). */
+  freeForBots(job) {
+    return this.slotsOf(job, false) - (this.taken[job.id] || 0);
+  }
+
+  /** An NPC with `job` steps aside for a person who wants it (the dead first, then the first one found): it is simply gone. Returns whether there was one. */
+  displaceBot(job) {
+    const sim = this.sim;
+    const bots = [...sim.mobs.values()].filter((m) => m.kind === 'human' && !m.client && m.job === job.id && !m.evacuated);
+    const m = bots.find((b) => b.dead) || bots[0];
+    if (!m) return false;
+    sim.people.release(m);
+    if (m.pulledBy) sim.people.release(m.pulledBy);
+    if (m.inside) m.inside.mobs.splice(m.inside.mobs.indexOf(m), 1);
+    for (const o of sim.clients.values()) if (o.strip === m.id) sim.people.closeStrip(o);
+    sim.mobs.delete(m.id);
+    this.botTaken[job.id] = Math.max(0, (this.botTaken[job.id] || 0) - 1);
+    this.taken[job.id] = Math.max(0, (this.taken[job.id] || 0) - 1);
+    return true;
   }
 
   handle(c, msg) {
@@ -92,6 +116,7 @@ export class Round {
     this.state = 'playing';
     this.time = 0;
     this.taken = {};
+    this.botTaken = {};
     this.countdown = null;
     sim.chat.systemAll('notice', 'Welcome to Space Station 13, enjoy your stay!');
     const players = [...sim.clients.values()].filter((c) => c.state === 'lobby' && c.ready);
@@ -109,8 +134,9 @@ export class Round {
       const job = sim.jobs.byId[id];
       if (!job) continue;
       const n = id === 'assistant' ? 3 : 1;
-      for (let k = 0; k < n && have < target && this.free(job, false) > 0; k++) {
+      for (let k = 0; k < n && have < target && this.freeForBots(job) > 0; k++) {
         this.taken[job.id] = (this.taken[job.id] || 0) + 1;
+        this.botTaken[job.id] = (this.botTaken[job.id] || 0) + 1;
         sim.spawnCrew(job, null);
         have++;
       }
@@ -123,6 +149,7 @@ export class Round {
   assign(c, job, late) {
     const sim = this.sim;
     this.taken[job.id] = (this.taken[job.id] || 0) + 1;
+    if (this.taken[job.id] > this.slotsOf(job, late)) this.displaceBot(job);                    // an NPC has the job: it gives way
     const m = sim.spawnCrew(job, c, { late });
     c.ready = false;
     c.deadMob = null;

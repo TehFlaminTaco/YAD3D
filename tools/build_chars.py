@@ -163,12 +163,39 @@ def build(itemdefs, resolve, dm, out_dir):
             hide = hide_bits(r)
             worn.setdefault(path, {})[slot] = [base, hide] if hide else [base]
     meta['worn'] = worn
+
+    # what each item looks like held, by hand (SS13's inhand_icon_state, else icon_state, in lefthand_file / righthand_file): [left, right] base cells, -1 for none.
+    # A lit welding tool is "<state>1" (weldingtool.dm update_icon_state): `handOn`.
+    def hand_pair(r, state):
+        out = []
+        for key in ('lefthand_file', 'righthand_file'):
+            f = r.get(key)
+            out.append(group(f, state) if isinstance(f, str) and state else -1)
+        return out
+
+    hand, hand_on = {}, {}
+    for path in itemdefs:
+        r = resolve(path)
+        held = r.get('inhand_icon_state')                          # (unset, or null: the icon_state; "": nothing to show)
+        state = held if isinstance(held, str) and held != 'null' else r.get('icon_state')
+        if not isinstance(state, str) or state in ('', 'null'):
+            continue
+        pair = hand_pair(r, state)
+        if pair[0] < 0 and pair[1] < 0:
+            continue
+        hand[path] = pair
+        if path.startswith('/obj/item/weldingtool'):
+            on = hand_pair(r, state + '1')
+            if on[0] >= 0 or on[1] >= 0:
+                hand_on[path] = on
+    meta['hand'] = hand
+    meta['handOn'] = hand_on
     meta['cells'] = len(sheet.imgs)
 
     os.makedirs(out_dir, exist_ok=True)
     sheet.save(os.path.join(out_dir, 'chars.png'))
     with open(os.path.join(out_dir, 'chars.json'), 'w') as f:
         json.dump(meta, f, separators=(',', ':'))
-    print('  chars: %d cells, %d worn items, %d hair, %d facial, %d underwear, %d undershirts, %d socks' % (
-        len(sheet.imgs), len(worn), len(meta['hair']), len(meta['facial']), len(meta['underwear']), len(meta['undershirt']), len(meta['socks'])))
+    print('  chars: %d cells, %d worn items, %d held, %d hair, %d facial, %d underwear, %d undershirts, %d socks' % (
+        len(sheet.imgs), len(worn), len(hand), len(meta['hair']), len(meta['facial']), len(meta['underwear']), len(meta['undershirt']), len(meta['socks'])))
     return meta

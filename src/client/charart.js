@@ -72,6 +72,8 @@ export class CharArt {
     worn('mask', HIDE.MASK);
     worn('head', 0);
     if (o.cuffs !== undefined) this.layer(ctx, o.cuffs, di);                      // HANDCUFF_LAYER, over the clothes
+    if (o.lh !== undefined) this.layer(ctx, o.lh, di);                            // HANDS_LAYER: what is held, over everything
+    if (o.rh !== undefined) this.layer(ctx, o.rh, di);
   }
 
   /** A fresh 32x32 canvas of one direction, for the character screen and the first-person body. */

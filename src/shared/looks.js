@@ -72,18 +72,23 @@ export class Looks {
     });
   }
 
-  /** What someone wears: `bySlot` maps a slot to the item path in it. */
-  outfit(bySlot) {
+  /** What someone wears: `bySlot` maps a slot to the item path in it; `hands` is what is in the left and right hand, `{p: item path, on: it is lit}` or null. */
+  outfit(bySlot, hands = []) {
     const o = {};
     let h = 0;
     for (const slot of WORN_SLOTS) {
       const e = bySlot[slot] && this.meta.worn[bySlot[slot]]?.[slot];
       if (e) { o[slot] = e[0]; h |= e[1] || 0; }
     }
+    for (let k = 0; k < 2; k++) {                                            // what is held: the picture for that hand (a lit welding tool's own)
+      const held = hands[k];
+      const e = held && ((held.on && this.meta.handOn?.[held.p]) || this.meta.hand?.[held.p]);
+      if (e && e[k] >= 0) o[k ? 'rh' : 'lh'] = e[k];
+    }
     return { o, h };
   }
 
-  appearance(look, bySlot) {
-    return { l: look, ...this.outfit(bySlot) };
+  appearance(look, bySlot, hands = []) {
+    return { l: look, ...this.outfit(bySlot, hands) };
   }
 }

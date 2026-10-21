@@ -125,11 +125,15 @@ export class Atmos {
   cell(i) { return new CellMix(this, i); }
   pressureWorld(x, z, l = 0) { return this.pressureAt(Math.floor(x / TILE), Math.floor(z / TILE), l); }
 
-  /** A window was smashed or a breach welded shut: tile (c, r) joins or leaves the gas grid. */
+  /**
+   * Tile (c, r) changed: a window was smashed or a breach welded shut (it joins or leaves the gas grid, and what it held is gone), or the floor was changed (a tile laid or prised up:
+   * it is the same room's air, so it keeps its gas).
+   */
   tileChanged(c, r, l = 0) {
     const i = this.world.idx(c, r, l);
-    for (const arr of this.arrs) arr[i] = 0;
+    const was = this.isCell[i];
     this.buildTopology(false);
+    if (!(was && this.isCell[i])) for (const arr of this.arrs) arr[i] = 0;
   }
 
   /** Pressure-driven push (m/s) felt at a world position on deck `l`. */

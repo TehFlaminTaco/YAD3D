@@ -10,6 +10,7 @@ import { CL } from '../src/shared/closets.js';
 import { recalc, place, attach, detach } from '../src/sim/inventory.js';
 import { menuFor } from '../src/shared/stacks.js';
 import { HIDE } from '../src/shared/looks.js';
+import { spriteOf } from '../src/shared/items.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = loadSimData(root);
@@ -340,6 +341,26 @@ section('looks', () => {
   step(0.3);
   const seen = evsOf(bobIn, 'look').find((x) => x.id === a.id);
   ok(seen && seen.ap.o.head === undefined && seen.ap.o.uniform === ap.o.uniform, 'taking your hat off sends everyone the new look');
+  // what is held shows in the hand (SS13's inhand sprites), and a lit welding tool looks lit
+  a.hands[0] = a.hands[1] = null; recalc(sim, a);
+  const bare = sim.appearanceOf(a);
+  ok(bare.o.lh === undefined && bare.o.rh === undefined, 'empty hands show nothing');
+  const torch = sim.newItem('/obj/item/weldingtool'); a.hands[0] = torch; torch.loc = { t: 'hand', mob: a, i: 0 }; recalc(sim, a);
+  const hold0 = sim.appearanceOf(a);
+  ok(typeof hold0.o.lh === 'number' && hold0.o.rh === undefined, 'a tool in the left hand shows in the left hand');
+  const crowbar = sim.newItem('/obj/item/crowbar'); a.hands[1] = crowbar; crowbar.loc = { t: 'hand', mob: a, i: 1 }; recalc(sim, a);
+  ok(typeof sim.appearanceOf(a).o.rh === 'number', 'and one in the right hand shows there');
+  bobIn.length = 0;
+  torch.lit = true; a.apDirty = true;
+  step(0.3);
+  const lit = evsOf(bobIn, 'look').find((x) => x.id === a.id);
+  ok(lit && lit.ap.o.lh !== undefined && lit.ap.o.lh !== hold0.o.lh, 'lighting it changes the picture, and everyone is told');
+  ok(spriteOf(torch) === torch.spriteOn && torch.spriteOn !== undefined && torch.spriteOn !== torch.sprite, 'a lit welding tool is its own picture in the inventory too');
+  torch.lit = false;
+  ok(spriteOf(torch) === torch.sprite, 'and an unlit one is the plain one');
+  const tray = sim.newItem('/obj/item/t_scanner');
+  ok(tray.spriteOn !== undefined && spriteOf(tray) === tray.sprite && (tray.on = true) && spriteOf(tray) === tray.spriteOn, 'a T-ray scanner that is on has its own picture');
+  a.hands[0] = a.hands[1] = null; recalc(sim, a);
   // some things hide hair: a hardsuit helmet
   const helmet = sim.newItem('/obj/item/clothing/head/helmet/space/emergency');
   a.worn.head = null;
@@ -358,6 +379,49 @@ section('looks', () => {
   ok(evsOf(mine, 'mirror').length === 1 && evsOf(mine, 'mirror')[0].look.h === hair, 'clicking a mirror opens the hairdresser with your current look');
   sim.handle(A, { t: 'mirror', look: { h: other, hc: '#00ff00', g: 'm', sk: DATA.chars.skin[0].n } });
   ok(a.look.h === other && a.look.hc === '#00ff00' && a.look.g === 'f' && a.look.sk === skin, 'at a mirror you change hair and its colour, nothing else');
+});
+
+section('players come before NPCs for jobs', () => {
+  const crew = (sim, job) => [...sim.mobs.values()].filter((m) => m.kind === 'human' && m.job === job);
+  // at the start of the round: the players choose first, the NPCs fill what is left
+  const sim = new Sim(DATA, { bots: 18 });
+  const A = sim.addClient('Alice', () => {});
+  sim.handle(A, { t: 'lobby', op: 'job', id: 'captain' });
+  sim.handle(A, { t: 'lobby', op: 'ready', v: true });
+  sim.handle(A, { t: 'lobby', op: 'start' });
+  ok(A.mob.job === 'captain' && crew(sim, 'captain').length === 1, "a player who asks for the captain's job gets it, and there is no NPC captain");
+  ok(crew(sim, 'chief_engineer').length === 1 && sim.round.botTaken.chief_engineer === 1 && sim.round.botTaken.captain === undefined, 'the NPCs filled the other jobs');
+  // later: an NPC holds the job, and a person who wants it has it
+  const sim2 = new Sim(DATA, { bots: 18 });
+  const P = sim2.addClient('Pat', () => {});
+  sim2.handle(P, { t: 'lobby', op: 'job', id: 'assistant' });
+  sim2.handle(P, { t: 'lobby', op: 'ready', v: true });
+  sim2.handle(P, { t: 'lobby', op: 'start' });
+  const bot = crew(sim2, 'captain')[0];
+  ok(bot && !bot.client, 'an NPC is the captain');
+  ok(sim2.round.publicState().taken.captain === 0, 'but a player is shown the position as open');
+  const B = sim2.addClient('Bob', () => {});
+  sim2.handle(B, { t: 'lobby', op: 'latejoin', id: 'captain' });
+  ok(B.mob && B.mob.job === 'captain' && B.mob.client === B, "a late joiner takes the captain's job");
+  ok(crew(sim2, 'captain').length === 1 && !sim2.mobs.has(bot.id), 'and the NPC who had it is gone');
+  ok(sim2.round.taken.captain === 1 && !sim2.round.botTaken.captain && sim2.round.publicState().taken.captain === 1, 'which is now taken');
+  const C = sim2.addClient('Cy', () => {});
+  sim2.handle(C, { t: 'lobby', op: 'latejoin', id: 'captain' });
+  ok(!C.mob, 'a second player cannot have it');
+  // a dead NPC is the one that goes first
+  const eng = crew(sim2, 'station_engineer');
+  ok(eng.length >= 1, 'there are NPC engineers');
+  const total = sim2.jobs.byId.station_engineer.total;
+  const dead = eng[eng.length - 1]; dead.dead = true; dead.body.dead = true;
+  const clients = [];
+  for (let k = 0; k < total + 1 && k < 12; k++) {
+    const x = sim2.addClient('Eng' + k, () => {});
+    sim2.handle(x, { t: 'lobby', op: 'latejoin', id: 'station_engineer' });
+    clients.push(x);
+  }
+  ok(!sim2.mobs.has(dead.id), 'when engineers join, the dead NPC engineer is the first to go');
+  ok(clients.filter((x) => x.mob).length === Math.min(total, clients.length), `players fill every position (${total}), and no more`);
+  ok(crew(sim2, 'station_engineer').filter((m) => m.client).length === Math.min(total, clients.length) && crew(sim2, 'station_engineer').length <= total, 'with no more people in the job than it has positions');
 });
 
 section('people', () => {
@@ -397,6 +461,7 @@ section('people', () => {
   ok(a.busy && texts(inbox.b).some((x) => x.startsWith(`${a.name} tries to remove your `)), 'taking something off warns them');
   step(8.5);
   ok(!b.worn.shoes, "it comes off after the item's strip delay");
+  ok(evs(inbox.a, 'look').some((e) => e.id === b.id && e.ap.o.shoes === undefined), 'and everyone sees them without them (the strip window working out how they look must not eat the news)');
   ok([...sim.floor.values()].some((f) => f.item.path.includes('shoes') && Math.hypot(f.x - b.x, f.z - b.z) < 1.5), 'and lies at their feet');
   // a space helmet covers the mask
   const mask = sim.newItem('/obj/item/clothing/mask/breath'); mask.loc = { t: 'slot', mob: b, slot: 'mask' }; b.worn.mask = mask;
@@ -1716,8 +1781,10 @@ section('floors, plating and lattice', () => {
   let mark = inbox.a.length;
   tool('/obj/item/wrench'); click(fl.c, fl.r); step(0.5);
   ok(w.floorType(fl.i).k === 'tile' && !a.busy, 'a wrench does nothing to a tile floor');
+  const air0 = sim.atmos.total(fl.i);
   tool('/obj/item/crowbar'); click(fl.c, fl.r);
   ok(w.floorType(fl.i).k === 'plating' && w.floorCell[fl.i] === T.plating, 'a crowbar pries the tile up at once: bare plating');
+  ok(air0 > 50 && Math.abs(sim.atmos.total(fl.i) - air0) < 1, `and the air in the tile stays (${air0.toFixed(1)} kPa before, ${sim.atmos.total(fl.i).toFixed(1)} after)`);
   ok(floorAt(fl.c, fl.r, PLASTEEL).some((f) => f.item.amount === 1), 'and the tile lies there');
   ok(said(mark).includes('You remove the floor tile.'), 'DM\'s message');
   ok(sim.atmos.isCell[fl.i] === 1 && w.kind[fl.i] === 1, 'it is still floor (and holds air)');
@@ -1728,6 +1795,7 @@ section('floors, plating and lattice', () => {
   const tiles = tool(PLASTEEL, { amount: 3 });
   click(fl.c, fl.r);
   ok(w.floorType(fl.i).k === 'tile' && w.ft[fl.i] === L.tiles[PLASTEEL].ft && w.floorCell[fl.i] === L.tiles[PLASTEEL].cell && tiles.amount === 2, 'a plasteel tile makes it a floor again and is used up');
+  ok(Math.abs(sim.atmos.total(fl.i) - air0) < 1, 'and laying one does not take the air either');
 
   // ---- two rods (30 ds) reinforce plating, a wrench (30 ds) takes it back and leaves the rods
   tool('/obj/item/crowbar'); click(fl.c, fl.r);

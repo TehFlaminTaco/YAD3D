@@ -1,5 +1,5 @@
 import { SLOTS, TILE } from '../shared/config.js';
-import { describeState, storageReason, fitsSlot, EQUIP_ORDER } from '../shared/items.js';
+import { describeState, storageReason, fitsSlot, EQUIP_ORDER, spriteOf } from '../shared/items.js';
 import { stackKey, stackInfo, plural } from '../shared/stacks.js';
 
 const MAGBOOT_SLOW = 0.65;
@@ -61,7 +61,7 @@ export function place(sim, item, grid, x, z, y, l = 0) {
   const rec = { item, grid, x, y: yy, z, c, r, l };
   sim.floor.set(item.id, rec);
   item.loc = { t: 'floor' };
-  sim.emit({ e: 'item+', id: item.id, g: grid.id, s: item.sprite, n: item.name, x, y: yy, z, l });
+  sim.emit({ e: 'item+', id: item.id, g: grid.id, s: spriteOf(item), n: item.name, x, y: yy, z, l });
   return rec;
 }
 
@@ -265,7 +265,7 @@ function tagsOf(it) {
 }
 
 export function serializeItem(it, depth = 0) {
-  const o = { id: it.id, n: it.name, s: it.sprite, w: it.w, st: describeState(it) };
+  const o = { id: it.id, n: it.name, s: spriteOf(it), w: it.w, st: describeState(it) };
   const tg = tagsOf(it);
   if (tg) o.tg = tg;
   if (it.def.stack > 1 || it.amount !== undefined) o.amt = it.amount;

@@ -3,7 +3,7 @@ import { decodeGrid, VOID_BP } from '../shared/leveldata.js';
 import { GameMap } from '../shared/gamemap.js';
 import { tfPoint, tfClone } from '../shared/math3.js';
 import { settle, frameYaw } from '../shared/frames.js';
-import { ItemDB, makeItemData } from '../shared/items.js';
+import { ItemDB, makeItemData, spriteOf } from '../shared/items.js';
 import { Jobs } from '../shared/jobs.js';
 import { stepMovement, floatState } from '../shared/movement.js';
 import { clamp, rng } from '../shared/util.js';
@@ -455,7 +455,7 @@ export class Sim {
       name: this.level.name,
       map: map.id,
       grids: [...map.grids.values()].map((g) => this.gridState(g)),
-      items: [...this.floor.values()].filter((f) => f.grid.map === map).map((f) => [f.item.id, f.item.sprite, f.item.name, f.x, f.y, f.z, f.grid.id, f.l | 0]),
+      items: [...this.floor.values()].filter((f) => f.grid.map === map).map((f) => [f.item.id, spriteOf(f.item), f.item.name, f.x, f.y, f.z, f.grid.id, f.l | 0]),
     };
   }
 
@@ -857,9 +857,11 @@ export class Sim {
     if (m.apDirty || !m.ap) {
       const by = {};
       for (const slot of WORN_SLOTS) if (m.worn[slot]) by[slot] = m.worn[slot].path;
-      m.ap = this.looks.appearance(m.look, by);
+      const hands = m.hands.map((it) => (it ? { p: it.path, on: !!it.lit } : null));        // what they hold (a lit welding tool looks lit in the hand)
+      m.ap = this.looks.appearance(m.look, by, hands);
       if (m.cuffed) m.ap.o.cuffs = this.looks.meta.cuffs;
       m.apDirty = false;
+      m.apRev = (m.apRev || 0) + 1;
     }
     return m.ap;
   }
@@ -869,13 +871,18 @@ export class Sim {
     return this.looks.outfit(job.outfit || {});
   }
 
-  /** Tell everyone about anybody who has changed clothes or hair since the last snapshot. */
+  /**
+   * Tell everyone about anybody who has changed clothes, hair or what they hold since the last snapshot. Compared with what was last sent, not with what was last worked out:
+   * anything that asks for an appearance (the strip window does) works it out again and clears the dirty flag, and the change must still go out.
+   */
   sendLookChanges() {
     for (const m of this.mobs.values()) {
-      if (!m.look || !m.apDirty) continue;
-      const before = m.ap ? JSON.stringify(m.ap) : '';
+      if (!m.look) continue;
       const ap = this.appearanceOf(m);
-      if (before && JSON.stringify(ap) !== before) this.emit({ e: 'look', id: m.id, ap });
+      if (m.apSentRev === m.apRev) continue;
+      const key = JSON.stringify(ap);
+      if (m.apSent !== undefined && key !== m.apSent) this.emit({ e: 'look', id: m.id, ap });
+      m.apSent = key; m.apSentRev = m.apRev;
     }
   }
 

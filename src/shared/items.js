@@ -135,9 +135,12 @@ export function breathRate(def) {
   return t.rate;
 }
 
+/** The picture of an item: the one for when it is switched on (a lit welding tool, a T-ray scanner that is on), if it has one, else its own. */
+export function spriteOf(it) { return (it.lit || it.on) && it.spriteOn !== undefined ? it.spriteOn : it.sprite; }
+
 export function makeItemData(db, path, extra = {}) {
   const info = db.info(path), def = db.behavior(path);
-  const it = { id: 0, path, name: extra.name || info.n, sprite: info.s, w: info.w, slots: info.sl, force: info.f, def, ...extra };
+  const it = { id: 0, path, name: extra.name || info.n, sprite: info.s, spriteOn: info.sa, w: info.w, slots: info.sl, force: info.f, def, ...extra };
   if (def.gun) it.shots = def.gun.shots;
   if (def.tank || def.plasmaTank) it.mix = tankMix(def, path);
   if (def.jetpack) it.gas = def.jetpack.cap;
